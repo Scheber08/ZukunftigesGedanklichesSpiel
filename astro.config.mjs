@@ -37,7 +37,19 @@ export default defineConfig({
     plugins: [tailwindcss()],
     // Icons werden einzeln importiert; ohne Vorbündelung löst ein neues Icon im Dev-Server
     // keine Neu-Optimierung (und damit keine veralteten Chunks) aus.
-    optimizeDeps: { exclude: ['@lucide/astro', '@lucide/svelte'] },
+    // Laufzeit-Abhängigkeiten gleich beim Start vorbündeln: Späte Entdeckung löst im
+    // Worker-Runner eine Neu-Optimierung aus, die laufende Anfragen ins Leere laufen lässt.
+    optimizeDeps: {
+      include: [
+        'astro/content/runtime',
+        '@supabase/supabase-js',
+        '@supabase/ssr',
+        'marked',
+        'simple-icons',
+        'country-flag-icons/string/3x2',
+      ],
+      exclude: ['@lucide/astro', '@lucide/svelte'],
+    },
     ssr: { optimizeDeps: { exclude: ['@lucide/astro', '@lucide/svelte'] } },
   },
 
