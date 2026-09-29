@@ -1,0 +1,276 @@
+---
+/**
+ * Wertung (Plan §4.4) – für die aktuelle Saison (/wertung) und jede Archiv-Saison
+ * (/saison/[saison]/wertung) wiederverwendbar:
+ * Tabs Fahrer | Konstrukteure | Matrix, Punkteverlauf, „Stand nach Runde X“,
+ * Punkteschema, Gleichstand-Regel, Saisonauswahl, Teilen-Link und CSV-Export.
+ */
+import Download from '@lucide/astro/icons/download';
+import Lock from '@lucide/astro/icons/lock';
+import ChampionCard from '~/components/standings/ChampionCard.astro';
+import PointsSchemeCard from '~/components/standings/PointsSchemeCard.astro';
+import RoundPicker from '~/components/standings/RoundPicker.astro';
+import SeasonPicker from '~/components/standings/SeasonPicker.astro';
+import StandingsTabs from '~/components/standings/StandingsTabs.astro';
+import TieBreakNote from '~/components/standings/TieBreakNote.astro';
+import DriverStandingsTable from '~/components/sport/DriverStandingsTable.astro';
+import MatrixTable from '~/components/sport/MatrixTable.astro';
+import PointsChart from '~/components/sport/PointsChart.astro';
+import TeamStandingsTable from '~/components/sport/TeamStandingsTable.astro';
+import Badge from '~/components/ui/Badge.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import Legend from '~/components/ui/Legend.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import ShareButton from '~/components/ui/ShareButton.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { formatDateTime, timeZoneName } from '~/lib/domain/time';
+import { loadLeague } from '~/lib/server/league';
+import { csvFileName } from '~/lib/standings/csv';
+import { resolveSeason, seasonChampions, seasonName, TAB_ANCHORS } from '~/lib/standings/page';
+import { breadcrumbJsonLd, roundLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  /** Ohne Slug: aktuelle Saison unter /wertung */
+  seasonSlug?: string;
+}
+const { lang, seasonSlug } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const season = resolveSeason(league, seasonSlug);
+const isArchive = seasonSlug != null;
+
+const pageAlternates = isArchive && season ? alternates('seasonStandings', { season: season.slug }) : alternates('standings');
+const selfHref = pageAlternates[lang];
+const site = Astro.site ?? new URL(Astro.url.origin);
+
+// ------------------------------------------------------------ Daten der Saison
+const name = season ? seasonName(season, lang) : '';
+const drivers = season ? league.driverStandings(season.id) : [];
+const teams = season ? league.teamStandings(season.id) : [];
+const counted = season ? league.countedRounds(season.id) : [];
+const plannedRounds = season ? league.roundsOf(season.id).filter((r) => r.status !== 'cancelled') : [];
+const lastRound = counted.at(-1);
+const lastLabel = lastRound ? roundLabel(lastRound, league.track(lastRound.track_id), lang) : '';
+const champions = season ? seasonChampions(season, league.awardsOf(season.id), drivers, teams) : null;
+const finished = season?.status === 'finished';
+const anchors = TAB_ANCHORS[lang];
+
+const statusBadge = season
+  ? ({
+      active: { label: t('standingsPage.status.active'), variant: 'teal' },
+      finished: { label: t('standingsPage.status.finished'), variant: 'green' },
+      planned: { label: t('standingsPage.status.planned'), variant: 'muted' },
+    } as const)[season.status]
+  : undefined;
+
+const provisional = lastRound?.status === 'provisional' ? lastRound : undefined;
+const protestOpen = provisional ? league.protestOpen(provisional) : false;
+
+const title = season ? t('standingsPage.meta.title', { season: name }) : t('nav.standings');
+const description = season ? t('standingsPage.meta.description', { season: name }) : undefined;
+
+const breadcrumbs = isArchive
+  ? [
+      { label: t('nav.home'), href: url(lang, 'home') },
+      { label: t('nav.archive'), href: url(lang, 'archive') },
+      { label: title },
+    ]
+  : [{ label: t('nav.home'), href: url(lang, 'home') }, { label: t('nav.standings') }];
+const jsonLd = breadcrumbJsonLd(
+  site,
+  breadcrumbs.map((b) => ({ name: b.label, href: b.href ?? selfHref })),
+);
+const updated = lastRound ? (lastRound.final_at ?? lastRound.provisional_at) : null;
+---
+
+<BaseLayout lang={lang} title={title} description={description} alternates={pageAlternates} jsonLd={jsonLd}>
+  <PageHeader
+    lang={lang}
+    title={title}
+    eyebrow={isArchive ? t('standingsPage.eyebrow.archive') : t('standingsPage.eyebrow.current')}
+    breadcrumbs={breadcrumbs}
+    updated={updated}
+  >
+    {
+      season && (
+        <Fragment slot="actions">
+          <div class="flex flex-wrap gap-2">
+            <ShareButton lang={lang} />
+            {drivers.length > 0 && (
+              <a
+                href={url(lang, 'standingsCsv', { season: season.slug })}
+                download={csvFileName(season.slug)}
+                class="btn btn-ghost btn-sm border border-border"
+                title={t('standingsPage.csv.hint')}
+                data-track="standings_csv"
+              >
+                <Download size={16} aria-hidden="true" />
+                {t('standingsPage.csv.link')}
+              </a>
+            )}
+          </div>
+        </Fragment>
+      )
+    }
+    {
+      season && statusBadge && (
+        <ul class="season-facts mt-5">
+          <li>
+            <Badge variant={statusBadge.variant}>
+              {finished && <Lock size={12} aria-hidden="true" />}
+              {statusBadge.label}
+            </Badge>
+          </li>
+          <li>
+            {lastRound ? (
+              <span class="inline-flex flex-wrap items-center gap-2">
+                <strong>{finished ? t('standingsPage.state.final', { round: lastLabel }) : t('standingsPage.state.after', { round: lastLabel })}</strong>
+                {lastRound.status !== 'final' && <RoundStatusBadge status={lastRound.status} lang={lang} />}
+              </span>
+            ) : (
+              <span class="text-muted">{t('standingsPage.state.none')}</span>
+            )}
+          </li>
+          <li class="text-muted">{t('standingsPage.roundsCounted', { done: counted.length, total: plannedRounds.length })}</li>
+          <li class="text-muted">
+            {t('standingsPage.gameVersion')}: <span class="text-fg">{season.game_version}</span>
+          </li>
+        </ul>
+      )
+    }
+    {
+      season && (
+        <div class="mt-6 flex flex-wrap items-center justify-between gap-4">
+          <SeasonPicker lang={lang} league={league} activeSeasonId={season.id} selfHref={selfHref} />
+          {!isArchive && (
+            <a href={url(lang, 'seasonStandings', { season: season.slug })} class="inline-flex min-h-11 items-center text-sm text-muted underline hover:text-teal">
+              {t('standingsPage.permalink')}
+            </a>
+          )}
+        </div>
+      )
+    }
+  </PageHeader>
+
+  <div class="container-page py-10 md:py-14">
+    {
+      !season ? (
+        <EmptyState title={t('standingsPage.empty.noSeason')} text={t('standingsPage.empty.noSeasonText')} />
+      ) : (
+        <>
+          {provisional && (
+            <p class="alert alert-warning mb-8 text-sm" role="note">
+              {protestOpen && provisional.protest_deadline
+                ? t('standingsPage.provisional.open', {
+                    round: lastLabel,
+                    date: `${formatDateTime(provisional.protest_deadline, lang)} ${timeZoneName(provisional.protest_deadline, lang)}`,
+                  })
+                : t('standingsPage.provisional.closed', { round: lastLabel })}
+            </p>
+          )}
+
+          {finished && (
+            <div class="mb-10 grid gap-3">
+              {champions && <ChampionCard lang={lang} league={league} season={season} champions={champions} />}
+              <p class="flex items-center gap-2 text-sm text-muted">
+                <Lock size={14} aria-hidden="true" />
+                {t('standingsPage.frozen')}
+              </p>
+            </div>
+          )}
+
+          <StandingsTabs
+            label={t('standingsPage.tabs.label')}
+            tabs={[
+              { id: anchors.drivers, label: t('standingsPage.tabs.drivers') },
+              { id: anchors.teams, label: t('standingsPage.tabs.teams') },
+              { id: anchors.matrix, label: t('standingsPage.tabs.matrix') },
+            ]}
+          />
+
+          <!-- Fahrer -->
+          <section id={anchors.drivers} class="tab-panel" data-tab-panel aria-labelledby="drivers-title">
+            <SectionTitle id="drivers-title" title={t('standingsPage.drivers.title')} />
+            <DriverStandingsTable lang={lang} league={league} standings={drivers} caption={t('standingsPage.drivers.caption', { season: name })} />
+            {drivers.length > 0 && <p class="mt-3 text-sm text-muted">{t('standingsPage.drivers.reserveNote')}</p>}
+            {counted.length > 0 && drivers.length > 0 && (
+              <div class="mt-10">
+                <h3 class="mb-4 text-xl uppercase">{t('standingsPage.chart.drivers')}</h3>
+                <PointsChart lang={lang} league={league} seasonId={season.id} kind="driver" top={10} title={t('standingsPage.chart.driversTitle', { season: name })} />
+                <p class="mt-2 text-xs text-muted">{t('standingsPage.chart.dashed')}</p>
+              </div>
+            )}
+          </section>
+
+          <!-- Konstrukteure -->
+          <section id={anchors.teams} class="tab-panel" data-tab-panel aria-labelledby="teams-title">
+            <SectionTitle id="teams-title" title={t('standingsPage.teams.title')} />
+            <p class="alert mb-5 text-sm">
+              <strong>{t('standingsPage.reserve.label')}: {season.reserve_points_for_constructors ? t('standingsPage.reserve.yes') : t('standingsPage.reserve.no')}.</strong>{' '}
+              {season.reserve_points_for_constructors ? t('standingsPage.reserve.counts') : t('standingsPage.reserve.notCounted')}
+            </p>
+            <TeamStandingsTable lang={lang} league={league} standings={teams} caption={t('standingsPage.teams.caption', { season: name })} />
+            {counted.length > 0 && teams.some((s) => s.points > 0) && (
+              <div class="mt-10">
+                <h3 class="mb-4 text-xl uppercase">{t('standingsPage.chart.teams')}</h3>
+                <PointsChart lang={lang} league={league} seasonId={season.id} kind="team" top={teams.length} title={t('standingsPage.chart.teamsTitle', { season: name })} />
+              </div>
+            )}
+          </section>
+
+          <!-- Matrix -->
+          <section id={anchors.matrix} class="tab-panel" data-tab-panel aria-labelledby="matrix-title">
+            <SectionTitle id="matrix-title" title={t('standingsPage.matrix.title')} />
+            {drivers.length > 0 && (
+              <div class="mb-5 grid gap-3">
+                <p class="text-sm text-muted">{t('standingsPage.matrix.hint')}</p>
+                <Legend lang={lang} podium />
+              </div>
+            )}
+            <MatrixTable lang={lang} league={league} seasonId={season.id} />
+          </section>
+
+          <!-- Stand nach Runde X -->
+          <section class="mt-16" aria-labelledby="rounds-title">
+            <SectionTitle id="rounds-title" title={t('standingsPage.rounds.title')} />
+            {counted.length > 0 && <p class="mb-5 max-w-2xl text-sm text-muted">{t('standingsPage.rounds.hint')}</p>}
+            <RoundPicker lang={lang} league={league} season={season} />
+          </section>
+
+          <!-- Punkte & Regeln: eine Datenquelle (Saison + Punkteschema) -->
+          <section class="mt-16" aria-labelledby="rules-title">
+            <SectionTitle id="rules-title" title={t('standingsPage.info.title')} />
+            <div class="grid gap-5 lg:grid-cols-[3fr_2fr]">
+              <PointsSchemeCard lang={lang} league={league} season={season} />
+              <TieBreakNote lang={lang} league={league} />
+            </div>
+          </section>
+        </>
+      )
+    }
+  </div>
+</BaseLayout>
+
+<style>
+  .season-facts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.25rem;
+    font-size: var(--fs-small);
+  }
+  .tab-panel {
+    padding-top: 2rem;
+  }
+  /* Ohne JS stehen alle Panels untereinander – dann mit etwas mehr Luft */
+  .tab-panel + .tab-panel {
+    margin-top: 3rem;
+  }
+  :global([role='tablist']) ~ .tab-panel + .tab-panel {
+    margin-top: 0;
+  }
+</style>

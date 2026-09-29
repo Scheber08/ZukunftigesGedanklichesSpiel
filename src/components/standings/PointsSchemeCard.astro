@@ -1,0 +1,140 @@
+---
+/**
+ * Punkteschema der Saison (Plan §2.2 „eine Datenquelle“): Punkte je Platz für Rennen
+ * und Sprint, Bonus für die schnellste Runde (inkl. Top-N-Bedingung), Pole-Bonus und
+ * ob Reservepunkte für die Konstrukteure zählen – alles direkt aus points_schemes/seasons.
+ */
+import Timer from '@lucide/astro/icons/timer';
+import { useT, type Lang } from '~/i18n';
+import type { SeasonRow } from '~/lib/db/types';
+import type { League } from '~/lib/league/league';
+import { schemeSummary } from '~/lib/standings/page';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  season: SeasonRow;
+  /** Überschrift-Ebene innerhalb der Seite */
+  headingId?: string;
+}
+const { lang, league, season, headingId = `scheme-${season.id}` } = Astro.props;
+const t = useT(lang);
+const scheme = league.pointsScheme(season.points_scheme_id);
+const summary = scheme ? schemeSummary(scheme) : undefined;
+const pts = (n: number) => (n === 1 ? t('standingsPage.points.one') : t('standingsPage.points.many', { n }));
+const hasSprintRounds = league.roundsOf(season.id).some((r) => r.format === 'sprint' && r.status !== 'cancelled');
+---
+
+{
+  summary && (
+    <section class="card p-5 md:p-6" aria-labelledby={headingId}>
+      <h3 id={headingId} class="text-xl uppercase">
+        {t('standingsPage.scheme.title')}
+      </h3>
+
+      <div class="table-wrap mt-4">
+        <table class="timing-table scheme-table">
+          <caption class="sr-only">{t('standingsPage.scheme.caption')}</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="sticky-col">{t('standingsPage.scheme.session')}</th>
+              {summary.places.map((p) => (
+                <th scope="col" class="num">
+                  <abbr title={t('standingsPage.scheme.placeLong', { n: p })}>{t('standingsPage.scheme.placeShort', { n: p })}</abbr>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row" class="sticky-col">{t('standingsPage.scheme.race')}</th>
+              {summary.race.map((v) => (
+                <td class="num font-semibold">{v ?? '–'}</td>
+              ))}
+            </tr>
+            {summary.sprint && (
+              <tr>
+                <th scope="row" class="sticky-col">{t('standingsPage.scheme.sprint')}</th>
+                {summary.sprint.map((v) => (
+                  <td class="num">{v ?? '–'}</td>
+                ))}
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-3 text-sm text-muted">
+        {t('standingsPage.scheme.rest')}
+        {summary.sprint && hasSprintRounds && <> {t('standingsPage.scheme.sprintNote')}</>}
+      </p>
+
+      <dl class="mt-5 grid gap-3 text-sm">
+        <div class="bonus-row">
+          <dt class="flex items-center gap-2 font-semibold">
+            <Timer size={16} aria-hidden="true" class="text-teal" />
+            {t('standingsPage.scheme.fastestLap')}
+          </dt>
+          <dd class="text-muted">
+            {summary.fastestLap
+              ? summary.fastestLap.maxPos != null
+                ? t('standingsPage.scheme.fastestLapTop', { points: pts(summary.fastestLap.bonus), max: summary.fastestLap.maxPos })
+                : t('standingsPage.scheme.fastestLapAlways', { points: pts(summary.fastestLap.bonus) })
+              : t('standingsPage.scheme.noBonus')}
+          </dd>
+        </div>
+        <div class="bonus-row">
+          <dt class="flex items-center gap-2 font-semibold">
+            <span class="pole-mark" aria-hidden="true">P</span>
+            {t('standingsPage.scheme.pole')}
+          </dt>
+          <dd class="text-muted">
+            {summary.pole != null ? t('standingsPage.scheme.poleBonus', { points: pts(summary.pole) }) : t('standingsPage.scheme.noBonus')}
+          </dd>
+        </div>
+        <div class="bonus-row">
+          <dt class="flex items-center gap-2 font-semibold">
+            <span class="reserve-chip" aria-hidden="true">R</span>
+            {t('standingsPage.reserve.label')}
+          </dt>
+          <dd class="text-muted">
+            <strong class="text-fg">{season.reserve_points_for_constructors ? t('standingsPage.reserve.yes') : t('standingsPage.reserve.no')}</strong>
+            {' – '}
+            {season.reserve_points_for_constructors ? t('standingsPage.reserve.counts') : t('standingsPage.reserve.notCounted')}
+          </dd>
+        </div>
+      </dl>
+    </section>
+  )
+}
+
+<style>
+  .scheme-table th,
+  .scheme-table td {
+    padding-inline: 0.55rem;
+  }
+  .bonus-row {
+    display: grid;
+    gap: 0.25rem;
+  }
+  @media (min-width: 640px) {
+    .bonus-row {
+      grid-template-columns: minmax(12rem, auto) 1fr;
+      gap: 1rem;
+    }
+  }
+  .pole-mark {
+    display: inline-flex;
+    justify-content: center;
+    width: 16px;
+    font-weight: 800;
+    color: var(--color-green);
+  }
+  .reserve-chip {
+    padding: 0 0.3rem;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    font-size: var(--fs-micro);
+    font-weight: 700;
+    color: var(--color-muted);
+  }
+</style>

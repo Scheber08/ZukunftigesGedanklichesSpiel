@@ -1,0 +1,13 @@
+---
+/** Zwischenstand „Stand nach Runde X“, englisch (Route 'standingsAfter'). */
+import type { GetStaticPaths } from 'astro';
+import StandingsAfterView from '~/components/standings/StandingsAfterView.astro';
+import { loadLeague } from '~/lib/server/league';
+import { standingsAfterPaths } from '~/lib/standings/page';
+
+export const getStaticPaths = (async () => standingsAfterPaths(await loadLeague())) satisfies GetStaticPaths;
+
+const { season, round } = Astro.params;
+---
+
+<StandingsAfterView lang="en" seasonSlug={season} round={Number(round)} />

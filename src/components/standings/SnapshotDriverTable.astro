@@ -1,0 +1,106 @@
+---
+/**
+ * Fahrerwertung „Stand nach Runde X“ mit Positionsveränderung gegenüber der Vorrunde.
+ * Startnummer und Reserve-Kennzeichen beziehen sich auf den Stand der Runde (Archiv-genau).
+ */
+import Movement from './Movement.astro';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import TeamName from '~/components/ui/TeamName.astro';
+import { useT, type Lang } from '~/i18n';
+import type { Id } from '~/lib/db/types';
+import type { DriverStanding } from '~/lib/domain/standings';
+import type { League } from '~/lib/league/league';
+import type { Movement as MovementValue } from '~/lib/standings/page';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  standings: DriverStanding[];
+  movements: Map<Id, MovementValue>;
+  /** Zeitpunkt der Runde – für die damals gültige Startnummer */
+  at: Date;
+  caption: string;
+}
+const { lang, league, standings, movements, at, caption } = Astro.props;
+const t = useT(lang);
+const showMovement = movements.size > 0;
+---
+
+{
+  standings.length === 0 ? (
+    <EmptyState title={t('standings.none')} />
+  ) : (
+    <div class="table-wrap">
+      <table class="timing-table">
+        <caption class="sr-only">{caption}</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="pos">
+              <abbr title={t('common.position')}>{t('common.positionShort')}</abbr>
+            </th>
+            {showMovement && (
+              <th scope="col" class="move-col">
+                <abbr title={t('standingsPage.move.headerLong')}>{t('standingsPage.move.header')}</abbr>
+              </th>
+            )}
+            <th scope="col" class="sticky-col">{t('common.driver')}</th>
+            <th scope="col">{t('common.team')}</th>
+            <th scope="col" class="num">{t('common.points')}</th>
+            <th scope="col" class="num">{t('standings.gap')}</th>
+            <th scope="col" class="num">{t('standings.wins')}</th>
+            <th scope="col" class="num">{t('standings.podiums')}</th>
+            <th scope="col" class="num">{t('standings.poles')}</th>
+            <th scope="col" class="num">
+              <abbr title={t('standings.fastestLapsLong')}>{t('standings.fastestLaps')}</abbr>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {standings.map((s) => {
+            const team = s.teamId != null ? league.team(s.teamId) : undefined;
+            const reserveOnly = s.starts > 0 && s.reserveStarts === s.starts;
+            return (
+              <tr>
+                <td class="pos">
+                  {s.tied && <span class="sr-only">{t('standings.tied')} </span>}
+                  {s.tied ? `=${s.position}` : s.position}
+                </td>
+                {showMovement && (
+                  <td class="move-col">
+                    <Movement lang={lang} movement={movements.get(s.driverId)} />
+                  </td>
+                )}
+                <th scope="row" class="sticky-col font-normal">
+                  <DriverLink
+                    lang={lang}
+                    driver={league.driver(s.driverId)}
+                    team={team}
+                    number={league.numberAt(s.driverId, at) ?? league.numberOf(s.driverId)}
+                    reserve={reserveOnly}
+                  />
+                </th>
+                <td class="muted">
+                  <TeamName lang={lang} team={team} stripe={false} />
+                </td>
+                <td class="num text-lg font-bold">{s.points}</td>
+                <td class="num muted">{s.gapToLeader > 0 ? `−${s.gapToLeader}` : '–'}</td>
+                <td class="num">{s.wins || ''}</td>
+                <td class="num">{s.podiums || ''}</td>
+                <td class="num">{s.poles || ''}</td>
+                <td class="num">{s.fastestLaps || ''}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+<style>
+  .timing-table .move-col {
+    width: 3.5rem;
+    text-align: center;
+  }
+</style>

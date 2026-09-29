@@ -1,0 +1,63 @@
+---
+/**
+ * Erklärung des Gleichstands (Countback, Plan §4.4) mit Link auf die Regel im Regelwerk.
+ * Die §-Nummer kommt aus dem gültigen Regelwerk, damit Text und Regel nie auseinanderlaufen.
+ */
+import Scale from '@lucide/astro/icons/scale';
+import { url, useT, type Lang } from '~/i18n';
+import type { League } from '~/lib/league/league';
+import { ruleNumber, TIE_RULE_ANCHOR } from '~/lib/standings/page';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  headingId?: string;
+}
+const { lang, league, headingId = 'tie-break' } = Astro.props;
+const t = useT(lang);
+const ref = ruleNumber(league.data.rules_sections, league.rulesVersion?.id);
+const href = `${url(lang, 'rules')}#${TIE_RULE_ANCHOR}`;
+---
+
+<section class="card p-5 md:p-6" aria-labelledby={headingId}>
+  <h3 id={headingId} class="flex items-center gap-2 text-xl uppercase">
+    <Scale size={20} aria-hidden="true" class="text-teal" />
+    {t('standingsPage.tie.title')}
+  </h3>
+  <p class="mt-4 text-sm">{t('standingsPage.tie.intro')}</p>
+  <ol class="tie-steps mt-3 grid gap-2 text-sm">
+    <li>{t('standingsPage.tie.step1')}</li>
+    <li>{t('standingsPage.tie.step2')}</li>
+    <li>{t('standingsPage.tie.step3')}</li>
+  </ol>
+  <p class="mt-4 text-sm text-muted">{t('standingsPage.tie.shared')}</p>
+  <a href={href} class="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-green hover:text-teal">
+    {ref ? t('standingsPage.tie.rulesLink', { ref }) : t('standingsPage.tie.rulesLinkPlain')} →
+  </a>
+</section>
+
+<style>
+  .tie-steps {
+    counter-reset: step;
+  }
+  .tie-steps li {
+    counter-increment: step;
+    display: flex;
+    gap: 0.75rem;
+    align-items: baseline;
+  }
+  .tie-steps li::before {
+    content: counter(step);
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.8125rem;
+  }
+</style>

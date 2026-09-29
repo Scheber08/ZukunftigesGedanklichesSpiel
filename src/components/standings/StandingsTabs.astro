@@ -1,0 +1,92 @@
+---
+/**
+ * Umschalter Fahrer | Konstrukteure | Matrix als zugängliche Tabs (Plan §3.5, §4.4).
+ *
+ * Progressive Enhancement: Ohne JavaScript ist das eine Sprungnavigation zu den
+ * Abschnitten, alle Panels sind sichtbar. Mit JavaScript wird daraus ein ARIA-Tablist
+ * (Pfeiltasten, Pos1/Ende), inaktive Panels werden ausgeblendet und der gewählte Tab
+ * landet im Anker der URL – so teilt der „Link kopieren“-Button genau diese Ansicht.
+ *
+ * Die Panels liegen in der View; sie brauchen nur die passende `id` und `data-tab-panel`.
+ */
+interface Props {
+  /** Beschriftung der Navigation (aria-label) */
+  label: string;
+  tabs: Array<{ id: string; label: string }>;
+  class?: string;
+}
+const { label, tabs, class: className } = Astro.props;
+---
+
+<nav class:list={['tabs standings-tabs', className]} aria-label={label} data-standings-tabs>
+  {
+    tabs.map((tab) => (
+      <a href={`#${tab.id}`} id={`tab-${tab.id}`} class="tab" data-tab={tab.id}>
+        {tab.label}
+      </a>
+    ))
+  }
+</nav>
+
+<script>
+  /** Macht aus der Sprungnavigation eine Tablist nach dem WAI-ARIA-Muster (automatische Aktivierung). */
+  function enhance(nav: HTMLElement) {
+    const tabs = [...nav.querySelectorAll<HTMLAnchorElement>('a[data-tab]')];
+    const panels = tabs.map((tab) => document.getElementById(tab.dataset.tab ?? ''));
+    if (tabs.length < 2 || panels.some((p) => p == null)) return;
+
+    nav.setAttribute('role', 'tablist');
+    tabs.forEach((tab, i) => {
+      const panel = panels[i]!;
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-controls', panel.id);
+      panel.setAttribute('role', 'tabpanel');
+      panel.setAttribute('aria-labelledby', tab.id);
+      panel.tabIndex = 0;
+    });
+
+    const select = (index: number, opts: { focus?: boolean; updateUrl?: boolean } = {}) => {
+      tabs.forEach((tab, i) => {
+        const active = i === index;
+        tab.setAttribute('aria-selected', String(active));
+        tab.tabIndex = active ? 0 : -1;
+        panels[i]!.hidden = !active;
+      });
+      if (opts.focus) tabs[index]!.focus();
+      if (opts.updateUrl) history.replaceState(history.state, '', `#${tabs[index]!.dataset.tab}`);
+    };
+
+    const indexFromHash = () => {
+      const id = decodeURIComponent(window.location.hash.slice(1));
+      return tabs.findIndex((tab) => tab.dataset.tab === id);
+    };
+
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', (e) => {
+        e.preventDefault();
+        select(i, { updateUrl: true });
+      });
+      tab.addEventListener('keydown', (e) => {
+        const last = tabs.length - 1;
+        let next: number | null = null;
+        if (e.key === 'ArrowRight') next = i === last ? 0 : i + 1;
+        else if (e.key === 'ArrowLeft') next = i === 0 ? last : i - 1;
+        else if (e.key === 'Home') next = 0;
+        else if (e.key === 'End') next = last;
+        if (next == null) return;
+        e.preventDefault();
+        select(next, { focus: true, updateUrl: true });
+      });
+    });
+
+    window.addEventListener('hashchange', () => {
+      const i = indexFromHash();
+      if (i >= 0) select(i);
+    });
+
+    const initial = indexFromHash();
+    select(initial >= 0 ? initial : 0);
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-standings-tabs]').forEach(enhance);
+</script>

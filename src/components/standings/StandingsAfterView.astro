@@ -1,0 +1,231 @@
+---
+/**
+ * „Stand nach Runde X“ (Plan §4.4, §6.3): Fahrer- und Konstrukteurswertung nach einer
+ * gewerteten Runde, mit Positionsveränderung gegenüber der vorherigen gewerteten Runde
+ * und Navigation zwischen den Runden. Seiten-View für
+ * /saison/[saison]/wertung/nach-runde-[runde] und /en/season/[season]/standings/after-round-[round].
+ */
+import ChevronLeft from '@lucide/astro/icons/chevron-left';
+import ChevronRight from '@lucide/astro/icons/chevron-right';
+import RoundPicker from './RoundPicker.astro';
+import SnapshotDriverTable from './SnapshotDriverTable.astro';
+import SnapshotTeamTable from './SnapshotTeamTable.astro';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import ShareButton from '~/components/ui/ShareButton.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { formatDateLong } from '~/lib/domain/time';
+import { loadLeague } from '~/lib/server/league';
+import {
+  driverPositions,
+  movements,
+  roundNeighbours,
+  seasonName,
+  teamPositions,
+} from '~/lib/standings/page';
+import { breadcrumbJsonLd, roundLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  seasonSlug: string;
+  round: number;
+}
+const { lang, seasonSlug, round: roundNumber } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const season = league.seasonBySlug(seasonSlug);
+const { previous, current, next } = season ? roundNeighbours(league, season.id, roundNumber) : { previous: undefined, current: undefined, next: undefined };
+
+const pageAlternates = alternates('standingsAfter', { season: seasonSlug, round: roundNumber });
+const site = Astro.site ?? new URL(Astro.url.origin);
+
+const name = season ? seasonName(season, lang) : '';
+const label = (r: typeof current) => (r ? roundLabel(r, league.track(r.track_id), lang) : '');
+const currentLabel = label(current);
+
+const drivers = season && current ? league.driverStandings(season.id, current.number) : [];
+const teams = season && current ? league.teamStandings(season.id, current.number) : [];
+const driverMoves = movements(driverPositions(drivers), season && previous ? driverPositions(league.driverStandings(season.id, previous.number)) : null);
+const teamMoves = movements(teamPositions(teams), season && previous ? teamPositions(league.teamStandings(season.id, previous.number)) : null);
+
+const isLatest = current != null && next == null;
+const dotd = season && current ? league.awardsOf(season.id).find((a) => a.type === 'driver_of_the_day' && a.round_id === current.id) : undefined;
+
+// Die laufende Saison hat ihre Gesamtwertung unter /wertung, abgeschlossene im Archiv
+const seasonHref =
+  season && season.id === league.currentSeason?.id ? url(lang, 'standings') : url(lang, 'seasonStandings', { season: seasonSlug });
+const selfHref = pageAlternates[lang];
+
+const title = t('standingsPage.meta.afterTitle', { round: currentLabel, season: name });
+const breadcrumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('standingsPage.meta.title', { season: name }), href: seasonHref },
+  { label: t('standingsPage.after.title', { round: currentLabel }) },
+];
+const jsonLd = breadcrumbJsonLd(
+  site,
+  breadcrumbs.map((b) => ({ name: b.label, href: b.href ?? selfHref })),
+);
+---
+
+<BaseLayout
+  lang={lang}
+  title={title}
+  description={t('standingsPage.meta.afterDescription', { round: currentLabel, season: name })}
+  alternates={pageAlternates}
+  jsonLd={jsonLd}
+>
+  <PageHeader
+    lang={lang}
+    title={t('standingsPage.after.title', { round: currentLabel })}
+    eyebrow={t('standingsPage.after.eyebrow', { season: name })}
+    breadcrumbs={breadcrumbs}
+  >
+    <Fragment slot="actions">
+      <ShareButton lang={lang} />
+    </Fragment>
+    {
+      current && (
+        <div class="mt-4 grid gap-3">
+          <p class="max-w-2xl text-muted">
+            {previous
+              ? t('standingsPage.after.lead', { date: formatDateLong(current.start_utc, lang), prev: label(previous) })
+              : t('standingsPage.after.leadFirst', { date: formatDateLong(current.start_utc, lang) })}{' '}
+            {isLatest && (season?.status === 'finished' ? t('standingsPage.after.latestFinal') : t('standingsPage.after.latest'))}
+          </p>
+          <ul class="facts">
+            <li class="inline-flex items-center gap-2">
+              <span class="text-muted">{t('standingsPage.after.resultStatus')}:</span>
+              <RoundStatusBadge status={current.status} lang={lang} />
+            </li>
+            {season && (
+              <li>
+                <a href={url(lang, 'race', { season: season.slug, round: current.number })} class="inline-flex min-h-11 items-center font-semibold text-green hover:text-teal">
+                  {t('standingsPage.after.toRace', { round: currentLabel })} →
+                </a>
+              </li>
+            )}
+            {dotd?.driver_id != null && (
+              <li class="inline-flex items-center gap-2">
+                <span class="text-muted">{t('standingsPage.after.dotd')}:</span>
+                <DriverLink lang={lang} driver={league.driver(dotd.driver_id)} stripe={false} />
+              </li>
+            )}
+          </ul>
+        </div>
+      )
+    }
+  </PageHeader>
+
+  <div class="container-page py-10 md:py-14">
+    {
+      !season || !current ? (
+        <EmptyState title={t('standings.none')} />
+      ) : (
+        <>
+          <nav class="round-nav" aria-label={t('standingsPage.after.nav')}>
+            {previous ? (
+              <a href={url(lang, 'standingsAfter', { season: season.slug, round: previous.number })} class="btn btn-secondary btn-sm min-h-11" rel="prev">
+                <ChevronLeft size={16} aria-hidden="true" />
+                <span>
+                  <span class="sr-only">{t('standingsPage.after.prev')}: </span>
+                  {label(previous)}
+                </span>
+              </a>
+            ) : (
+              <span />
+            )}
+            <a href={seasonHref} class="btn btn-ghost btn-sm min-h-11 border border-border">
+              {t('standingsPage.after.toSeason')}
+            </a>
+            {next ? (
+              <a href={url(lang, 'standingsAfter', { season: season.slug, round: next.number })} class="btn btn-secondary btn-sm min-h-11" rel="next">
+                <span>
+                  <span class="sr-only">{t('standingsPage.after.next')}: </span>
+                  {label(next)}
+                </span>
+                <ChevronRight size={16} aria-hidden="true" />
+              </a>
+            ) : (
+              <span />
+            )}
+          </nav>
+
+          <section class="mt-10" aria-labelledby="after-drivers">
+            <SectionTitle id="after-drivers" title={t('standingsPage.drivers.title')} />
+            <SnapshotDriverTable
+              lang={lang}
+              league={league}
+              standings={drivers}
+              movements={driverMoves}
+              at={new Date(current.start_utc)}
+              caption={t('standingsPage.after.driversCaption', { round: currentLabel })}
+            />
+          </section>
+
+          <section class="mt-14" aria-labelledby="after-teams">
+            <SectionTitle id="after-teams" title={t('standingsPage.teams.title')} />
+            <p class="mb-5 text-sm text-muted">
+              <strong class="text-fg">
+                {t('standingsPage.reserve.label')}: {season.reserve_points_for_constructors ? t('standingsPage.reserve.yes') : t('standingsPage.reserve.no')}.
+              </strong>{' '}
+              {season.reserve_points_for_constructors ? t('standingsPage.reserve.counts') : t('standingsPage.reserve.notCounted')}
+            </p>
+            <SnapshotTeamTable
+              lang={lang}
+              league={league}
+              standings={teams}
+              movements={teamMoves}
+              caption={t('standingsPage.after.teamsCaption', { round: currentLabel })}
+            />
+          </section>
+
+          <section class="mt-16" aria-labelledby="after-rounds">
+            <SectionTitle id="after-rounds" title={t('standingsPage.rounds.title')} />
+            <RoundPicker lang={lang} league={league} season={season} activeRound={current.number} />
+          </section>
+        </>
+      )
+    }
+  </div>
+</BaseLayout>
+
+<style>
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 1.5rem;
+    font-size: var(--fs-small);
+  }
+  .round-nav {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .round-nav > :first-child {
+    justify-self: start;
+  }
+  .round-nav > :last-child {
+    justify-self: end;
+  }
+  .round-nav .btn {
+    white-space: normal;
+    text-align: left;
+  }
+  @media (max-width: 639px) {
+    .round-nav {
+      grid-template-columns: 1fr 1fr;
+    }
+    .round-nav > :nth-child(2) {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      justify-self: stretch;
+    }
+  }
+</style>

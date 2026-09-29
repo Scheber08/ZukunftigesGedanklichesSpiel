@@ -1,0 +1,13 @@
+---
+/** Archiv-Wertung einer Saison, englisch (Route 'seasonStandings'). */
+import type { GetStaticPaths } from 'astro';
+import { loadLeague } from '~/lib/server/league';
+import { seasonStandingsPaths } from '~/lib/standings/page';
+import StandingsView from '~/views/StandingsView.astro';
+
+export const getStaticPaths = (async () => seasonStandingsPaths(await loadLeague())) satisfies GetStaticPaths;
+
+const { season } = Astro.params;
+---
+
+<StandingsView lang="en" seasonSlug={season} />

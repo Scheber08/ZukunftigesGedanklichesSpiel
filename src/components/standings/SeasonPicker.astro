@@ -1,0 +1,64 @@
+---
+/**
+ * Saisonauswahl (Plan §4.4): Links zu allen Saisons mit Wertung. Die laufende Saison
+ * verlinkt auf /wertung, abgeschlossene auf ihre stabile Archiv-URL /saison/[saison]/wertung.
+ */
+import { url, useT, type Lang } from '~/i18n';
+import type { Id } from '~/lib/db/types';
+import type { League } from '~/lib/league/league';
+import { seasonName } from '~/lib/standings/page';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  /** Saison, die gerade angezeigt wird */
+  activeSeasonId: Id;
+  /** Adresse der aktuellen Seite (für den aktiven Eintrag) */
+  selfHref: string;
+}
+const { lang, league, activeSeasonId, selfHref } = Astro.props;
+const t = useT(lang);
+const current = league.currentSeason;
+const items = league.archiveSeasons.map((s) => ({
+  season: s,
+  active: s.id === activeSeasonId,
+  href: s.id === activeSeasonId ? selfHref : s.id === current?.id ? url(lang, 'standings') : url(lang, 'seasonStandings', { season: s.slug }),
+}));
+---
+
+{
+  items.length > 1 && (
+    <nav aria-label={t('standingsPage.seasons.label')} class="season-picker">
+      <span class="micro" aria-hidden="true">
+        {t('standingsPage.seasons.label')}
+      </span>
+      <div class="segmented flex-wrap">
+        {items.map((item) => (
+          <a href={item.href} aria-current={item.active ? 'page' : undefined}>
+            {seasonName(item.season, lang)}
+            {item.season.status === 'active' && <span class="running">· {t('standingsPage.seasons.running')}</span>}
+          </a>
+        ))}
+      </div>
+    </nav>
+  )
+}
+
+<style>
+  .season-picker {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+  }
+  /* Touch-Ziele mindestens 44 px */
+  .season-picker a {
+    min-height: 44px;
+    gap: 0.35rem;
+  }
+  .running {
+    font-weight: 500;
+    font-size: 0.75rem;
+    color: var(--color-teal);
+  }
+</style>

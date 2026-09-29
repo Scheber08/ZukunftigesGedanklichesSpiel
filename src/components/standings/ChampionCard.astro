@@ -1,0 +1,93 @@
+---
+/** Champions einer abgeschlossenen Saison (Fahrer + Konstrukteure), hervorgehoben mit Verlaufsrahmen. */
+import Trophy from '@lucide/astro/icons/trophy';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import TeamName from '~/components/ui/TeamName.astro';
+import { useT, type Lang } from '~/i18n';
+import type { SeasonRow } from '~/lib/db/types';
+import type { League } from '~/lib/league/league';
+import { seasonName, type SeasonChampions } from '~/lib/standings/page';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  season: SeasonRow;
+  champions: SeasonChampions;
+}
+const { lang, league, season, champions } = Astro.props;
+const t = useT(lang);
+const pts = (n: number | null) => (n == null ? '' : n === 1 ? t('standingsPage.points.one') : t('standingsPage.points.many', { n }));
+const driverTeamId = champions.driverId != null ? league.driverStandings(season.id).find((s) => s.driverId === champions.driverId)?.teamId : null;
+const driverTeam = driverTeamId != null ? league.team(driverTeamId) : undefined;
+const headingId = `champions-${season.id}`;
+---
+
+<section class="champion-card card" aria-labelledby={headingId}>
+  <div class="glow-bg" aria-hidden="true"></div>
+  <h2 id={headingId} class="flex items-center gap-2 text-xl uppercase">
+    <Trophy size={22} aria-hidden="true" class="text-green" />
+    {t('standingsPage.champion.title', { season: seasonName(season, lang) })}
+  </h2>
+  <dl class="mt-5 grid gap-5 sm:grid-cols-2">
+    {
+      champions.driverId != null && (
+        <div class="champ">
+          <dt class="micro">{t('standingsPage.champion.driver')}</dt>
+          <dd class="mt-2 text-xl">
+            <DriverLink lang={lang} driver={league.driver(champions.driverId)} team={driverTeam} flag />
+          </dd>
+          <dd class="mt-1 text-sm text-muted">
+            {driverTeam && (
+              <>
+                {driverTeam.name} ·{' '}
+              </>
+            )}
+            <span class="tabular">{pts(champions.driverPoints)}</span>
+          </dd>
+        </div>
+      )
+    }
+    {
+      champions.teamId != null && (
+        <div class="champ">
+          <dt class="micro">{t('standingsPage.champion.team')}</dt>
+          <dd class="mt-2 text-xl font-semibold uppercase">
+            <TeamName lang={lang} team={league.team(champions.teamId)} />
+          </dd>
+          <dd class="mt-1 text-sm text-muted tabular">{pts(champions.teamPoints)}</dd>
+        </div>
+      )
+    }
+  </dl>
+</section>
+
+<style>
+  .champion-card {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    padding: 1.25rem;
+    border-color: transparent;
+    background:
+      linear-gradient(var(--color-surface-1), var(--color-surface-1)) padding-box,
+      var(--g-accent) border-box;
+  }
+  @media (min-width: 768px) {
+    .champion-card {
+      padding: 1.75rem;
+    }
+  }
+  .glow-bg {
+    position: absolute;
+    inset: -40% -10% auto auto;
+    width: 60%;
+    height: 180%;
+    z-index: -1;
+    background: radial-gradient(closest-side, rgb(55 190 137 / 0.18), transparent 70%);
+    pointer-events: none;
+  }
+  .champ {
+    padding-left: 0.875rem;
+    border-left: 1px solid var(--color-border);
+  }
+</style>

@@ -1,0 +1,111 @@
+---
+/**
+ * „Stand nach Runde X“ (Plan §4.4): Links auf die statischen Zwischenstands-Seiten
+ * jeder gewerteten Runde. Vorläufige Ergebnisse sind mit Text gekennzeichnet.
+ */
+import Flag from '~/components/ui/Flag.astro';
+import { url, useT, type Lang } from '~/i18n';
+import type { SeasonRow } from '~/lib/db/types';
+import type { League } from '~/lib/league/league';
+import { roundLabel, trackName } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  season: SeasonRow;
+  /** Runde der gerade angezeigten Seite */
+  activeRound?: number;
+}
+const { lang, league, season, activeRound } = Astro.props;
+const t = useT(lang);
+const rounds = league.countedRounds(season.id);
+---
+
+{
+  rounds.length === 0 ? (
+    <p class="text-sm text-muted">{t('standingsPage.rounds.none')}</p>
+  ) : (
+    <nav aria-label={t('standingsPage.rounds.label')}>
+      <ol class="round-picker">
+        {rounds.map((r) => {
+          const track = league.track(r.track_id);
+          const active = r.number === activeRound;
+          return (
+            <li>
+              <a
+                href={url(lang, 'standingsAfter', { season: season.slug, round: r.number })}
+                class="round-chip"
+                aria-current={active ? 'page' : undefined}
+                title={t('standingsPage.state.after', { round: roundLabel(r, track, lang) })}
+              >
+                <span class="round-no">R{r.number}</span>
+                <span class="round-track">
+                  <Flag code={track?.country_code} lang={lang} decorative />
+                  {trackName(track, lang)}
+                </span>
+                {r.status === 'provisional' && <span class="round-prov">{t('standingsPage.rounds.provisional')}</span>}
+              </a>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  )
+}
+
+<style>
+  .round-picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+    gap: 0.5rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .round-chip {
+    display: grid;
+    gap: 0.125rem;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface-1);
+    text-decoration: none;
+    transition:
+      border-color 180ms ease-out,
+      background-color 180ms ease-out;
+  }
+  .round-chip:hover {
+    border-color: var(--color-teal);
+    background: var(--color-surface-2);
+  }
+  .round-chip[aria-current='page'] {
+    border-color: var(--color-green);
+    background: var(--color-surface-2);
+    box-shadow: inset 0 -2px 0 var(--color-green);
+  }
+  .round-no {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.05rem;
+    line-height: 1.1;
+  }
+  .round-track {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    font-size: 0.8125rem;
+    color: var(--color-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .round-prov {
+    font-size: var(--fs-micro);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-warning);
+  }
+</style>

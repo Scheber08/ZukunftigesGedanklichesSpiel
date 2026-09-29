@@ -1,0 +1,57 @@
+---
+/**
+ * Positionsveränderung gegenüber der Vorrunde: ▲/▼ mit Zahl, „=“ oder „Neu“.
+ * Pfeile sind dekorativ, der Screenreader bekommt den Text („2 Plätze gewonnen“).
+ */
+import { useT, type Lang } from '~/i18n';
+import type { Movement } from '~/lib/standings/page';
+
+interface Props {
+  lang: Lang;
+  movement: Movement | undefined;
+}
+const { lang, movement } = Astro.props;
+const t = useT(lang);
+
+const label = !movement
+  ? ''
+  : movement.kind === 'up'
+    ? movement.n === 1
+      ? t('standingsPage.move.up1')
+      : t('standingsPage.move.upN', { n: movement.n })
+    : movement.kind === 'down'
+      ? movement.n === 1
+        ? t('standingsPage.move.down1')
+        : t('standingsPage.move.downN', { n: movement.n })
+      : movement.kind === 'same'
+        ? t('standingsPage.move.same')
+        : t('standingsPage.move.new');
+---
+
+{
+  movement && (
+    <span
+      class:list={[
+        'movement',
+        movement.kind === 'up' && 'text-green',
+        movement.kind === 'down' && 'text-danger',
+        (movement.kind === 'same' || movement.kind === 'new') && 'text-muted',
+      ]}
+      title={label}
+    >
+      <span aria-hidden="true">
+        {movement.kind === 'up' ? `▲${movement.n}` : movement.kind === 'down' ? `▼${movement.n}` : movement.kind === 'same' ? '=' : t('standingsPage.move.newShort')}
+      </span>
+      <span class="sr-only">{label}</span>
+    </span>
+  )
+}
+
+<style>
+  .movement {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+</style>
