@@ -1,0 +1,132 @@
+---
+/**
+ * Aufstellung einer Runde (Plan §4.3): 22 Cockpits nach Team, Startnummer,
+ * Reservefahrer mit Kürzel „R“ und „ersetzt <Gamertag>“.
+ * Ohne veröffentlichte Aufstellung: leerer Zustand, bei geplanten Runden zusätzlich
+ * die Stammbesetzung laut Cockpit-Plan (klar als unverbindlich gekennzeichnet).
+ */
+import DriverLink from '~/components/ui/DriverLink.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import TeamName from '~/components/ui/TeamName.astro';
+import { useT, type Lang } from '~/i18n';
+import { groupByTeam } from '~/lib/calendar/race';
+import type { RoundRow } from '~/lib/db/types';
+import type { League } from '~/lib/league/league';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  round: RoundRow;
+}
+const { lang, league, round } = Astro.props;
+const t = useT(lang);
+const entries = league.entriesOf(round.id);
+const groups = groupByTeam(entries);
+const reserves = entries.filter((e) => e.role === 'reserve').length;
+
+// Vorschau für geplante Runden: Cockpits der Saison, gültig für diese Runde
+const teamOrder = new Map(league.teamsOf(round.season_id).map((team, i) => [team.id, i]));
+const at = new Date(round.start_utc);
+const expected =
+  entries.length === 0 && round.status === 'scheduled'
+    ? groupByTeam(
+        league
+          .seatsOf(round.season_id, round.number)
+          .sort((a, b) => (teamOrder.get(a.team_id) ?? 99) - (teamOrder.get(b.team_id) ?? 99) || a.seat_no - b.seat_no)
+          .map((s) => ({ team_id: s.team_id, seat_no: s.seat_no, driver_id: s.driver_id, number: league.numberAt(s.driver_id, at) ?? league.numberOf(s.driver_id) })),
+      )
+    : [];
+---
+
+{
+  groups.length > 0 ? (
+    <>
+      <p class="mb-5 text-sm text-muted">
+        {t('calendar.lineup.summary', { drivers: entries.length, teams: groups.length })}
+        {reserves > 0 && <> · {t('calendar.lineup.reserves', { n: reserves })}</>}
+      </p>
+      <ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {groups.map((g) => {
+          const team = league.team(g.teamId);
+          return (
+            <li class="lineup-team card">
+              <h3 class="lineup-team-name">
+                <TeamName lang={lang} team={team} />
+              </h3>
+              <ol class="mt-3 grid gap-2">
+                {g.entries.map((e) => (
+                  <li class="lineup-driver">
+                    <span class="sr-only">{t('calendar.lineup.seat', { n: e.seat_no })}: </span>
+                    <DriverLink lang={lang} driver={league.driver(e.driver_id)} team={team} number={e.race_number} reserve={e.role === 'reserve'} stripe={false} />
+                    {e.role === 'reserve' && e.replaces_driver_id != null && (
+                      <span class="replaces">{t('common.replaces', { name: league.driverName(e.replaces_driver_id, lang) })}</span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  ) : (
+    <>
+      <EmptyState
+        title={t('calendar.lineup.emptyTitle')}
+        text={round.status === 'cancelled' ? t('calendar.lineup.cancelledText') : t('calendar.lineup.emptyText')}
+      />
+      {expected.length > 0 && (
+        <div class="mt-8">
+          <h3 class="text-lg uppercase">{t('calendar.lineup.expectedTitle')}</h3>
+          <p class="mt-1 mb-4 text-sm text-muted">{t('calendar.lineup.expectedNote')}</p>
+          <ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {expected.map((g) => {
+              const team = league.team(g.teamId);
+              return (
+                <li class="lineup-team card is-expected">
+                  <h4 class="lineup-team-name">
+                    <TeamName lang={lang} team={team} />
+                  </h4>
+                  <ol class="mt-3 grid gap-2">
+                    {g.entries.map((s) => (
+                      <li class="lineup-driver">
+                        <span class="sr-only">{t('calendar.lineup.seat', { n: s.seat_no })}: </span>
+                        <DriverLink lang={lang} driver={league.driver(s.driver_id)} team={team} number={s.number} stripe={false} />
+                      </li>
+                    ))}
+                  </ol>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </>
+  )
+}
+
+<style>
+  .lineup-team {
+    padding: 1rem 1.125rem;
+  }
+  .lineup-team.is-expected {
+    border-style: dashed;
+    background: transparent;
+  }
+  .lineup-team-name {
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .lineup-driver {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.75rem;
+    min-height: 2rem;
+  }
+  .replaces {
+    font-size: var(--fs-small);
+    color: var(--color-muted);
+  }
+</style>

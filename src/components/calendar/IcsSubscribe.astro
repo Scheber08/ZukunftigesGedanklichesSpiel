@@ -1,0 +1,123 @@
+---
+/**
+ * ICS-Abo (Plan §4.3): webcal://-Link auf /kalender.ics, normaler Download,
+ * Abo-Adresse zum Kopieren (für Google Kalender) und Hinweis zur Zeitumstellung.
+ */
+import CalendarSync from '@lucide/astro/icons/calendar-sync';
+import Copy from '@lucide/astro/icons/copy';
+import Download from '@lucide/astro/icons/download';
+import { url, useT, type Lang } from '~/i18n';
+
+interface Props {
+  lang: Lang;
+  /** Basis-URL der Seite (Astro.site) */
+  site: URL;
+  class?: string;
+}
+const { lang, site, class: className } = Astro.props;
+const t = useT(lang);
+const icsPath = url(lang, 'calendarIcs');
+const httpsUrl = new URL(icsPath, site).href;
+const webcalUrl = httpsUrl.replace(/^https?:/, 'webcal:');
+const inputId = `ics-url-${lang}`;
+---
+
+<section class:list={['ics-box card p-5 md:p-6', className]} aria-labelledby="ics-title">
+  <h2 id="ics-title" class="flex items-center gap-3 text-xl uppercase">
+    <span class="text-teal"><CalendarSync size={22} aria-hidden="true" /></span>
+    {t('calendar.subscribe.title')}
+  </h2>
+  <p class="mt-3 text-sm text-muted">{t('calendar.subscribe.text')}</p>
+
+  <div class="mt-5 flex flex-wrap gap-3">
+    <a href={webcalUrl} class="btn btn-primary" data-track="ics_subscribe">
+      <CalendarSync size={18} aria-hidden="true" />
+      {t('calendar.subscribe.webcal')}
+    </a>
+    <a href={icsPath} download="kalender.ics" class="btn btn-secondary" data-track="ics_download">
+      <Download size={18} aria-hidden="true" />
+      {t('calendar.subscribe.download')}
+    </a>
+  </div>
+
+  <div class="field mt-5">
+    <label for={inputId} class="label">{t('calendar.subscribe.urlLabel')}</label>
+    <div class="flex gap-2">
+      <input id={inputId} class="input min-w-0 flex-1 font-mono text-sm" type="url" readonly value={httpsUrl} data-ics-url />
+      <button
+        type="button"
+        class="btn btn-secondary btn-icon shrink-0"
+        data-ics-copy
+        data-copied-label={t('calendar.subscribe.copied')}
+        aria-label={t('calendar.subscribe.copy')}
+        title={t('calendar.subscribe.copy')}
+        hidden
+      >
+        <Copy size={18} aria-hidden="true" />
+      </button>
+    </div>
+    <p class="field-hint" data-ics-status role="status" aria-live="polite"></p>
+  </div>
+
+  <p class="mt-4 text-sm text-muted">{t('calendar.subscribe.dstNote')} {t('calendar.subscribe.includes')}</p>
+
+  <details class="howto mt-4">
+    <summary>{t('calendar.subscribe.howtoTitle')}</summary>
+    <ul class="mt-2 grid gap-2 text-sm text-muted">
+      <li>{t('calendar.subscribe.howtoApple')}</li>
+      <li>{t('calendar.subscribe.howtoGoogle')}</li>
+      <li>{t('calendar.subscribe.howtoOutlook')}</li>
+    </ul>
+  </details>
+</section>
+
+<style>
+  [data-ics-copy][hidden] {
+    display: none;
+  }
+  .howto summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    cursor: pointer;
+    font-size: var(--fs-small);
+    font-weight: 600;
+    color: var(--color-green);
+  }
+  .howto summary:hover {
+    color: var(--color-teal);
+  }
+  .howto ul {
+    padding-left: 1.2em;
+    list-style: disc;
+  }
+  .howto li::marker {
+    color: var(--color-teal);
+  }
+</style>
+
+<script>
+  // Abo-Adresse kopieren (ohne JS bleibt das Feld zum manuellen Markieren)
+  document.querySelectorAll<HTMLElement>('.ics-box').forEach((box) => {
+    const input = box.querySelector<HTMLInputElement>('[data-ics-url]');
+    const button = box.querySelector<HTMLButtonElement>('[data-ics-copy]');
+    const status = box.querySelector<HTMLElement>('[data-ics-status]');
+    if (!input) return;
+    input.addEventListener('focus', () => input.select());
+    if (!button || !navigator.clipboard) return;
+    button.hidden = false;
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(input.value);
+        if (status) {
+          status.textContent = button.dataset.copiedLabel ?? '';
+          setTimeout(() => (status.textContent = ''), 3000);
+        }
+      } catch {
+        input.focus();
+        input.select();
+      }
+    });
+  });
+</script>

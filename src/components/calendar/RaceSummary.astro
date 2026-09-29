@@ -1,0 +1,79 @@
+---
+/**
+ * Kurzfazit einer gewerteten Runde über der Renn-Tabelle: Sieger, Pole,
+ * schnellste Runde (mit Zeit) und ggf. Fahrer des Tages.
+ * Pole mit „P“, schnellste Runde mit Stoppuhr – nie nur Farbe (Plan §3.5).
+ */
+import Award from '@lucide/astro/icons/award';
+import Timer from '@lucide/astro/icons/timer';
+import Trophy from '@lucide/astro/icons/trophy';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import { useT, type Lang } from '~/i18n';
+import { formatLapTime } from '~/lib/domain/laptime';
+import type { League } from '~/lib/league/league';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  roundId: number;
+}
+const { lang, league, roundId } = Astro.props;
+const t = useT(lang);
+const summary = league.roundSummary(roundId);
+const winner = summary?.podium.find((r) => r.position === 1);
+const round = league.round(roundId);
+const dotd = round ? league.awardsOf(round.season_id).find((a) => a.round_id === roundId && a.type === 'driver_of_the_day') : undefined;
+const items = [
+  winner && { key: 'winner', label: t('calendar.results.winner'), driverId: winner.driver_id, teamId: winner.team_id, reserve: winner.role === 'reserve', extra: null },
+  summary?.pole && { key: 'pole', label: t('legend.pole'), driverId: summary.pole.driver_id, teamId: summary.pole.team_id, reserve: summary.pole.role === 'reserve', extra: formatLapTime(summary.pole.best_lap_ms) },
+  summary?.fastestLap && {
+    key: 'fl',
+    label: t('legend.fastestLap'),
+    driverId: summary.fastestLap.driver_id,
+    teamId: summary.fastestLap.team_id,
+    reserve: summary.fastestLap.role === 'reserve',
+    extra: formatLapTime(summary.fastestLap.best_lap_ms),
+  },
+  dotd?.driver_id != null && {
+    key: 'dotd',
+    label: t('calendar.results.driverOfTheDay'),
+    driverId: dotd.driver_id,
+    teamId: league.entriesOf(roundId).find((e) => e.driver_id === dotd.driver_id)?.team_id ?? null,
+    reserve: false,
+    extra: null,
+  },
+].filter((x): x is { key: string; label: string; driverId: number; teamId: number | null; reserve: boolean; extra: string | null } => Boolean(x));
+---
+
+{
+  items.length > 0 && (
+    <dl class="race-summary mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {items.map((item) => (
+        <div class="card px-4 py-3">
+          <dt class="micro flex items-center gap-1.5">
+            {item.key === 'winner' && <Trophy size={14} aria-hidden="true" class="text-green" />}
+            {item.key === 'pole' && (
+              <span class="pole-mark" aria-hidden="true">
+                P
+              </span>
+            )}
+            {item.key === 'fl' && <Timer size={14} aria-hidden="true" class="text-teal" />}
+            {item.key === 'dotd' && <Award size={14} aria-hidden="true" class="text-teal" />}
+            {item.label}
+          </dt>
+          <dd class="mt-1.5 flex flex-wrap items-center gap-x-2">
+            <DriverLink lang={lang} driver={league.driver(item.driverId)} team={item.teamId != null ? league.team(item.teamId) : null} reserve={item.reserve} />
+            {item.extra && item.extra !== '–' && <span class="tabular text-sm text-muted">{item.extra}</span>}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+<style>
+  .pole-mark {
+    font-weight: 800;
+    color: var(--color-green);
+  }
+</style>

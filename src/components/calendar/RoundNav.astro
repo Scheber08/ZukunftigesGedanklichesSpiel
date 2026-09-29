@@ -1,0 +1,96 @@
+---
+/** Vorherige / nächste Runde derselben Saison plus Links zu Kalender und Ergebnissen. */
+import ChevronLeft from '@lucide/astro/icons/chevron-left';
+import ChevronRight from '@lucide/astro/icons/chevron-right';
+import Flag from '~/components/ui/Flag.astro';
+import { url, useT, type Lang } from '~/i18n';
+import { adjacentRounds } from '~/lib/calendar/race';
+import type { RoundRow } from '~/lib/db/types';
+import type { League } from '~/lib/league/league';
+import { roundLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  round: RoundRow;
+}
+const { lang, league, round } = Astro.props;
+const t = useT(lang);
+const season = league.season(round.season_id)!;
+const { previous, next } = adjacentRounds(league.roundsOf(round.season_id), round);
+const link = (r: RoundRow) => ({
+  href: url(lang, 'race', { season: season.slug, round: r.number }),
+  label: roundLabel(r, league.track(r.track_id), lang),
+  code: league.track(r.track_id)?.country_code,
+  cancelled: r.status === 'cancelled',
+});
+const prev = previous ? link(previous) : null;
+const nxt = next ? link(next) : null;
+---
+
+<nav class="round-nav" aria-label={t('calendar.nav.label')}>
+  <ul class="grid gap-3 sm:grid-cols-2">
+    <li>
+      {
+        prev && (
+          <a href={prev.href} class="nav-card card card-hover" rel="prev">
+            <ChevronLeft size={20} aria-hidden="true" class="shrink-0 text-teal" />
+            <span class="min-w-0">
+              <span class="micro block">{t('calendar.nav.previous')}</span>
+              <span class:list={['nav-label flex items-center gap-2', prev.cancelled && 'line-through']}>
+                <Flag code={prev.code} lang={lang} decorative />
+                {prev.label}
+              </span>
+            </span>
+          </a>
+        )
+      }
+    </li>
+    <li>
+      {
+        nxt && (
+          <a href={nxt.href} class="nav-card card card-hover justify-end text-right" rel="next">
+            <span class="min-w-0">
+              <span class="micro block">{t('calendar.nav.next')}</span>
+              <span class:list={['nav-label flex items-center justify-end gap-2', nxt.cancelled && 'line-through']}>
+                <Flag code={nxt.code} lang={lang} decorative />
+                {nxt.label}
+              </span>
+            </span>
+            <ChevronRight size={20} aria-hidden="true" class="shrink-0 text-teal" />
+          </a>
+        )
+      }
+    </li>
+  </ul>
+  <p class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+    <a href={url(lang, 'calendar')} class="more-link">{t('calendar.nav.toCalendar')} →</a>
+    <a href={url(lang, 'results')} class="more-link">{t('calendar.nav.toResults')} →</a>
+  </p>
+</nav>
+
+<style>
+  .nav-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 44px;
+    padding: 0.875rem 1rem;
+    text-decoration: none;
+  }
+  .nav-card:hover .nav-label {
+    color: var(--color-teal);
+  }
+  .more-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-weight: 600;
+    color: var(--color-green);
+    text-decoration: none;
+  }
+  .more-link:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+</style>

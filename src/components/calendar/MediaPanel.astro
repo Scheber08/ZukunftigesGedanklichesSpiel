@@ -1,0 +1,81 @@
+---
+/**
+ * Medien einer Runde (Plan §4.3): VOD- und Highlight-Links als Buttons (keine Embeds,
+ * damit ohne Einwilligung nichts von YouTube/Twitch geladen wird) und verknüpfte News.
+ */
+import Clapperboard from '@lucide/astro/icons/clapperboard';
+import Play from '@lucide/astro/icons/play';
+import NewsCard from '~/components/content/NewsCard.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import { useT, type Lang } from '~/i18n';
+import { mediaPlatform, safeMediaUrl } from '~/lib/calendar/race';
+import type { RoundRow } from '~/lib/db/types';
+import type { League } from '~/lib/league/league';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  round: RoundRow;
+}
+const { lang, league, round } = Astro.props;
+const t = useT(lang);
+const videos = [
+  { key: 'vod', href: safeMediaUrl(round.vod_url), label: t('calendar.media.vod') },
+  { key: 'highlights', href: safeMediaUrl(round.highlights_url), label: t('calendar.media.highlights') },
+]
+  .filter((v): v is { key: string; href: string; label: string } => v.href != null)
+  .map((v) => ({ ...v, platform: mediaPlatform(v.href) }));
+const news = league.newsForRound(round.id);
+---
+
+{
+  videos.length === 0 && news.length === 0 ? (
+    <EmptyState title={t('calendar.media.emptyTitle')} text={t('calendar.media.emptyText')} />
+  ) : (
+    <div class="grid gap-8">
+      {videos.length > 0 && (
+        <div>
+          <p class="micro mb-3">{t('calendar.media.videos')}</p>
+          <ul class="flex flex-wrap gap-3">
+            {videos.map((v) => (
+              <li>
+                <a href={v.href} class:list={['btn', v.key === 'vod' ? 'btn-primary' : 'btn-secondary']} target="_blank" rel="noopener" data-track={`${v.key}_click`}>
+                  {v.key === 'vod' ? <Play size={18} aria-hidden="true" /> : <Clapperboard size={18} aria-hidden="true" />}
+                  {v.label}
+                  {v.platform && <span class="platform">{t('calendar.media.on', { platform: v.platform })}</span>}
+                  <span class="sr-only">{t('a11y.externalLink')}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {news.length > 0 && (
+        <div>
+          <p class="micro mb-3">{t('calendar.media.news')}</p>
+          <ul class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {news.map((n) => (
+              <li>
+                <NewsCard lang={lang} news={n} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+<style>
+  .platform {
+    font-family: var(--font-sans);
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: 0.8;
+  }
+  .btn {
+    white-space: normal;
+    text-align: left;
+  }
+</style>

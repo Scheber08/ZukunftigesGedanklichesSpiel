@@ -1,0 +1,183 @@
+---
+/**
+ * Rennkalender (Plan §4.3): aktuelle Saison mit hervorgehobener nächster Runde,
+ * einklappbaren abgeschlossenen Runden, ICS-Abo und Vorschau geplanter Saisons.
+ */
+import IcsSubscribe from '~/components/calendar/IcsSubscribe.astro';
+import RoundCard from '~/components/calendar/RoundCard.astro';
+import RoundCountdown from '~/components/calendar/RoundCountdown.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { splitCalendar } from '~/lib/calendar/calendar';
+import { loadLeague } from '~/lib/server/league';
+import { breadcrumbJsonLd, seasonLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const site = Astro.site ?? new URL(Astro.url.origin);
+
+const season = league.currentSeason;
+const rounds = season ? league.roundsOf(season.id) : [];
+const split = splitCalendar(rounds, league.now, league.nextRound()?.id);
+const sprintCount = rounds.filter((r) => r.format === 'sprint' && r.status !== 'cancelled').length;
+const plannedSeasons = league.seasons
+  .filter((s) => s.status === 'planned' && s.id !== season?.id)
+  .sort((a, b) => a.number - b.number)
+  .map((s) => ({ season: s, rounds: league.roundsOf(s.id) }))
+  .filter((p) => p.rounds.length > 0);
+
+const label = season ? seasonLabel(season, lang) : '';
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('calendar.title'), href: url(lang, 'calendar') },
+];
+const jsonLd = breadcrumbJsonLd(
+  site,
+  crumbs.map((c) => ({ name: c.label, href: c.href })),
+);
+const updated = league.lastUpdated(rounds);
+---
+
+<BaseLayout
+  lang={lang}
+  title={t('calendar.meta.title')}
+  description={t('calendar.meta.description', { season: label || t('calendar.title') })}
+  alternates={alternates('calendar')}
+  jsonLd={jsonLd}
+>
+  <PageHeader lang={lang} title={t('calendar.title')} eyebrow={label || undefined} lead={t('calendar.lead')} breadcrumbs={crumbs} updated={updated}>
+    {
+      rounds.length > 0 && (
+        <ul class="mt-5 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted">
+          <li>
+            <strong class="text-fg">{t('calendar.stats.rounds', { n: rounds.filter((r) => r.status !== 'cancelled').length })}</strong>
+          </li>
+          {sprintCount > 0 && <li>{t('calendar.stats.sprints', { n: sprintCount })}</li>}
+          {split.completed.length > 0 && <li>{t('calendar.stats.done', { n: league.countedRounds(season!.id).length })}</li>}
+        </ul>
+      )
+    }
+  </PageHeader>
+
+  <div class="container-page grid gap-12 py-10 md:py-14">
+    <div class:list={['grid items-start gap-6', split.next && 'lg:grid-cols-[1.2fr_1fr]']}>
+      {
+        split.next && (
+          <RoundCountdown
+            lang={lang}
+            league={league}
+            round={split.next}
+            heading={t('calendar.next.title')}
+            headingId="next-round-title"
+            eyebrow={t('calendar.next.title')}
+          />
+        )
+      }
+      <IcsSubscribe lang={lang} site={site} />
+    </div>
+
+    {
+      !season || rounds.length === 0 ? (
+        <EmptyState title={t('calendar.empty.title')} text={t('calendar.empty.text')} />
+      ) : (
+        <>
+          {split.completed.length > 0 && (
+            <details class="completed" open={split.upcoming.length === 0 ? true : undefined}>
+              <summary class="completed-summary">
+                <h2 class="section-title uppercase">{t('calendar.completed.summary', { n: split.completed.length })}</h2>
+              </summary>
+              <ol class="mt-6 grid gap-3" aria-label={t('calendar.completed.summary', { n: split.completed.length })}>
+                {split.completed.map((round) => (
+                  <li>
+                    <RoundCard lang={lang} league={league} round={round} />
+                  </li>
+                ))}
+              </ol>
+            </details>
+          )}
+
+          <section aria-labelledby="upcoming-title">
+            <SectionTitle id="upcoming-title" title={t('calendar.upcoming.title')} />
+            {split.upcoming.length > 0 ? (
+              <ol class="grid gap-3">
+                {split.upcoming.map((round) => (
+                  <li>
+                    <RoundCard lang={lang} league={league} round={round} highlight={round.id === split.next?.id} />
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <EmptyState title={t('calendar.none.upcoming')}>
+                <a href={url(lang, 'results')} class="btn btn-secondary mt-5">
+                  {t('calendar.nav.toResults')}
+                </a>
+              </EmptyState>
+            )}
+          </section>
+        </>
+      )
+    }
+
+    {
+      plannedSeasons.map(({ season: planned, rounds: plannedRounds }) => (
+        <section aria-labelledby={`planned-${planned.slug}`}>
+          <SectionTitle id={`planned-${planned.slug}`} title={t('calendar.planned.title', { season: seasonLabel(planned, lang) })} />
+          <p class="-mt-3 mb-6 max-w-2xl text-sm text-muted">{t('calendar.planned.lead')}</p>
+          <ol class="grid gap-3">
+            {plannedRounds.map((round) => (
+              <li>
+                <RoundCard lang={lang} league={league} round={round} />
+              </li>
+            ))}
+          </ol>
+        </section>
+      ))
+    }
+  </div>
+</BaseLayout>
+
+<style>
+  .completed-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 44px;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface-1);
+    cursor: pointer;
+    list-style: none;
+  }
+  .completed-summary::-webkit-details-marker {
+    display: none;
+  }
+  .completed-summary:hover {
+    border-color: #3a3a42;
+  }
+  .completed-summary .section-title {
+    font-size: var(--fs-h3);
+  }
+  .completed-summary::after {
+    content: '';
+    flex: none;
+    width: 0.6rem;
+    height: 0.6rem;
+    margin-right: 0.25rem;
+    border-right: 2px solid var(--color-teal);
+    border-bottom: 2px solid var(--color-teal);
+    transform: rotate(45deg);
+    transition: transform 180ms ease-out;
+  }
+  .completed[open] > .completed-summary::after {
+    transform: rotate(-135deg);
+  }
+</style>

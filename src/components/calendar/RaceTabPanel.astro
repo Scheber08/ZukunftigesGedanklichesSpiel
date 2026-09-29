@@ -1,0 +1,35 @@
+---
+/**
+ * Ein Bereich der Rennseite. Ohne JS ein normaler Abschnitt mit H2,
+ * mit JS ein role=tabpanel (siehe RaceTabs.astro); die H2 bleibt für Screenreader.
+ */
+interface Props {
+  id: string;
+  title: string;
+  class?: string;
+}
+const { id, title, class: className } = Astro.props;
+---
+
+<section id={id} class:list={['race-panel', className]} data-tab-panel aria-labelledby={`${id}-title`}>
+  <h2 id={`${id}-title`} class="panel-title section-title uppercase">{title}</h2>
+  <slot />
+</section>
+
+<style>
+  .panel-title {
+    margin-bottom: 1.5rem;
+  }
+  /* Mit Tabs übernimmt die Tab-Leiste die sichtbare Beschriftung */
+  :global(.is-enhanced) .panel-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+</style>

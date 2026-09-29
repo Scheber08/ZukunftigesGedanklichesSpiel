@@ -1,0 +1,109 @@
+---
+/**
+ * Veröffentlichte Steward-Entscheidungen einer Runde (Plan §4.3, §4.6):
+ * Referenz (Link zur Entscheidung), Fahrer, Verdikt und Kurzbegründung.
+ */
+import ChevronRight from '@lucide/astro/icons/chevron-right';
+import Badge from '~/components/ui/Badge.astro';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import { url, useT, type Lang } from '~/i18n';
+import { plainExcerpt, verdictText, verdictTone } from '~/lib/calendar/race';
+import type { RoundRow } from '~/lib/db/types';
+import { localized, type League } from '~/lib/league/league';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  round: RoundRow;
+}
+const { lang, league, round } = Astro.props;
+const t = useT(lang);
+const decisions = league.decisionsOf(round.id);
+const entries = league.entriesOf(round.id);
+
+function teamOf(driverId: number) {
+  const entry = entries.find((e) => e.driver_id === driverId);
+  if (entry) return { team: league.team(entry.team_id), number: entry.race_number };
+  return { team: league.driverTeam(driverId, round.season_id), number: league.numberAt(driverId, new Date(round.start_utc)) };
+}
+---
+
+{
+  decisions.length === 0 ? (
+    <EmptyState title={t('calendar.stewards.emptyTitle')} text={t('calendar.stewards.emptyText')} />
+  ) : (
+    <ul class="grid gap-3" aria-label={t('calendar.stewards.title')}>
+      {decisions.map((d) => {
+        const reason = localized(d, 'reasoning', lang);
+        const session = d.session_id != null ? league.session(d.session_id) : undefined;
+        const { team, number } = teamOf(d.driver_id);
+        const href = url(lang, 'decision', { ref: d.public_ref });
+        return (
+          <li class="decision card">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <a href={href} class="decision-ref tabular">
+                <span class="sr-only">{t('calendar.stewards.ref')}: </span>
+                {d.public_ref}
+              </a>
+              <Badge variant={verdictTone(d.verdict)}>
+                <span class="sr-only">{t('calendar.stewards.verdict')}: </span>
+                {verdictText(t, d)}
+              </Badge>
+            </div>
+            <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              <span class="sr-only">{t('calendar.stewards.driver')}: </span>
+              <DriverLink lang={lang} driver={league.driver(d.driver_id)} team={team} number={number} />
+              {session && <span class="text-muted">· {t(`session.${session.type}`)}</span>}
+              {d.rule_ref && <span class="text-muted">· {d.rule_ref}</span>}
+            </p>
+            {reason.text && (
+              <p class="mt-2 text-sm text-muted" lang={reason.fallback ? 'de' : undefined}>
+                <span class="sr-only">{t('calendar.stewards.reason')}: </span>
+                {plainExcerpt(reason.text, 200)}
+              </p>
+            )}
+            <a href={href} class="decision-more" aria-label={t('calendar.stewards.readMoreAria', { ref: d.public_ref })}>
+              {t('calendar.stewards.readMore')}
+              <ChevronRight size={16} aria-hidden="true" />
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  )
+}
+
+<style>
+  .decision {
+    padding: 1rem 1.125rem;
+  }
+  .decision-ref {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.125rem;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+  }
+  .decision-ref:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+  .decision-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 44px;
+    font-size: var(--fs-small);
+    font-weight: 600;
+    color: var(--color-green);
+    text-decoration: none;
+  }
+  .decision-more:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+</style>

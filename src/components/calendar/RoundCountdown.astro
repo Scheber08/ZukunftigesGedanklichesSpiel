@@ -1,0 +1,108 @@
+---
+/**
+ * Countdown-Karte für eine kommende Runde (Plan §3.5): Svelte-Countdown plus Start in
+ * Liga-Zeit (Besucherzeit ergänzt das Seitenskript), Format, Status, Rennseite und ICS.
+ */
+import CalendarPlus from '@lucide/astro/icons/calendar-plus';
+import ChevronRight from '@lucide/astro/icons/chevron-right';
+import Countdown from '~/components/sport/Countdown.svelte';
+import Badge from '~/components/ui/Badge.astro';
+import Flag from '~/components/ui/Flag.astro';
+import LocalTime from '~/components/ui/LocalTime.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import { url, useT, type Lang } from '~/i18n';
+import type { RoundRow } from '~/lib/db/types';
+import type { League } from '~/lib/league/league';
+import { countryName, roundLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  round: RoundRow;
+  /** Überschrift für Screenreader (Kontext der Karte) */
+  heading: string;
+  headingId: string;
+  /** Kleiner Titel über dem Countdown */
+  eyebrow: string;
+  /** Link zur Rennseite anzeigen (im Kalender ja, auf der Rennseite selbst nein) */
+  raceLink?: boolean;
+  class?: string;
+}
+const { lang, league, round, heading, headingId, eyebrow, raceLink = true, class: className } = Astro.props;
+const t = useT(lang);
+const season = league.season(round.season_id)!;
+const track = league.track(round.track_id);
+const label = roundLabel(round, track, lang);
+const raceHref = url(lang, 'race', { season: season.slug, round: round.number });
+const icsHref = url(lang, 'raceIcs', { season: season.slug, round: round.number });
+const previous = league.previousRound(round.id);
+const subline = [countryName(track?.country_code, lang), round.format === 'sprint' ? t('format.sprint') : null].filter(Boolean).join(' · ');
+---
+
+<section class:list={['round-countdown card relative overflow-hidden p-5 md:p-6', className]} aria-labelledby={headingId}>
+  <div class="glow-soft" aria-hidden="true"></div>
+  <h2 id={headingId} class="sr-only">{heading}</h2>
+  <div class="relative">
+    <Countdown
+      client:visible
+      targets={[{ startUtc: round.start_utc, label, href: raceHref, dateText: subline }]}
+      previousStartUtc={previous?.start_utc ?? null}
+      labels={{
+        days: t('countdown.days'),
+        hours: t('countdown.hours'),
+        minutes: t('countdown.minutes'),
+        seconds: t('countdown.seconds'),
+        next: eyebrow,
+        now: t('countdown.now'),
+        none: t('calendar.race.countdownOver'),
+      }}
+    />
+
+    <div class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+      <Flag code={track?.country_code} lang={lang} />
+      <span>
+        <span class="micro mr-1">{t('calendar.race.start')}</span>
+        <LocalTime instant={round.start_utc} lang={lang} format="dateLongTime" zone />
+      </span>
+    </div>
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+      {round.format === 'sprint' && <Badge variant="teal">{t('common.sprint')}</Badge>}
+      <RoundStatusBadge status={round.status} lang={lang} />
+    </div>
+
+    <div class="mt-5 flex flex-wrap gap-3">
+      {
+        raceLink && (
+          <a href={raceHref} class="btn btn-primary" aria-label={t('calendar.round.toRaceAria', { round: label })}>
+            {t('calendar.round.toRace')}
+            <ChevronRight size={18} aria-hidden="true" />
+          </a>
+        )
+      }
+      <a
+        href={icsHref}
+        download
+        class:list={['btn', raceLink ? 'btn-secondary' : 'btn-primary']}
+        aria-label={t('calendar.round.icsAria', { round: label })}
+        data-track="ics_download"
+      >
+        <CalendarPlus size={18} aria-hidden="true" />
+        {t('common.addToCalendar')}
+      </a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .round-countdown {
+    border-color: rgb(52 196 208 / 0.45);
+  }
+  .glow-soft {
+    position: absolute;
+    inset: -40% -20% auto auto;
+    width: 70%;
+    height: 140%;
+    background: radial-gradient(closest-side, rgb(52 196 208 / 0.14), transparent 70%);
+    pointer-events: none;
+  }
+</style>

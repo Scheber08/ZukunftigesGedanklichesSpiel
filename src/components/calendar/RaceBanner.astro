@@ -1,0 +1,153 @@
+---
+/**
+ * Status-Banner der Rennseite (Plan §4.3): „Vorläufig, Protestfrist bis …“ mit Link zum
+ * Vorfall-Formular, „Final“, „Korrigiert am … (Grund)“ sowie Hinweise für geplante,
+ * gerade gefahrene und abgesagte Runden. Immer Icon + Text, nie nur Farbe.
+ */
+import CalendarX from '@lucide/astro/icons/calendar-x';
+import CircleCheckBig from '@lucide/astro/icons/circle-check-big';
+import Clock from '@lucide/astro/icons/clock';
+import Info from '@lucide/astro/icons/info';
+import PencilLine from '@lucide/astro/icons/pencil-line';
+import TriangleAlert from '@lucide/astro/icons/triangle-alert';
+import LocalTime from '~/components/ui/LocalTime.astro';
+import { url, useT, type Lang } from '~/i18n';
+import { raceBanner, splitPlaceholder } from '~/lib/calendar/race';
+import type { RoundRow } from '~/lib/db/types';
+import { formatDate } from '~/lib/domain/time';
+import { localized, type League } from '~/lib/league/league';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  round: RoundRow;
+}
+const { lang, league, round } = Astro.props;
+const t = useT(lang);
+const banner = raceBanner(round, league.correctionsOf(round.id), league.now);
+const reportHref = url(lang, 'stewardsReport');
+const [beforeDeadline, afterDeadline] = splitPlaceholder(t('calendar.banner.provisional'), 'deadline');
+---
+
+<div class="race-banner" data-race-banner>
+  {
+    banner.kind === 'cancelled' && (
+      <div class="alert alert-danger banner-row">
+        <CalendarX size={20} aria-hidden="true" class="shrink-0 text-danger" />
+        <p>{t('calendar.banner.cancelled')}</p>
+      </div>
+    )
+  }
+  {
+    banner.kind === 'provisional' && (
+      <div class="alert alert-warning banner-row" data-protest-deadline={banner.open ? banner.deadline : undefined}>
+        <TriangleAlert size={20} aria-hidden="true" class="shrink-0 text-warning" />
+        <div class="flex flex-1 flex-wrap items-center justify-between gap-3">
+          <p>
+            {banner.open && banner.deadline ? (
+              <>
+                {beforeDeadline}
+                <strong>
+                  <LocalTime instant={banner.deadline} lang={lang} format="dateLongTime" zone />
+                </strong>
+                {afterDeadline}
+              </>
+            ) : banner.deadline ? (
+              t('calendar.banner.provisionalClosed')
+            ) : (
+              t('calendar.banner.provisionalNoDeadline')
+            )}
+          </p>
+          {banner.open && (
+            <a href={reportHref} class="btn btn-secondary btn-sm banner-btn" data-protest-link>
+              {t('calendar.banner.report')}
+            </a>
+          )}
+        </div>
+      </div>
+    )
+  }
+  {
+    banner.kind === 'final' && (
+      <div class="alert alert-success banner-row">
+        <CircleCheckBig size={20} aria-hidden="true" class="shrink-0 text-green" />
+        <p>{banner.finalAt ? t('calendar.banner.finalSince', { date: formatDate(banner.finalAt, lang) }) : t('calendar.banner.final')}</p>
+      </div>
+    )
+  }
+  {
+    banner.kind === 'corrected' && (
+      <div class="alert banner-row corrected">
+        <PencilLine size={20} aria-hidden="true" class="shrink-0 text-teal" />
+        <div>
+          <p class="font-semibold">{t('calendar.banner.corrected')}</p>
+          {banner.corrections.length > 0 && (
+            <ul class="mt-1 grid gap-1 text-sm">
+              {banner.corrections.map((c) => {
+                const reason = localized(c, 'reason', lang);
+                return (
+                  <li>
+                    {t('calendar.banner.correctedAt', { date: formatDate(c.created_at, lang) })}
+                    {reason.text && (
+                      <span class="text-muted" lang={reason.fallback ? 'de' : undefined}>
+                        {' '}
+                        ({reason.text})
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    )
+  }
+  {
+    banner.kind === 'awaiting' && (
+      <div class="alert banner-row">
+        <Clock size={20} aria-hidden="true" class="shrink-0 text-teal" />
+        <p>{t('calendar.banner.awaiting')}</p>
+      </div>
+    )
+  }
+  {
+    (banner.kind === 'scheduled' || banner.kind === 'lineup') && (
+      <div class="alert banner-row">
+        <Info size={20} aria-hidden="true" class="shrink-0 text-teal" />
+        <p>{banner.kind === 'lineup' ? t('calendar.banner.lineup') : t('calendar.banner.scheduled')}</p>
+      </div>
+    )
+  }
+</div>
+
+<style>
+  .banner-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  .banner-row > :global(svg) {
+    margin-top: 0.15rem;
+  }
+  .corrected {
+    border-color: rgb(52 196 208 / 0.5);
+  }
+  .banner-btn {
+    min-height: 44px;
+  }
+</style>
+
+<script>
+  // Statische Seite: Nach Ablauf der Protestfrist den Melde-Link ausblenden
+  document.querySelectorAll<HTMLElement>('[data-protest-deadline]').forEach((el) => {
+    const deadline = Date.parse(el.dataset.protestDeadline ?? '');
+    if (Number.isFinite(deadline) && Date.now() > deadline) {
+      el.querySelectorAll<HTMLElement>('[data-protest-link]').forEach((link) => (link.hidden = true));
+    }
+  });
+  document.querySelectorAll<HTMLElement>('[data-protest-deadline-scope]').forEach((scope) => {
+    const deadline = Date.parse(scope.dataset.protestDeadlineScope ?? '');
+    if (Number.isFinite(deadline) && Date.now() > deadline) scope.hidden = true;
+  });
+</script>

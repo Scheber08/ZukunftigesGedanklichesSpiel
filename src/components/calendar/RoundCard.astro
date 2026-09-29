@@ -1,0 +1,172 @@
+---
+/**
+ * Eine Runde im Kalender (Plan §4.3): Rundennummer, Strecke mit Flagge, Datum/Uhrzeit
+ * (Europe/Berlin, Besucherzeit ergänzt das Seitenskript), Format, Status, Sieger.
+ * Abgesagte Runden sind durchgestrichen und tragen das Badge „abgesagt“.
+ */
+import CalendarPlus from '@lucide/astro/icons/calendar-plus';
+import ChevronRight from '@lucide/astro/icons/chevron-right';
+import Badge from '~/components/ui/Badge.astro';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import Flag from '~/components/ui/Flag.astro';
+import LocalTime from '~/components/ui/LocalTime.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import { url, useT, type Lang } from '~/i18n';
+import { isUpcoming } from '~/lib/calendar/race';
+import type { RoundRow } from '~/lib/db/types';
+import type { League } from '~/lib/league/league';
+import { countryName, roundLabel, trackName } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  round: RoundRow;
+  /** Nächste Runde hervorheben */
+  highlight?: boolean;
+  headingLevel?: 'h3' | 'h4';
+}
+const { lang, league, round, highlight = false, headingLevel: H = 'h3' } = Astro.props;
+const t = useT(lang);
+const season = league.season(round.season_id)!;
+const track = league.track(round.track_id);
+const label = roundLabel(round, track, lang);
+const raceHref = url(lang, 'race', { season: season.slug, round: round.number });
+const icsHref = url(lang, 'raceIcs', { season: season.slug, round: round.number });
+const cancelled = round.status === 'cancelled';
+const summary = league.hasResults(round.id) ? league.roundSummary(round.id) : undefined;
+const winner = summary?.podium.find((r) => r.position === 1);
+const upcoming = isUpcoming(round, league.now);
+const pending = !cancelled && !summary && new Date(round.start_utc) <= league.now;
+---
+
+<article class:list={['round-card card', highlight && 'is-next', cancelled && 'is-cancelled', summary && 'is-done']}>
+  <div class="round-no" aria-hidden="true">
+    <span class="round-no-r">R</span>{round.number}
+  </div>
+  <div class="min-w-0 flex-1">
+    <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+      <H class="round-title">
+        <a href={raceHref} class="round-link">
+          <Flag code={track?.country_code} lang={lang} decorative />
+          <span class="sr-only">R{round.number} · </span>
+          <span class="strike">{trackName(track, lang)}</span>
+        </a>
+      </H>
+      <div class="flex flex-wrap items-center gap-2">
+        {highlight && <Badge variant="solid">{t('calendar.next.badge')}</Badge>}
+        {round.format === 'sprint' && (
+          <Badge variant="teal" title={t('calendar.round.sprintHint')}>
+            {t('common.sprint')}
+          </Badge>
+        )}
+        <RoundStatusBadge status={round.status} lang={lang} />
+      </div>
+    </div>
+
+    <p class="mt-1 text-sm text-muted">
+      <span class="sr-only">{countryName(track?.country_code, lang)} · </span>
+      <span class="strike"><LocalTime instant={round.start_utc} lang={lang} format="dateLongTime" zone /></span>
+    </p>
+
+    {cancelled && <p class="mt-2 text-sm text-danger">{t('calendar.round.cancelledNote')}</p>}
+    {
+      winner && (
+        <p class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+          <span class="micro">{t('calendar.round.winner')}</span>
+          <DriverLink lang={lang} driver={league.driver(winner.driver_id)} team={league.team(winner.team_id)} reserve={winner.role === 'reserve'} />
+        </p>
+      )
+    }
+    {pending && <p class="mt-2 text-sm text-warning">{t('calendar.round.resultPending')}</p>}
+
+    <div class="mt-3 flex flex-wrap gap-2">
+      <a href={raceHref} class="btn btn-ghost btn-sm border border-border" aria-label={t('calendar.round.toRaceAria', { round: label })}>
+        {summary ? t('calendar.round.toResult') : t('calendar.round.toRace')}
+        <ChevronRight size={16} aria-hidden="true" />
+      </a>
+      {
+        upcoming && (
+          <a
+            href={icsHref}
+            download
+            class="btn btn-ghost btn-sm border border-border"
+            aria-label={t('calendar.round.icsAria', { round: label })}
+            data-track="ics_download"
+          >
+            <CalendarPlus size={16} aria-hidden="true" />
+            {t('common.addToCalendar')}
+          </a>
+        )
+      }
+    </div>
+  </div>
+</article>
+
+<style>
+  .round-card {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    transition: border-color 180ms ease-out;
+  }
+  @media (min-width: 640px) {
+    .round-card {
+      gap: 1.25rem;
+      padding: 1.25rem 1.5rem;
+    }
+  }
+  /* Touch-Ziele ≥ 44 px auch bei kleinen Buttons */
+  .btn {
+    min-height: 44px;
+  }
+  .round-card.is-next {
+    border-color: var(--color-teal);
+    box-shadow:
+      0 0 0 1px rgb(52 196 208 / 0.35),
+      0 0 24px -8px rgb(52 196 208 / 0.45);
+  }
+  .round-no {
+    flex: none;
+    width: 3.25rem;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 2rem;
+    line-height: 1;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-fg);
+  }
+  .round-no-r {
+    font-size: 0.55em;
+    color: var(--color-muted);
+    margin-right: 0.1em;
+  }
+  .is-done .round-no {
+    color: var(--color-muted);
+  }
+  .round-title {
+    font-size: 1.25rem;
+    text-transform: uppercase;
+    min-width: 0;
+  }
+  .round-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 44px;
+    text-decoration: none;
+  }
+  .round-link:hover .strike {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+  .is-cancelled .strike {
+    text-decoration: line-through;
+    text-decoration-color: var(--color-danger);
+    color: var(--color-muted);
+  }
+  .is-cancelled .round-no {
+    color: var(--color-muted);
+    text-decoration: line-through;
+  }
+</style>
