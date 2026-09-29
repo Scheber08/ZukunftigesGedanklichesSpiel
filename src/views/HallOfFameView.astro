@@ -1,0 +1,102 @@
+---
+/**
+ * Hall of Fame (Plan §4.8): Champions pro Saison (Fahrer und Team) als große Karten,
+ * dazu die ewigen Bestenlisten (Titel, Siege, Podien, Poles, schnellste Runden, Starts,
+ * Punkte, Konstrukteurstitel). Leerer Zustand, solange keine Saison abgeschlossen ist.
+ */
+import HofBoard from '~/components/people/HofBoard.astro';
+import HofChampionCard from '~/components/people/HofChampionCard.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import type { HallOfFameEntry } from '~/lib/league/league';
+import { constructorTitles } from '~/lib/people';
+import { loadLeague } from '~/lib/server/league';
+import { breadcrumbJsonLd } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const hof = league.hallOfFame();
+const hasChampions = hof.champions.length > 0;
+
+const toEntries = (list: HallOfFameEntry[]) => list.map((e) => ({ id: e.driverId, value: e.value }));
+const boards = [
+  { key: 'titles', kind: 'driver', entries: toEntries(hof.titles) },
+  { key: 'wins', kind: 'driver', entries: toEntries(hof.wins) },
+  { key: 'podiums', kind: 'driver', entries: toEntries(hof.podiums) },
+  { key: 'poles', kind: 'driver', entries: toEntries(hof.poles) },
+  { key: 'fastestLaps', kind: 'driver', entries: toEntries(hof.fastestLaps) },
+  { key: 'starts', kind: 'driver', entries: toEntries(hof.starts) },
+  { key: 'points', kind: 'driver', entries: toEntries(hof.points) },
+  { key: 'constructors', kind: 'team', entries: constructorTitles(hof.champions).map((e) => ({ id: e.teamId, value: e.value })) },
+] as const;
+
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('people.hof.title'), href: url(lang, 'hallOfFame') },
+];
+const site = Astro.site ?? new URL(Astro.url.origin);
+const jsonLd = breadcrumbJsonLd(site, crumbs.map((c) => ({ name: c.label, href: c.href })));
+---
+
+<BaseLayout lang={lang} title={t('people.hof.title')} description={t('people.hof.metaDescription')} alternates={alternates('hallOfFame')} jsonLd={jsonLd}>
+  <PageHeader
+    lang={lang}
+    title={t('people.hof.title')}
+    eyebrow={t('nav.league')}
+    lead={t('people.hof.lead')}
+    breadcrumbs={[crumbs[0]!, { label: t('people.hof.title') }]}
+  >
+    <p class="mt-5">
+      <a href={url(lang, 'archive')} class="text-sm font-semibold text-green hover:text-teal">{t('nav.archive')} →</a>
+    </p>
+  </PageHeader>
+
+  <div class="container-page">
+    {
+      !hasChampions ? (
+        <div class="section">
+          <EmptyState title={t('people.hof.emptyTitle')} text={t('people.hof.emptyText')}>
+            <div class="mt-6 flex flex-wrap justify-center gap-3">
+              <a href={url(lang, 'standings')} class="btn btn-secondary btn-sm">
+                {t('nav.standings')}
+              </a>
+              <a href={url(lang, 'archive')} class="btn btn-ghost btn-sm border border-border">
+                {t('nav.archive')}
+              </a>
+            </div>
+          </EmptyState>
+        </div>
+      ) : (
+        <>
+          <section class="py-10 md:py-14" aria-labelledby="champions-title">
+            <SectionTitle id="champions-title" title={t('people.hof.champions')} />
+            <ul class="grid gap-5 md:grid-cols-2">
+              {hof.champions.map((c) => (
+                <li>
+                  <HofChampionCard lang={lang} league={league} season={c.season} driverId={c.driverId} teamId={c.teamId} points={c.points} />
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section class="border-t border-border py-10 md:py-14" aria-labelledby="boards-title">
+            <SectionTitle id="boards-title" title={t('people.hof.leaderboards')} class="mb-3!" />
+            <p class="mb-8 max-w-2xl text-sm text-muted">{t('people.hof.leaderboardsLead')}</p>
+            <div class="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
+              {boards.map((b) => (
+                <HofBoard lang={lang} league={league} id={`board-${b.key}`} title={t(`people.hof.board.${b.key}`)} kind={b.kind} entries={[...b.entries]} />
+              ))}
+            </div>
+          </section>
+        </>
+      )
+    }
+  </div>
+</BaseLayout>

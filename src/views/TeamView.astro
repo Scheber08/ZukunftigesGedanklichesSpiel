@@ -1,0 +1,370 @@
+---
+/**
+ * Teamseite (Plan §4.5): Teamfarbe als Akzent (Streifen), aktuelle Fahrer, Punkte und
+ * Position der aktuellen Saison, Punkteverlauf, internes Duell, Einsätze von Reservefahrern
+ * und Saisonbilanzen. Keine Teamlogos – nur Name und Farbe.
+ */
+import DriverCard from '~/components/people/DriverCard.astro';
+import DuelPanel from '~/components/people/DuelPanel.astro';
+import ProfileHeader from '~/components/people/ProfileHeader.astro';
+import ProgressionChart from '~/components/people/ProgressionChart.astro';
+import SectionNav from '~/components/people/SectionNav.astro';
+import Badge from '~/components/ui/Badge.astro';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import type { Id } from '~/lib/db/types';
+import { progressionSteps, teamDrivers, teamDuel, teamReserveBySeason, teamSeasonDrivers } from '~/lib/people';
+import { loadLeague } from '~/lib/server/league';
+import { breadcrumbJsonLd, roundLabel, seasonLabel, teamStyle } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  slug: string;
+}
+const { lang, slug } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const team = league.teamBySlug(slug);
+const season = league.currentSeason;
+const seasonName = season ? seasonLabel(season, lang) : '';
+const inSeason = team != null && season != null && league.teamsOf(season.id).some((x) => x.id === team.id);
+const seasonOpen = season != null && season.status !== 'planned';
+
+const drivers = team && season && inSeason ? teamDrivers(league, team.id, season.id) : [];
+const standing = team && season && inSeason && seasonOpen ? league.teamStandings(season.id).find((s) => s.teamId === team.id) : undefined;
+const hasPoints = standing != null && (standing.points > 0 || standing.starts > 0);
+const steps = team && season && hasPoints ? progressionSteps(league, 'team', season.id, team.id) : [];
+const duel = team && season && inSeason && seasonOpen ? teamDuel(league, team.id, season.id) : null;
+const reserveGroups = team ? teamReserveBySeason(league, team.id) : [];
+const records = team ? league.teamSeasonRecords(team.id) : [];
+
+/** Punkte eines Reservefahrers in einer Runde für dieses Team (alle Sessions). */
+function reservePoints(seasonId: Id, roundId: Id, driverId: Id): number {
+  return league
+    .standingsResults(seasonId)
+    .filter((r) => r.roundId === roundId && r.driverId === driverId && r.teamId === team?.id)
+    .reduce((sum, r) => sum + r.points, 0);
+}
+
+const name = team?.name ?? '–';
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('people.teams.title'), href: url(lang, 'teams') },
+  { label: name, href: team ? url(lang, 'team', { slug: team.slug }) : undefined },
+];
+const site = Astro.site ?? new URL(Astro.url.origin);
+const jsonLd = team ? breadcrumbJsonLd(site, crumbs.map((c) => ({ name: c.label, href: c.href ?? url(lang, 'teams') }))) : undefined;
+const nav = [
+  ...(inSeason ? [{ id: 'fahrer', label: t('people.team.currentDrivers') }] : []),
+  ...(hasPoints ? [{ id: 'saison', label: t('people.team.glance', { season: seasonName }) }] : []),
+  ...(duel ? [{ id: 'duell', label: t('people.duel.teamTitle') }] : []),
+  { id: 'reserve', label: t('people.reserve.teamTitle') },
+  { id: 'bilanzen', label: t('people.team.records') },
+];
+if (!team) Astro.response.status = 404;
+---
+
+<BaseLayout
+  lang={lang}
+  title={name}
+  description={t('people.team.metaDescription', { team: name })}
+  alternates={alternates('team', { slug })}
+  jsonLd={jsonLd}
+  noindex={!team}
+>
+  {
+    !team ? (
+      <div class="container-page section">
+        <EmptyState title={t('people.teams.none')}>
+          <a href={url(lang, 'teams')} class="btn btn-secondary mt-6">
+            {t('people.teams.title')}
+          </a>
+        </EmptyState>
+      </div>
+    ) : (
+      <>
+        <ProfileHeader lang={lang} title={team.name} eyebrow={t('people.team.eyebrow')} breadcrumbs={crumbs} team={team}>
+          <Fragment slot="badges">
+            <Badge variant="muted" title={team.name}>
+              {team.short_name}
+            </Badge>
+            {seasonName && inSeason && <Badge variant="teal">{seasonName}</Badge>}
+          </Fragment>
+          {standing && hasPoints && (
+            <dl class="facts">
+              <div>
+                <dt class="micro">{t('people.team.position')}</dt>
+                <dd class="fact-big tabular">
+                  {standing.tied && <span class="sr-only">{t('standings.tied')} </span>}
+                  {standing.tied ? `=${standing.position}` : t('people.pos', { n: standing.position })}
+                </dd>
+              </div>
+              <div>
+                <dt class="micro">{t('people.team.points')}</dt>
+                <dd class="fact-big tabular">{standing.points}</dd>
+              </div>
+              <div>
+                <dt class="micro">{t('people.team.gap')}</dt>
+                <dd class="fact-big tabular">{standing.gapToLeader > 0 ? `−${standing.gapToLeader}` : t('people.team.leader')}</dd>
+              </div>
+            </dl>
+          )}
+          <SectionNav lang={lang} items={nav} />
+        </ProfileHeader>
+
+        <div class="container-page">
+          {!inSeason && season && (
+            <p class="alert mt-10 text-sm">{t('people.team.notInSeason', { team: team.name, season: seasonName })}</p>
+          )}
+
+          <!-- Aktuelle Fahrer -->
+          {inSeason && (
+            <section id="fahrer" class="team-section" aria-labelledby="fahrer-title">
+              <SectionTitle id="fahrer-title" title={t('people.team.currentDrivers')} />
+              {drivers.length === 0 ? (
+                <p class="card p-5 text-sm text-muted">{t('people.teams.noDrivers')}</p>
+              ) : (
+                <ul class="grid gap-3 sm:grid-cols-2">
+                  {drivers.map(({ driver }) => {
+                    const since = driver.joined_season_id != null ? league.season(driver.joined_season_id) : undefined;
+                    return (
+                      <li>
+                        <DriverCard lang={lang} driver={driver} team={team} number={league.numberOf(driver.id)}>
+                          {since && <span>{t('people.drivers.since', { season: seasonLabel(since, lang) })}</span>}
+                        </DriverCard>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          )}
+
+          <!-- Saison auf einen Blick + Punkteverlauf -->
+          {standing && hasPoints && season && (
+            <section id="saison" class="team-section" aria-labelledby="saison-title">
+              <SectionTitle id="saison-title" title={t('people.team.glance', { season: seasonName })} href={url(lang, 'standings')} linkLabel={t('nav.standings')} />
+              <dl class="tiles">
+                <div class="tile">
+                  <dt class="micro">{t('standings.wins')}</dt>
+                  <dd class="tile-value tabular">{standing.wins}</dd>
+                </div>
+                <div class="tile">
+                  <dt class="micro">{t('standings.podiums')}</dt>
+                  <dd class="tile-value tabular">{standing.podiums}</dd>
+                </div>
+                <div class="tile">
+                  <dt class="micro">{t('standings.poles')}</dt>
+                  <dd class="tile-value tabular">{standing.poles}</dd>
+                </div>
+                <div class="tile">
+                  <dt class="micro">{t('standings.fastestLapsLong')}</dt>
+                  <dd class="tile-value tabular">{standing.fastestLaps}</dd>
+                </div>
+                <div class="tile">
+                  <dt class="micro">{t('people.stats.bestFinish')}</dt>
+                  <dd class="tile-value tabular">{standing.bestFinish != null ? t('people.pos', { n: standing.bestFinish }) : '–'}</dd>
+                </div>
+              </dl>
+              <p class="mt-3 text-xs text-muted">
+                {season.reserve_points_for_constructors
+                  ? t('people.teams.reserveNote', { season: seasonName })
+                  : t('people.teams.reserveNoteNot', { season: seasonName })}
+              </p>
+              <div class="mt-6">
+                <ProgressionChart
+                  lang={lang}
+                  league={league}
+                  id="team-progress"
+                  steps={steps}
+                  title={t('people.chart.title', { season: seasonName })}
+                  description={t('people.team.chartDescription', { name: team.name })}
+                  color={team.color_hex}
+                />
+              </div>
+            </section>
+          )}
+
+          <!-- Internes Duell -->
+          {duel && (
+            <section id="duell" class="team-section" aria-labelledby="duell-title">
+              <SectionTitle id="duell-title" title={t('people.duel.teamTitle')} />
+              <div class="max-w-3xl">
+                <DuelPanel lang={lang} league={league} id="team-duel" a={duel.a} b={duel.b} team={team} duel={duel.duel} />
+              </div>
+            </section>
+          )}
+
+          <!-- Einsätze von Reservefahrern -->
+          <section id="reserve" class="team-section" aria-labelledby="reserve-title">
+            <SectionTitle id="reserve-title" title={t('people.reserve.teamTitle')} />
+            {reserveGroups.length === 0 ? (
+              <p class="card p-5 text-sm text-muted">{t('people.reserve.teamNone', { team: team.name })}</p>
+            ) : (
+              <div class="grid gap-6">
+                {reserveGroups.map((g) => {
+                  const sName = seasonLabel(g.season, lang);
+                  return (
+                    <div>
+                      {reserveGroups.length > 1 && <h3 class="micro mb-2">{sName}</h3>}
+                      <div class="table-wrap">
+                        <table class="timing-table">
+                          <caption class="sr-only">{t('people.reserve.teamCaption', { team: team.name, season: sName })}</caption>
+                          <thead>
+                            <tr>
+                              <th scope="col" class="sticky-col">{t('common.round')}</th>
+                              <th scope="col">{t('people.reserve.driver')}</th>
+                              <th scope="col">{t('people.reserve.replaced')}</th>
+                              <th scope="col" class="num">{t('common.pointsShort')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {g.items.map(({ round, entry }) => {
+                              const pts = league.hasResults(round.id) ? reservePoints(g.season.id, round.id, entry.driver_id) : null;
+                              return (
+                                <tr>
+                                  <th scope="row" class="sticky-col font-normal">
+                                    <span class="flex flex-wrap items-center gap-2">
+                                      <a href={url(lang, 'race', { season: g.season.slug, round: round.number })} class="round-link">
+                                        {roundLabel(round, league.track(round.track_id), lang)}
+                                      </a>
+                                      {!league.hasResults(round.id) && <RoundStatusBadge status={round.status} lang={lang} />}
+                                    </span>
+                                  </th>
+                                  <td>
+                                    <DriverLink lang={lang} driver={league.driver(entry.driver_id)} number={entry.race_number} stripe={false} reserve />
+                                  </td>
+                                  <td>
+                                    {entry.replaces_driver_id != null ? <DriverLink lang={lang} driver={league.driver(entry.replaces_driver_id)} stripe={false} /> : '–'}
+                                  </td>
+                                  <td class="num">{pts == null ? '–' : pts > 0 ? pts : ''}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <!-- Saisonbilanzen -->
+          <section id="bilanzen" class="team-section pb-14" aria-labelledby="bilanzen-title">
+            <SectionTitle id="bilanzen-title" title={t('people.team.records')} href={url(lang, 'archive')} linkLabel={t('nav.archive')} />
+            {records.length === 0 ? (
+              <p class="card p-5 text-sm text-muted">{t('people.team.recordsNone')}</p>
+            ) : (
+              <div class="table-wrap">
+                <table class="timing-table">
+                  <caption class="sr-only">{t('people.team.recordsCaption', { team: team.name })}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col" class="sticky-col">{t('common.season')}</th>
+                      <th scope="col" class="num">{t('people.team.position')}</th>
+                      <th scope="col" class="num">{t('common.points')}</th>
+                      <th scope="col" class="num">{t('standings.wins')}</th>
+                      <th scope="col" class="num">{t('standings.podiums')}</th>
+                      <th scope="col" class="num">{t('standings.poles')}</th>
+                      <th scope="col">{t('people.team.drivers')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {records.map(({ season: s, standing: st }) => {
+                      const seasonDrivers = teamSeasonDrivers(league, team.id, s.id);
+                      return (
+                        <tr>
+                          <th scope="row" class="sticky-col font-normal">
+                            <span class="flex flex-wrap items-center gap-2">
+                              <a href={url(lang, 'seasonStandings', { season: s.slug })} class="round-link">
+                                {seasonLabel(s, lang)}
+                              </a>
+                              {s.status === 'active' && <Badge variant="teal">{t('people.team.inProgress')}</Badge>}
+                            </span>
+                          </th>
+                          <td class="num font-bold">{st && st.points > 0 ? (st.tied ? `=${st.position}` : t('people.pos', { n: st.position })) : '–'}</td>
+                          <td class="num">{st?.points ?? 0}</td>
+                          <td class="num">{st?.wins || ''}</td>
+                          <td class="num">{st?.podiums || ''}</td>
+                          <td class="num">{st?.poles || ''}</td>
+                          <td>
+                            <span class="flex flex-wrap gap-x-4 gap-y-1">
+                              {seasonDrivers.map((d) => (
+                                <DriverLink lang={lang} driver={d} stripe={false} />
+                              ))}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+      </>
+    )
+  }
+</BaseLayout>
+
+<style>
+  .team-section {
+    padding-top: 3rem;
+    scroll-margin-top: calc(var(--header-h) + 1rem);
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, max-content));
+    gap: 1rem 2.5rem;
+    margin-top: 1.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-border);
+  }
+  .fact-big {
+    margin-top: 0.25rem;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(1.75rem, 1.4rem + 1.4vw, 2.5rem);
+    line-height: 1;
+  }
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  @media (min-width: 640px) {
+    .tiles {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+  }
+  .tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface-1);
+  }
+  .tile-value {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.75rem;
+    line-height: 1.1;
+  }
+  .round-link {
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .round-link:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+</style>

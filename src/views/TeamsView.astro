@@ -1,0 +1,162 @@
+---
+/**
+ * Teamliste (Plan §4.1, §4.5): die Teams der aktuellen Saison nach Konstrukteurswertung,
+ * je Karte Teamfarbe als Akzentstreifen, aktuelle Fahrer, Punkte und Position.
+ * Keine Teamlogos – nur Name und Farbe.
+ */
+import PeopleTabs from '~/components/people/PeopleTabs.astro';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import PlatformBadge from '~/components/ui/PlatformBadge.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import type { Id } from '~/lib/db/types';
+import type { TeamStanding } from '~/lib/domain/standings';
+import { teamDrivers } from '~/lib/people';
+import { loadLeague } from '~/lib/server/league';
+import { seasonLabel, teamStyle } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const season = league.currentSeason;
+const seasonName = season ? seasonLabel(season, lang) : '';
+const teams = season ? league.teamsOf(season.id) : [];
+const standings = new Map<Id, TeamStanding>(season ? league.teamStandings(season.id).map((s) => [s.teamId, s]) : []);
+const anyPoints = [...standings.values()].some((s) => s.points > 0);
+// Nach Wertung sortieren, sobald es Punkte gibt – sonst Reihenfolge der Saison
+const ordered = anyPoints
+  ? [...teams].sort((a, b) => (standings.get(a.id)?.position ?? 99) - (standings.get(b.id)?.position ?? 99))
+  : teams;
+---
+
+<BaseLayout
+  lang={lang}
+  title={t('people.teams.title')}
+  description={t('people.teams.metaDescription', { n: teams.length, season: seasonName || t('common.season') })}
+  alternates={alternates('teams')}
+>
+  <PageHeader
+    lang={lang}
+    title={t('people.teams.title')}
+    eyebrow={seasonName || undefined}
+    lead={t('people.teams.lead')}
+    breadcrumbs={[{ label: t('nav.home'), href: url(lang, 'home') }, { label: t('people.teams.title') }]}
+  >
+    <PeopleTabs lang={lang} current="teams" />
+  </PageHeader>
+
+  <div class="container-page py-10 md:py-14">
+    {
+      !season || teams.length === 0 ? (
+        <EmptyState title={t('people.teams.none')} />
+      ) : (
+        <section aria-labelledby="teams-title">
+          <SectionTitle
+            id="teams-title"
+            title={t('people.teams.standingLabel')}
+            href={url(lang, 'standings')}
+            linkLabel={t('nav.standings')}
+            class="mb-3!"
+          />
+          <p class="mb-6 max-w-2xl text-sm text-muted">
+            {season.reserve_points_for_constructors
+              ? t('people.teams.reserveNote', { season: seasonName })
+              : t('people.teams.reserveNoteNot', { season: seasonName })}
+          </p>
+          <ol class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {ordered.map((team) => {
+              const st = standings.get(team.id);
+              const drivers = teamDrivers(league, team.id, season.id);
+              return (
+                <li class="team-card card card-hover" style={teamStyle(team)}>
+                  <div class="flex items-start justify-between gap-3">
+                    <h3 class="nav-label text-xl leading-tight">
+                      <a href={url(lang, 'team', { slug: team.slug })} class="team-link">
+                        {team.name}
+                      </a>
+                    </h3>
+                    {st && st.points > 0 && (
+                      <p class="pos tabular" title={t('people.teams.positionLabel', { n: st.position })}>
+                        <span class="sr-only">{t('people.teams.positionLabel', { n: st.position })}</span>
+                        <span aria-hidden="true">{st.tied ? `=${st.position}` : t('people.pos', { n: st.position })}</span>
+                      </p>
+                    )}
+                  </div>
+                  <p class="mt-1 text-sm text-muted tabular">
+                    {st && st.points > 0 ? (
+                      <>
+                        <strong class="text-fg">{t('people.points', { n: st.points })}</strong>
+                        {st.wins > 0 && <span> · {t('standings.wins')} {st.wins}</span>}
+                        {st.podiums > 0 && <span> · {t('standings.podiums')} {st.podiums}</span>}
+                      </>
+                    ) : (
+                      t('people.teams.noPoints')
+                    )}
+                  </p>
+                  {drivers.length === 0 ? (
+                    <p class="mt-4 text-sm text-muted">{t('people.teams.noDrivers')}</p>
+                  ) : (
+                    <ul class="mt-4 grid gap-2">
+                      {drivers.map(({ driver }) => (
+                        <li class="driver-row">
+                          <DriverLink lang={lang} driver={driver} team={team} number={league.numberOf(driver.id)} stripe={false} flag />
+                          <PlatformBadge platform={driver.platform} lang={lang} />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )
+    }
+  </div>
+</BaseLayout>
+
+<style>
+  .team-card {
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem 1.25rem 1.25rem 1.5rem;
+    border-left: 4px solid var(--team-color, var(--color-border));
+  }
+  .team-card:hover,
+  .team-card:focus-within {
+    border-left-color: var(--team-color, transparent);
+  }
+  .team-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    text-decoration: none;
+  }
+  .team-link:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+  .pos {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 1.75rem;
+    line-height: 1;
+  }
+  .driver-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem 0.75rem;
+    min-height: 44px;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-control);
+    background: var(--color-surface-2);
+  }
+</style>

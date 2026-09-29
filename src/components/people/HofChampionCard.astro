@@ -1,0 +1,147 @@
+---
+/**
+ * Große Champion-Karte einer abgeschlossenen Saison (Plan §4.8): Fahrer- und
+ * Konstrukteurs-Champion mit Punkten, Teamfarbe nur als Streifen, Link zum Endstand.
+ */
+import Trophy from '@lucide/astro/icons/trophy';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import Flag from '~/components/ui/Flag.astro';
+import TeamName from '~/components/ui/TeamName.astro';
+import { url, useT, type Lang } from '~/i18n';
+import type { Id, SeasonRow } from '~/lib/db/types';
+import type { League } from '~/lib/league/league';
+import { seasonLabel, teamStyle } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  season: SeasonRow;
+  driverId: Id | null;
+  teamId: Id | null;
+  points: number | null;
+}
+const { lang, league, season, driverId, teamId, points } = Astro.props;
+const t = useT(lang);
+const name = seasonLabel(season, lang);
+const driver = driverId != null ? league.driver(driverId) : undefined;
+const driverStanding = driverId != null ? league.driverStandings(season.id).find((s) => s.driverId === driverId) : undefined;
+const driverTeam = driverStanding?.teamId != null ? league.team(driverStanding.teamId) : undefined;
+// Startnummer, mit der der Titel geholt wurde (letztes Ergebnis der Saison)
+const titleNumber = driverId != null ? (league.driverResults(driverId).find((r) => r.season.id === season.id)?.result.race_number ?? null) : null;
+const team = teamId != null ? league.team(teamId) : undefined;
+const teamPoints = teamId != null ? league.teamStandings(season.id).find((s) => s.teamId === teamId)?.points : undefined;
+const headingId = `champion-${season.slug}`;
+---
+
+<article class="champion card" aria-labelledby={headingId}>
+  <header class="flex items-center justify-between gap-3">
+    <h3 id={headingId} class="nav-label text-xl">{name}</h3>
+    <span class="text-teal" aria-hidden="true"><Trophy size={22} /></span>
+  </header>
+
+  <div class="block-driver" style={teamStyle(driverTeam)}>
+    <p class="micro">{t('people.hof.driverChampion')}</p>
+    {
+      driver ? (
+        <div class="mt-2 flex items-center gap-4">
+          {titleNumber != null && (
+            <span class="big-number tabular" aria-hidden="true">
+              {titleNumber}
+            </span>
+          )}
+          <div class="min-w-0">
+            <p class="champ-name">
+              <DriverLink lang={lang} driver={driver} stripe={false} />
+              {!driver.anonymized && driver.nationality_code && <Flag code={driver.nationality_code} lang={lang} class="ml-2" />}
+            </p>
+            <p class="mt-1 flex flex-wrap items-center gap-x-3 text-sm text-muted">
+              {driverTeam && <TeamName lang={lang} team={driverTeam} />}
+              {points != null && <span class="tabular font-semibold text-fg">{t('people.points', { n: points })}</span>}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p class="mt-2 text-muted">–</p>
+      )
+    }
+  </div>
+
+  <div class="block-team" style={teamStyle(team)}>
+    <p class="micro">{t('people.hof.teamChampion')}</p>
+    {
+      team ? (
+        <p class="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <TeamName lang={lang} team={team} class="nav-label text-xl" />
+          {teamPoints != null && <span class="tabular text-sm font-semibold">{t('people.points', { n: teamPoints })}</span>}
+        </p>
+      ) : (
+        <p class="mt-2 text-muted">–</p>
+      )
+    }
+  </div>
+
+  {
+    season.status !== 'planned' && (
+      <a href={url(lang, 'seasonStandings', { season: season.slug })} class="more">
+        {t('people.hof.toStandings', { season: name })} →
+      </a>
+    )
+  }
+</article>
+
+<style>
+  .champion {
+    position: relative;
+    display: grid;
+    gap: 1rem;
+    padding: 1.25rem;
+    overflow: hidden;
+    border-color: transparent;
+    background:
+      radial-gradient(90% 60% at 100% 0%, rgb(14 90 97 / 0.35), transparent 70%) padding-box,
+      linear-gradient(var(--color-surface-1), var(--color-surface-1)) padding-box,
+      var(--g-accent) border-box;
+  }
+  @media (min-width: 768px) {
+    .champion {
+      padding: 1.75rem;
+    }
+  }
+  .block-driver,
+  .block-team {
+    padding: 0.875rem 1rem;
+    border-radius: var(--radius-control);
+    background: rgb(22 22 26 / 0.85);
+    border-left: 4px solid var(--team-color, var(--color-border));
+  }
+  .big-number {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 3.25rem;
+    line-height: 0.9;
+  }
+  .champ-name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    font-family: var(--font-display);
+    font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2.1rem);
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+  }
+  .champ-name :global(.gamertag) {
+    font-weight: 900;
+  }
+  .more {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-green);
+    text-decoration: none;
+  }
+  .more:hover {
+    color: var(--color-teal);
+  }
+</style>

@@ -1,0 +1,15 @@
+---
+import { teamPageSlugs } from '~/lib/people';
+import { loadLeague } from '~/lib/server/league';
+import TeamView from '~/views/TeamView.astro';
+
+/** Teamseiten für alle Teams, die in mindestens einer Saison vorkommen. */
+export async function getStaticPaths() {
+  const league = await loadLeague();
+  return teamPageSlugs(league).map((slug) => ({ params: { slug } }));
+}
+
+const { slug } = Astro.params;
+---
+
+<TeamView lang="en" slug={slug!} />

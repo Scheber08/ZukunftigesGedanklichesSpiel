@@ -1,0 +1,80 @@
+---
+/**
+ * Ewige Bestenliste (Plan §4.8) als kompakte Tabelle: Rang (Gleichstand „=2“), Fahrer bzw.
+ * Team, Wert. Pseudonymisierte Fahrer erscheinen ohne Link als „Ehemaliger Fahrer #id“.
+ */
+import DriverLink from '~/components/ui/DriverLink.astro';
+import TeamName from '~/components/ui/TeamName.astro';
+import { useT, type Lang } from '~/i18n';
+import type { Id } from '~/lib/db/types';
+import type { League } from '~/lib/league/league';
+import { rankByValue } from '~/lib/people';
+import { formatPoints } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  id: string;
+  title: string;
+  kind: 'driver' | 'team';
+  entries: Array<{ id: Id; value: number }>;
+  limit?: number;
+}
+const { lang, league, id, title, kind, entries, limit = 10 } = Astro.props;
+const t = useT(lang);
+const ranked = rankByValue(entries.slice(0, limit));
+---
+
+<section class="board" aria-labelledby={id}>
+  <h3 id={id} class="board-title">{title}</h3>
+  {
+    ranked.length === 0 ? (
+      <p class="card p-4 text-sm text-muted">{t('people.hof.boardEmpty')}</p>
+    ) : (
+      <div class="table-wrap">
+        <table class="timing-table">
+          <caption class="sr-only">{t('people.hof.boardCaption', { board: title })}</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="pos">
+                <abbr title={t('people.hof.rank')}>#</abbr>
+              </th>
+              <th scope="col">{kind === 'driver' ? t('common.driver') : t('common.team')}</th>
+              <th scope="col" class="num">{t('people.hof.value')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ranked.map(({ rank, tied, entry }) => (
+              <tr class:list={[rank === 1 && 'leader']}>
+                <td class="pos">
+                  {tied && <span class="sr-only">{t('standings.tied')} </span>}
+                  {tied ? `=${rank}` : rank}
+                </td>
+                <th scope="row" class="font-normal">
+                  {kind === 'driver' ? (
+                    <DriverLink lang={lang} driver={league.driver(entry.id)} team={null} stripe={false} />
+                  ) : (
+                    <TeamName lang={lang} team={league.team(entry.id)} />
+                  )}
+                </th>
+                <td class="num text-lg font-bold">{formatPoints(entry.value, lang)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+</section>
+
+<style>
+  .board-title {
+    margin-bottom: 0.75rem;
+    font-size: 1.125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .leader > * {
+    background: rgb(55 190 137 / 0.08);
+  }
+</style>
