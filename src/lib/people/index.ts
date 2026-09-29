@@ -178,11 +178,6 @@ export function driverDuels(league: League, driverId: Id, seasonId: Id): DuelVie
   return league.teammates(driverId, seasonId).map((mate) => ({ mate, team, duel: league.duel(seasonId, team.id, driverId, mate.id) }));
 }
 
-/** Hat das Duell überhaupt gemeinsame Runden? */
-export function duelHasRounds(duel: Duel): boolean {
-  return duel.rounds.length > 0;
-}
-
 export interface ProgressionStep {
   round: RoundRow;
   /** Punkte in dieser Runde */
