@@ -44,6 +44,8 @@ export interface PrivateSettings {
   discord_invites: { website: string | null; instagram: string | null; tiktok: string | null; youtube: string | null };
   /** Gebündelter Rebuild (Plan §7.2). */
   rebuild: { requested_at: string | null; dispatched_at: string | null; reason: string | null };
+  /** App-Token der Twitch-API (Client-Credentials), vom Cron-Job gepflegt. */
+  twitch_token: { access_token: string | null; expires_at: string | null };
 }
 
 export type SettingKey = keyof PublicSettings | keyof PrivateSettings;
@@ -64,6 +66,7 @@ export const PRIVATE_SETTING_KEYS = [
   'discord_role_map',
   'discord_invites',
   'rebuild',
+  'twitch_token',
 ] as const satisfies ReadonlyArray<keyof PrivateSettings>;
 
 export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
@@ -93,11 +96,12 @@ export const DEFAULT_PRIVATE_SETTINGS: PrivateSettings = {
   discord_role_map: { admin: [], steward: [], redakteur: [] },
   discord_invites: { website: null, instagram: null, tiktok: null, youtube: null },
   rebuild: { requested_at: null, dispatched_at: null, reason: null },
+  twitch_token: { access_token: null, expires_at: null },
 };
 
 /** Liest die Einstellungen aus Zeilen und füllt fehlende Schlüssel mit Defaults auf. */
 export function parsePublicSettings(rows: ReadonlyArray<{ key: string; value: unknown }>): PublicSettings {
-  const out: Record<string, unknown> = structuredClone(DEFAULT_PUBLIC_SETTINGS);
+  const out = structuredClone(DEFAULT_PUBLIC_SETTINGS) as unknown as Record<string, unknown>;
   for (const r of rows) {
     if ((PUBLIC_SETTING_KEYS as readonly string[]).includes(r.key)) {
       const def = out[r.key];
@@ -111,7 +115,7 @@ export function parsePublicSettings(rows: ReadonlyArray<{ key: string; value: un
 }
 
 export function parsePrivateSettings(rows: ReadonlyArray<{ key: string; value: unknown }>): PrivateSettings {
-  const out: Record<string, unknown> = structuredClone(DEFAULT_PRIVATE_SETTINGS);
+  const out = structuredClone(DEFAULT_PRIVATE_SETTINGS) as unknown as Record<string, unknown>;
   for (const r of rows) {
     if ((PRIVATE_SETTING_KEYS as readonly string[]).includes(r.key)) {
       const def = out[r.key];

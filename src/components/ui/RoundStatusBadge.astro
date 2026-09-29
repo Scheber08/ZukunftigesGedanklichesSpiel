@@ -1,0 +1,24 @@
+---
+/** Status einer Runde (Plan §3.5): geplant, vorläufig, final, korrigiert, abgesagt. */
+import Badge from './Badge.astro';
+import { useT, type Lang } from '~/i18n';
+import type { RoundStatus } from '~/lib/db/types';
+
+interface Props {
+  status: RoundStatus;
+  lang: Lang;
+  class?: string;
+}
+const { status, lang, class: className } = Astro.props;
+const t = useT(lang);
+const variant = {
+  scheduled: 'muted',
+  lineup_published: 'teal',
+  provisional: 'warning',
+  final: 'green',
+  corrected: 'teal',
+  cancelled: 'danger',
+} as const satisfies Record<RoundStatus, string>;
+---
+
+<Badge variant={variant[status]} class={className}>{t(`status.round.${status}`)}</Badge>

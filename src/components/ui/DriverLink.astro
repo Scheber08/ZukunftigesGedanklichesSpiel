@@ -1,0 +1,70 @@
+---
+/**
+ * Fahrer in Tabellen/Listen: Teamstreifen · Startnummer · GAMERTAG (Versalien), verlinkt aufs Profil.
+ * Pseudonymisierte Fahrer werden nicht verlinkt.
+ */
+import Flag from './Flag.astro';
+import { url, useT, type Lang } from '~/i18n';
+import type { DriverRow, TeamRow } from '~/lib/db/types';
+import { teamStyle } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  driver: DriverRow | undefined;
+  team?: TeamRow | null;
+  number?: number | null;
+  reserve?: boolean;
+  flag?: boolean;
+  stripe?: boolean;
+  class?: string;
+}
+const { lang, driver, team, number, reserve = false, flag = false, stripe = true, class: className } = Astro.props;
+const t = useT(lang);
+const name = !driver ? t('common.formerDriver') : driver.anonymized ? `${t('common.formerDriver')} #${driver.id}` : driver.gamertag;
+const href = driver && !driver.anonymized ? url(lang, 'driver', { slug: driver.slug }) : null;
+---
+
+<span class:list={['driver-link', className]} style={teamStyle(team)}>
+  {stripe && <span class="team-stripe" aria-hidden="true" />}
+  {number !== undefined && <span class="driver-number tabular" aria-label={`${t('common.number')} ${number ?? '–'}`}>{number ?? '–'}</span>}
+  {flag && driver?.nationality_code && <Flag code={driver.nationality_code} lang={lang} />}
+  {href ? <a href={href} class="gamertag">{name}</a> : <span class="gamertag">{name}</span>}
+  {reserve && <abbr class="reserve-mark" title={t('legend.reserve')}>{t('common.reserveShort')}</abbr>}
+</span>
+
+<style>
+  .driver-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .driver-number {
+    min-width: 1.6rem;
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--color-muted);
+    text-align: right;
+  }
+  .gamertag {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  a.gamertag:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+  .reserve-mark {
+    font-size: var(--fs-micro);
+    font-weight: 700;
+    text-decoration: none;
+    padding: 0 0.3rem;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    color: var(--color-muted);
+  }
+</style>

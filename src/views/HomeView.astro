@@ -1,0 +1,416 @@
+---
+/**
+ * Startseite (Plan §4.2): Hero mit Countdown, Anmeldestatus, letztes Rennen, WM-Stand,
+ * News, „Warum wir“, Discord-Karte und Partner-Leiste.
+ */
+import CalendarPlus from '@lucide/astro/icons/calendar-plus';
+import Timer from '@lucide/astro/icons/timer';
+import Users from '@lucide/astro/icons/users';
+import NewsCard from '~/components/content/NewsCard.astro';
+import Countdown from '~/components/sport/Countdown.svelte';
+import DriverStandingsTable from '~/components/sport/DriverStandingsTable.astro';
+import TeamStandingsTable from '~/components/sport/TeamStandingsTable.astro';
+import Badge from '~/components/ui/Badge.astro';
+import BrandIcon from '~/components/ui/BrandIcon.astro';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import Flag from '~/components/ui/Flag.astro';
+import Logo from '~/components/ui/Logo.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import TeamName from '~/components/ui/TeamName.astro';
+import { SITE } from '~/config/site';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { formatLapTime } from '~/lib/domain/laptime';
+import { formatDateTime, formatDateLong, formatTime, timeZoneName } from '~/lib/domain/time';
+import { loc } from '~/lib/league/league';
+import { loadLeague } from '~/lib/server/league';
+import { roundLabel, teamStyle } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const settings = league.settings;
+const season = league.currentSeason;
+
+// Countdown: kommende Runden, der Browser wählt die nächste in der Zukunft
+const upcoming = league.upcomingRounds(6);
+const next = upcoming[0];
+const previous = next ? league.previousRound(next.id) : undefined;
+const countdownTargets = upcoming.map((r) => {
+  const track = league.track(r.track_id);
+  const season = league.season(r.season_id)!;
+  return {
+    startUtc: r.start_utc,
+    label: roundLabel(r, track, lang),
+    href: url(lang, 'race', { season: season.slug, round: r.number }),
+    dateText: `${formatDateLong(r.start_utc, lang)} · ${formatTime(r.start_utc, lang)} ${timeZoneName(r.start_utc, lang)}`,
+  };
+});
+const nextTrack = next ? league.track(next.track_id) : undefined;
+const nextSeason = next ? league.season(next.season_id) : undefined;
+
+// Letztes Rennen
+const last = league.lastResultRound();
+const lastSummary = last ? league.roundSummary(last.id) : undefined;
+
+// WM-Stand
+const driverTop = season ? league.driverStandings(season.id).slice(0, 5) : [];
+const teamTop = season ? league.teamStandings(season.id).slice(0, 3) : [];
+
+const news = league.news.slice(0, 3);
+const reg = settings.registration;
+const regLabel = reg.state === 'open' ? t('home.registration.open') : reg.state === 'waitlist' ? t('home.registration.waitlist') : t('home.registration.closed');
+const regNote = lang === 'de' ? reg.note_de : (reg.note_en ?? reg.note_de);
+const claim = lang === 'de' ? settings.home.claim_de : settings.home.claim_en;
+const discord = settings.discord_counts;
+
+const why = ['grid', 'crossplay', 'stewards', 'archive', 'numbers', 'community'] as const;
+
+const site = Astro.site ?? new URL(Astro.url.origin);
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SportsOrganization',
+  name: SITE.name,
+  sport: 'Sim Racing',
+  url: new URL(url(lang, 'home'), site).href,
+  logo: new URL('/icon-512-maskable.png', site).href,
+  description: t('meta.defaultDescription'),
+  sameAs: [settings.socials.instagram, settings.socials.tiktok, settings.socials.youtube].filter(Boolean),
+};
+---
+
+<BaseLayout lang={lang} alternates={alternates('home')} heroHeader jsonLd={jsonLd}>
+  <!-- 1. Hero -->
+  <section class="hero relative isolate overflow-hidden border-b border-border pt-(--header-h)">
+    <div class="hero-bg" aria-hidden="true">
+      <div class="glow"></div>
+    </div>
+    <div class="container-page grid items-center gap-10 py-14 md:py-20 lg:grid-cols-[1.1fr_1fr]">
+      <div>
+        <p class="micro text-teal!">{t('home.hero.eyebrow')}</p>
+        <h1 class="display mt-3">{SITE.name}</h1>
+        <p class="mt-5 max-w-xl text-lg text-muted">{claim}</p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href={url(lang, 'join')} class="btn btn-primary">{t('nav.join')}</a>
+          {
+            settings.discord_invite.url && (
+              <a href={settings.discord_invite.url} class="btn btn-secondary" target="_blank" rel="noopener" data-track="discord_click">
+                <BrandIcon name="discord" size={18} />
+                {t('common.joinDiscord')}
+              </a>
+            )
+          }
+        </div>
+        <p class="mt-4 hidden text-sm text-teal" data-live-banner hidden>
+          <a href={url(lang, 'stream')} class="underline">{t('common.liveNow')}</a>
+        </p>
+      </div>
+
+      <div class="relative">
+        <div class="hero-logo" aria-hidden="true">
+          <Logo size="100%" />
+        </div>
+        <div class="card relative bg-surface-1/80 p-5 backdrop-blur-sm md:p-6">
+          <Countdown
+            client:load
+            targets={countdownTargets}
+            previousStartUtc={previous?.start_utc ?? null}
+            labels={{
+              days: t('countdown.days'),
+              hours: t('countdown.hours'),
+              minutes: t('countdown.minutes'),
+              seconds: t('countdown.seconds'),
+              next: t('countdown.next'),
+              now: t('countdown.now'),
+              none: t('countdown.none'),
+            }}
+          />
+          {
+            next && nextSeason && (
+              <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                <span class="inline-flex items-center gap-2">
+                  <Flag code={nextTrack?.country_code} lang={lang} />
+                  {formatDateTime(next.start_utc, lang)} {timeZoneName(next.start_utc, lang)}
+                </span>
+                {next.format === 'sprint' && <Badge variant="teal">{t('common.sprint')}</Badge>}
+                <a
+                  href={url(lang, 'raceIcs', { season: nextSeason.slug, round: next.number })}
+                  class="inline-flex items-center gap-1.5 text-green hover:text-teal"
+                  data-track="ics_download"
+                >
+                  <CalendarPlus size={16} aria-hidden="true" />
+                  {t('home.hero.calendarLink')}
+                </a>
+              </div>
+            )
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Anmeldestatus -->
+  <section class="border-b border-border bg-surface-1" aria-labelledby="reg-title">
+    <div class="container-page flex flex-col gap-4 py-6 md:flex-row md:items-center md:justify-between">
+      <div class="flex flex-wrap items-center gap-3">
+        <h2 id="reg-title" class="sr-only">{t('home.registration.title')}</h2>
+        <Badge variant={reg.state === 'open' ? 'green' : reg.state === 'waitlist' ? 'warning' : 'danger'}>{regLabel}</Badge>
+        {reg.state !== 'closed' && (
+          <p class="text-sm">
+            <strong>{t('home.registration.freeSeats', { n: reg.free_seats })}</strong>
+            <span class="text-muted"> · {t('home.registration.freeReserve', { n: reg.free_reserve })}</span>
+          </p>
+        )}
+        {regNote && <p class="w-full text-sm text-muted md:w-auto">{regNote}</p>}
+      </div>
+      <div class="flex gap-3">
+        <a href={url(lang, 'join')} class="btn btn-secondary btn-sm">{t('home.registration.info')}</a>
+      </div>
+    </div>
+  </section>
+
+  <div class="container-page">
+    <!-- 3. Letztes Rennen + 4. WM-Stand -->
+    <div class="grid gap-10 py-14 lg:grid-cols-2">
+      <section aria-labelledby="last-race" data-reveal>
+        <SectionTitle id="last-race" title={t('home.lastRace.title')} />
+        {
+          lastSummary ? (
+            <div class="card p-5">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <a
+                  href={url(lang, 'race', { season: lastSummary.season.slug, round: lastSummary.round.number })}
+                  class="nav-label flex items-center gap-2 text-xl hover:text-teal"
+                >
+                  <Flag code={lastSummary.track.country_code} lang={lang} decorative />
+                  {roundLabel(lastSummary.round, lastSummary.track, lang)}
+                </a>
+                <RoundStatusBadge status={lastSummary.round.status} lang={lang} />
+              </div>
+              {lastSummary.round.status === 'provisional' && lastSummary.round.protest_deadline && (
+                <p class="mt-2 text-sm text-warning">
+                  {t('home.lastRace.provisional', { date: formatDateTime(lastSummary.round.protest_deadline, lang) })}
+                </p>
+              )}
+              <ol class="mt-5 grid gap-3 sm:grid-cols-3">
+                {lastSummary.podium.map((r) => (
+                  <li class="podium-card" style={teamStyle(league.team(r.team_id))}>
+                    <span class="podium-pos">P{r.position}</span>
+                    <DriverLink lang={lang} driver={league.driver(r.driver_id)} team={league.team(r.team_id)} stripe={false} />
+                    <TeamName lang={lang} team={league.team(r.team_id)} class="text-xs text-muted" stripe={false} />
+                  </li>
+                ))}
+              </ol>
+              <dl class="mt-5 grid gap-2 text-sm sm:grid-cols-2">
+                {lastSummary.pole && (
+                  <div class="flex items-center gap-2">
+                    <dt class="font-bold text-green">P</dt>
+                    <dd>
+                      {t('legend.pole')}: <strong>{league.driverName(lastSummary.pole.driver_id, lang)}</strong>
+                    </dd>
+                  </div>
+                )}
+                {lastSummary.fastestLap && (
+                  <div class="flex items-center gap-2">
+                    <dt class="text-teal">
+                      <Timer size={16} aria-hidden="true" />
+                      <span class="sr-only">FL</span>
+                    </dt>
+                    <dd>
+                      {t('legend.fastestLap')}: <strong>{league.driverName(lastSummary.fastestLap.driver_id, lang)}</strong>{' '}
+                      <span class="tabular text-muted">{formatLapTime(lastSummary.fastestLap.best_lap_ms)}</span>
+                    </dd>
+                  </div>
+                )}
+              </dl>
+              <a
+                href={url(lang, 'race', { season: lastSummary.season.slug, round: lastSummary.round.number })}
+                class="mt-5 inline-block text-sm font-semibold text-green hover:text-teal"
+              >
+                {t('home.lastRace.toResult')} →
+              </a>
+            </div>
+          ) : (
+            <p class="card p-5 text-muted">{t('home.lastRace.none')}</p>
+          )
+        }
+      </section>
+
+      <section aria-labelledby="standings-title" data-reveal>
+        <SectionTitle id="standings-title" title={t('home.standings.title')} href={url(lang, 'standings')} linkLabel={t('home.standings.full')} />
+        {season && (
+          <div class="grid gap-4">
+            <DriverStandingsTable lang={lang} league={league} standings={driverTop} detail={false} />
+            <TeamStandingsTable lang={lang} league={league} standings={teamTop} detail={false} />
+          </div>
+        )}
+      </section>
+    </div>
+
+    <!-- 5. News -->
+    {
+      news.length > 0 && (
+        <section class="py-10" aria-labelledby="news-title" data-reveal>
+          <SectionTitle id="news-title" title={t('home.news.title')} href={url(lang, 'news')} linkLabel={t('home.news.all')} />
+          <div class="grid gap-5 md:grid-cols-3">
+            {news.map((n) => (
+              <NewsCard lang={lang} news={n} />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    <!-- 6. Warum wir -->
+    <section class="py-10" aria-labelledby="why-title" data-reveal>
+      <SectionTitle id="why-title" title={t('home.why.title')} />
+      <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {
+          why.map((key) => (
+            <li class="card card-hover p-5">
+              <h3 class="text-lg uppercase">{t(`home.why.${key}.title`)}</h3>
+              <p class="mt-2 text-sm text-muted">{t(`home.why.${key}.text`)}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <!-- 7. Discord-Karte (Daten holt der Server, kein iframe) -->
+    <section class="py-10" aria-labelledby="discord-title" data-reveal>
+      <div class="discord-card card flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between md:p-8" data-discord-card>
+        <div class="flex items-start gap-4">
+          <span class="rounded-xl bg-surface-2 p-3 text-teal"><BrandIcon name="discord" size={32} /></span>
+          <div>
+            <h2 id="discord-title" class="text-2xl uppercase">{t('home.discord.title')}</h2>
+            <p class="mt-2 max-w-xl text-sm text-muted">{t('home.discord.text')}</p>
+            <p class="mt-3 flex flex-wrap gap-4 text-sm">
+              <span class="inline-flex items-center gap-1.5" data-discord-members hidden={discord.members == null}>
+                <Users size={16} aria-hidden="true" />
+                <span data-value data-template={t('home.discord.members', { n: '{n}' })}>{t('home.discord.members', { n: discord.members ?? 0 })}</span>
+              </span>
+              <span class="inline-flex items-center gap-1.5" data-discord-online hidden={discord.online == null}>
+                <span class="h-2 w-2 rounded-full bg-green" aria-hidden="true"></span>
+                <span data-value data-template={t('home.discord.online', { n: '{n}' })}>{t('home.discord.online', { n: discord.online ?? 0 })}</span>
+              </span>
+            </p>
+          </div>
+        </div>
+        {
+          settings.discord_invite.url ? (
+            <a href={settings.discord_invite.url} class="btn btn-primary shrink-0" target="_blank" rel="noopener" data-track="discord_click">
+              {t('common.joinDiscord')}
+            </a>
+          ) : (
+            <p class="text-sm text-muted">{t('home.discord.soon')}</p>
+          )
+        }
+      </div>
+    </section>
+
+    <!-- 8. Partner-Leiste (gekennzeichnet) -->
+    {
+      league.partners.length > 0 && (
+        <section class="py-10" aria-labelledby="partners-title">
+          <div class="flex items-center gap-3">
+            <h2 id="partners-title" class="micro">{t('home.partners.title')}</h2>
+            <Badge variant="muted">{t('common.ad')}</Badge>
+          </div>
+          <ul class="mt-4 flex flex-wrap gap-4">
+            {league.partners.map((p) => (
+              <li>
+                <a href={p.url} rel="sponsored noopener" target="_blank" class="card card-hover flex items-center gap-3 px-5 py-3 text-sm">
+                  {p.logo ? <img src={p.logo} alt={p.name} height="32" width="120" loading="lazy" class="h-8 w-auto" /> : <span class="font-semibold">{p.name}</span>}
+                  <span class="sr-only">{loc(p, 'text', lang)}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+  </div>
+</BaseLayout>
+
+<style>
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(60% 50% at 75% 40%, rgb(14 90 97 / 0.35), transparent 70%),
+      radial-gradient(50% 45% at 60% 70%, rgb(11 96 67 / 0.3), transparent 70%);
+  }
+  .hero-bg .glow {
+    left: 45%;
+    width: 60%;
+  }
+  .hero-logo {
+    position: absolute;
+    right: -2rem;
+    top: 50%;
+    width: min(440px, 80%);
+    transform: translateY(-50%);
+    opacity: 0.12;
+    color: #fff;
+    pointer-events: none;
+  }
+  @media (min-width: 1024px) {
+    .hero-logo {
+      right: -4rem;
+      opacity: 0.18;
+    }
+  }
+  .podium-card {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.875rem 1rem;
+    border-radius: var(--radius-control);
+    background: var(--color-surface-2);
+    border-left: 4px solid var(--team-color, var(--color-border));
+  }
+  .podium-pos {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 1.5rem;
+    line-height: 1;
+  }
+</style>
+
+<script>
+  // Discord-Karte aktualisieren (Server-Cache, Plan §8.1) und LIVE-Banner
+  const card = document.querySelector<HTMLElement>('[data-discord-card]');
+  if (card) {
+    fetch('/api/discord-card', { headers: { accept: 'application/json' } })
+      .then((r) => (r.ok ? (r.json() as Promise<{ members?: number | null; online?: number | null }>) : null))
+      .then((data) => {
+        if (!data) return;
+        const set = (sel: string, value: number | null | undefined) => {
+          const wrap = card.querySelector<HTMLElement>(sel);
+          const el = wrap?.querySelector<HTMLElement>('[data-value]');
+          if (!wrap || !el || value == null) return;
+          el.textContent = (el.dataset.template ?? '{n}').replace('{n}', String(value));
+          wrap.hidden = false;
+        };
+        set('[data-discord-members]', data.members);
+        set('[data-discord-online]', data.online);
+      })
+      .catch(() => {});
+  }
+  const banner = document.querySelector<HTMLElement>('[data-live-banner]');
+  if (banner && document.querySelector('[data-live-badge]')) {
+    fetch('/api/live')
+      .then((r) => (r.ok ? (r.json() as Promise<{ live?: boolean }>) : null))
+      .then((data) => {
+        if (data?.live) {
+          banner.hidden = false;
+          banner.classList.remove('hidden');
+        }
+      })
+      .catch(() => {});
+  }
+</script>

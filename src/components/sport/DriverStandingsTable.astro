@@ -1,0 +1,71 @@
+---
+/** Fahrerwertung (Plan §4.4): Pos, Nr, Fahrer, Team, Punkte, Abstand, Siege, Podien, Poles, SR. */
+import DriverLink from '~/components/ui/DriverLink.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import TeamName from '~/components/ui/TeamName.astro';
+import { useT, type Lang } from '~/i18n';
+import type { DriverStanding } from '~/lib/domain/standings';
+import type { League } from '~/lib/league/league';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  standings: DriverStanding[];
+  limit?: number;
+  /** Siege/Podien/Poles/SR anzeigen */
+  detail?: boolean;
+  caption?: string;
+}
+const { lang, league, standings, limit, detail = true, caption } = Astro.props;
+const t = useT(lang);
+const rows = limit ? standings.slice(0, limit) : standings;
+---
+
+{
+  rows.length === 0 ? (
+    <EmptyState title={t('standings.none')} />
+  ) : (
+    <div class="table-wrap">
+      <table class="timing-table">
+        <caption class="sr-only">{caption ?? t('standings.driversCaption')}</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="pos"><abbr title={t('common.position')}>{t('common.positionShort')}</abbr></th>
+            <th scope="col" class="sticky-col">{t('common.driver')}</th>
+            <th scope="col">{t('common.team')}</th>
+            <th scope="col" class="num">{t('common.points')}</th>
+            <th scope="col" class="num">{t('standings.gap')}</th>
+            {detail && <th scope="col" class="num">{t('standings.wins')}</th>}
+            {detail && <th scope="col" class="num">{t('standings.podiums')}</th>}
+            {detail && <th scope="col" class="num">{t('standings.poles')}</th>}
+            {detail && <th scope="col" class="num"><abbr title={t('standings.fastestLapsLong')}>{t('standings.fastestLaps')}</abbr></th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((s) => {
+            const team = s.teamId != null ? league.team(s.teamId) : undefined;
+            const driver = league.driver(s.driverId);
+            return (
+              <tr>
+                <td class="pos">
+                  {s.tied && <span class="sr-only">{t('standings.tied')} </span>}
+                  {s.tied ? `=${s.position}` : s.position}
+                </td>
+                <th scope="row" class="sticky-col font-normal">
+                  <DriverLink lang={lang} driver={driver} team={team} number={league.numberOf(s.driverId)} reserve={driver?.status === 'reserve'} />
+                </th>
+                <td class="muted"><TeamName lang={lang} team={team} stripe={false} /></td>
+                <td class="num text-lg font-bold">{s.points}</td>
+                <td class="num muted">{s.gapToLeader > 0 ? `−${s.gapToLeader}` : '–'}</td>
+                {detail && <td class="num">{s.wins || ''}</td>}
+                {detail && <td class="num">{s.podiums || ''}</td>}
+                {detail && <td class="num">{s.poles || ''}</td>}
+                {detail && <td class="num">{s.fastestLaps || ''}</td>}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}

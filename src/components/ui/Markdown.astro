@@ -1,0 +1,13 @@
+---
+/** Rendert Markdown aus der DB (ohne rohes HTML, siehe lib/util/markdown.ts). */
+import { renderMarkdown } from '~/lib/util/markdown';
+
+interface Props {
+  source: string | null | undefined;
+  class?: string;
+  lang?: string;
+}
+const { source, class: className, lang } = Astro.props;
+---
+
+<div class:list={['prose', className]} lang={lang} set:html={renderMarkdown(source)} />

@@ -1,0 +1,40 @@
+---
+/**
+ * Zeitpunkt in Europe/Berlin (Liga-Zeit). Ein kleines Skript ergänzt die Zeit in der
+ * Zeitzone des Besuchers, wenn diese abweicht (Plan §4.3).
+ */
+import type { Lang } from '~/i18n';
+import { formatDate, formatDateLong, formatDateTime, formatTime, timeZoneName } from '~/lib/domain/time';
+
+interface Props {
+  instant: string;
+  lang: Lang;
+  format?: 'datetime' | 'date' | 'dateLong' | 'time' | 'dateLongTime';
+  /** Zeitzonenkürzel anhängen (MEZ/MESZ) */
+  zone?: boolean;
+  /** Ortszeit des Besuchers ergänzen */
+  local?: boolean;
+  class?: string;
+}
+const { instant, lang, format = 'datetime', zone = false, local = true, class: className } = Astro.props;
+let text: string;
+switch (format) {
+  case 'date':
+    text = formatDate(instant, lang);
+    break;
+  case 'dateLong':
+    text = formatDateLong(instant, lang);
+    break;
+  case 'time':
+    text = formatTime(instant, lang);
+    break;
+  case 'dateLongTime':
+    text = `${formatDateLong(instant, lang)}, ${formatTime(instant, lang)}`;
+    break;
+  default:
+    text = formatDateTime(instant, lang);
+}
+if (zone && format !== 'date' && format !== 'dateLong') text += ` ${timeZoneName(instant, lang)}`;
+---
+
+<time datetime={instant} class={className} data-localtime={local && format !== 'date' && format !== 'dateLong' ? format : undefined} data-lang={lang}>{text}</time>

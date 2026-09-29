@@ -1,0 +1,61 @@
+---
+/** Konstrukteurswertung (Plan §4.4). */
+import EmptyState from '~/components/ui/EmptyState.astro';
+import TeamName from '~/components/ui/TeamName.astro';
+import { useT, type Lang } from '~/i18n';
+import type { TeamStanding } from '~/lib/domain/standings';
+import type { League } from '~/lib/league/league';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  standings: TeamStanding[];
+  limit?: number;
+  detail?: boolean;
+  caption?: string;
+}
+const { lang, league, standings, limit, detail = true, caption } = Astro.props;
+const t = useT(lang);
+const rows = limit ? standings.slice(0, limit) : standings;
+const hasPoints = standings.some((s) => s.points > 0);
+---
+
+{
+  !hasPoints ? (
+    <EmptyState title={t('standings.none')} />
+  ) : (
+    <div class="table-wrap">
+      <table class="timing-table">
+        <caption class="sr-only">{caption ?? t('standings.teamsCaption')}</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="pos"><abbr title={t('common.position')}>{t('common.positionShort')}</abbr></th>
+            <th scope="col" class="sticky-col">{t('common.team')}</th>
+            <th scope="col" class="num">{t('common.points')}</th>
+            <th scope="col" class="num">{t('standings.gap')}</th>
+            {detail && <th scope="col" class="num">{t('standings.wins')}</th>}
+            {detail && <th scope="col" class="num">{t('standings.podiums')}</th>}
+            {detail && <th scope="col" class="num">{t('standings.poles')}</th>}
+            {detail && <th scope="col" class="num"><abbr title={t('standings.fastestLapsLong')}>{t('standings.fastestLaps')}</abbr></th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((s) => (
+            <tr>
+              <td class="pos">{s.tied ? `=${s.position}` : s.position}</td>
+              <th scope="row" class="sticky-col font-semibold uppercase">
+                <TeamName lang={lang} team={league.team(s.teamId)} />
+              </th>
+              <td class="num text-lg font-bold">{s.points}</td>
+              <td class="num muted">{s.gapToLeader > 0 ? `−${s.gapToLeader}` : '–'}</td>
+              {detail && <td class="num">{s.wins || ''}</td>}
+              {detail && <td class="num">{s.podiums || ''}</td>}
+              {detail && <td class="num">{s.poles || ''}</td>}
+              {detail && <td class="num">{s.fastestLaps || ''}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}

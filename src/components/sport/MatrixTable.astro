@@ -1,0 +1,175 @@
+---
+/**
+ * Matrix: Position je Rennen, farblich dezent (Podium, Pole, schnellste Runde, DNF mit Kürzel).
+ * Umschalter zwischen Platzierung und Punkten ohne JavaScript (Radio + :has()).
+ */
+import Timer from '@lucide/astro/icons/timer';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import { useT, type Lang } from '~/i18n';
+import type { Id } from '~/lib/db/types';
+import type { League } from '~/lib/league/league';
+import { roundLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  seasonId: Id;
+  upToRound?: number;
+}
+const { lang, league, seasonId, upToRound } = Astro.props;
+const t = useT(lang);
+const rounds = league.roundsOf(seasonId).filter((r) => r.status !== 'cancelled');
+const matrix = league.matrix(seasonId, upToRound);
+const standings = new Map(league.driverStandings(seasonId, upToRound).map((s) => [s.driverId, s]));
+const id = `matrix-${seasonId}`;
+---
+
+{
+  matrix.length === 0 ? (
+    <EmptyState title={t('standings.none')} />
+  ) : (
+    <div class="matrix">
+      <fieldset class="segmented mb-4" aria-label={t('matrix.caption')}>
+        <input type="radio" name={id} id={`${id}-pos`} value="pos" checked class="sr-only" />
+        <label for={`${id}-pos`}>{t('matrix.showPositions')}</label>
+        <input type="radio" name={id} id={`${id}-pts`} value="pts" class="sr-only" />
+        <label for={`${id}-pts`}>{t('matrix.showPoints')}</label>
+      </fieldset>
+      <div class="table-wrap">
+        <table class="timing-table matrix-table">
+          <caption class="sr-only">{t('matrix.caption')}</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="pos">
+                <abbr title={t('common.position')}>{t('common.positionShort')}</abbr>
+              </th>
+              <th scope="col" class="sticky-col">{t('common.driver')}</th>
+              {rounds.map((r) => (
+                <th scope="col" class="cell-head">
+                  <abbr title={roundLabel(r, league.track(r.track_id), lang)}>{r.number}</abbr>
+                  <span class="block text-[10px] font-normal tracking-normal normal-case">{league.track(r.track_id)?.country_code}</span>
+                </th>
+              ))}
+              <th scope="col" class="num">{t('matrix.total')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {matrix.map((row) => {
+              const s = standings.get(row.driverId);
+              const team = s?.teamId != null ? league.team(s.teamId) : undefined;
+              return (
+                <tr>
+                  <td class="pos">{s ? (s.tied ? `=${s.position}` : s.position) : ''}</td>
+                  <th scope="row" class="sticky-col font-normal">
+                    <DriverLink lang={lang} driver={league.driver(row.driverId)} team={team} />
+                  </th>
+                  {rounds.map((r) => {
+                    const c = row.cells.get(r.id);
+                    if (!c) return <td class="cell muted">·</td>;
+                    const dnf = c.raceStatus != null && c.raceStatus !== 'classified';
+                    const podium = c.racePosition != null && c.racePosition <= 3;
+                    return (
+                      <td class:list={['cell', podium && 'cell-podium', c.racePosition === 1 && 'cell-win']}>
+                        <span class="m-pos">
+                          {dnf ? <span class="text-danger">{t(`status.result.${c.raceStatus!}`)}</span> : (c.racePosition ?? '–')}
+                        </span>
+                        <span class="m-pts">{c.points}</span>
+                        <span class="marks">
+                          {c.isPole && <abbr class="pole" title={t('legend.pole')}>P</abbr>}
+                          {c.isFastestLap && (
+                            <span class="text-teal" title={t('legend.fastestLap')}>
+                              <Timer size={11} aria-hidden="true" />
+                              <span class="sr-only">{t('legend.fastestLap')}</span>
+                            </span>
+                          )}
+                          {c.isReserve && <abbr class="res" title={t('legend.reserve')}>R</abbr>}
+                        </span>
+                        {c.sprintPosition != null && (
+                          <span class="sprint" title={`${t('session.sprint')}: P${c.sprintPosition}`}>
+                            S{c.sprintPosition}
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td class="num font-bold">{s?.points ?? 0}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+<style>
+  .segmented input:checked + label {
+    background: var(--color-surface-2);
+    color: var(--color-fg);
+    box-shadow: inset 0 -1px 0 var(--color-teal);
+  }
+  .segmented input:focus-visible + label {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+  }
+  .segmented label {
+    min-height: 36px;
+    padding: 0.25rem 0.875rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+  }
+  .matrix-table .cell,
+  .matrix-table .cell-head {
+    text-align: center;
+    padding-inline: 0.4rem;
+    min-width: 3rem;
+  }
+  .cell {
+    position: relative;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .cell-podium {
+    background: rgb(55 190 137 / 0.1);
+  }
+  .cell-win {
+    background: rgb(55 190 137 / 0.22);
+  }
+  .m-pts {
+    display: none;
+  }
+  .matrix:has(input[value='pts']:checked) .m-pts {
+    display: inline;
+  }
+  .matrix:has(input[value='pts']:checked) .m-pos {
+    display: none;
+  }
+  .marks {
+    display: inline-flex;
+    gap: 1px;
+    vertical-align: super;
+    font-size: 0.6rem;
+  }
+  .marks .pole {
+    color: var(--color-green);
+    font-weight: 800;
+    text-decoration: none;
+  }
+  .marks .res {
+    color: var(--color-muted);
+    text-decoration: none;
+  }
+  .sprint {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 500;
+    color: var(--color-muted);
+  }
+</style>

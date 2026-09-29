@@ -1,0 +1,16 @@
+---
+/** Plattform als Text-Badge – keine Konsolen-Logos (Plan §3.5). */
+import { useT, type Lang } from '~/i18n';
+import type { Platform } from '~/lib/db/types';
+
+interface Props {
+  platform: Platform;
+  lang: Lang;
+}
+const { platform, lang } = Astro.props;
+const t = useT(lang);
+---
+
+<span class="badge badge-muted" title={t(`platform.long.${platform}`)}>
+  {t(`platform.${platform}`)}<span class="sr-only"> ({t(`platform.long.${platform}`)})</span>
+</span>

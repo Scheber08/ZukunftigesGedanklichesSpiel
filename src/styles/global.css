@@ -822,3 +822,8 @@
     border-color: #ccc !important;
   }
 }
+
+.localtime-hint {
+  color: var(--color-muted);
+  font-size: 0.875em;
+}

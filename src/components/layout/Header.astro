@@ -348,8 +348,8 @@ const liveEnabled = Boolean(settings.twitch_channel);
   const liveBadge = document.querySelector<HTMLElement>('[data-live-badge]');
   if (liveBadge) {
     fetch('/api/live', { headers: { accept: 'application/json' } })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { live?: boolean } | null) => {
+      .then((r) => (r.ok ? (r.json() as Promise<{ live?: boolean }>) : null))
+      .then((data) => {
         if (data?.live) liveBadge.hidden = false;
       })
       .catch(() => {});

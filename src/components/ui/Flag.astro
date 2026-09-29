@@ -1,0 +1,49 @@
+---
+/** SVG-Flagge (country-flag-icons, MIT). Optional pro Fahrer bzw. Strecke. */
+import * as FLAGS from 'country-flag-icons/string/3x2';
+import type { Lang } from '~/i18n';
+import { countryName } from '~/lib/view';
+
+interface Props {
+  code: string | null | undefined;
+  lang: Lang;
+  class?: string;
+  /** true = nur dekorativ (Name steht daneben) */
+  decorative?: boolean;
+}
+const { code, lang, class: className, decorative = false } = Astro.props;
+const upper = code?.toUpperCase();
+const svg = upper ? (FLAGS as Record<string, string>)[upper] : undefined;
+const name = countryName(upper, lang);
+---
+
+{
+  svg && (
+    <span
+      class:list={['flag', className]}
+      role={decorative ? undefined : 'img'}
+      aria-label={decorative ? undefined : name}
+      aria-hidden={decorative ? 'true' : undefined}
+      title={name}
+      set:html={svg}
+    />
+  )
+}
+
+<style>
+  .flag {
+    display: inline-flex;
+    flex: none;
+    width: 1.35em;
+    height: 0.9em;
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12);
+    vertical-align: -0.1em;
+  }
+  .flag :global(svg) {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+</style>

@@ -1,0 +1,14 @@
+---
+interface Props {
+  title: string;
+  text?: string;
+  class?: string;
+}
+const { title, text, class: className } = Astro.props;
+---
+
+<div class:list={['card px-6 py-10 text-center', className]}>
+  <p class="font-semibold">{title}</p>
+  {text && <p class="mx-auto mt-2 max-w-md text-sm text-muted">{text}</p>}
+  <slot />
+</div>

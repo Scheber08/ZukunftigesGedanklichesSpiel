@@ -1,0 +1,16 @@
+---
+/** „Link kopieren“ (Teilen-Link, Plan §4.4). */
+import Link from '@lucide/astro/icons/link';
+import { useT, type Lang } from '~/i18n';
+interface Props {
+  lang: Lang;
+  class?: string;
+}
+const { lang, class: className } = Astro.props;
+const t = useT(lang);
+---
+
+<button type="button" class:list={['btn btn-ghost btn-sm border border-border', className]} data-share data-copied-label={t('common.copied')}>
+  <Link size={16} aria-hidden="true" />
+  <span data-share-label>{t('common.share')}</span>
+</button>

@@ -1,0 +1,52 @@
+---
+/**
+ * Seitenkopf mit Brotkrümeln, H1 (genau eine pro Seite), Einleitung und optionalem „Stand“.
+ */
+import { useT, type Lang } from '~/i18n';
+import { formatDate } from '~/lib/domain/time';
+
+interface Props {
+  lang: Lang;
+  title: string;
+  eyebrow?: string;
+  lead?: string;
+  breadcrumbs?: Array<{ label: string; href?: string }>;
+  /** ISO-Zeitpunkt der letzten inhaltlichen Aktualisierung */
+  updated?: string | null;
+}
+const { lang, title, eyebrow, lead, breadcrumbs, updated } = Astro.props;
+const t = useT(lang);
+---
+
+<header class="page-header">
+  <div class="container-page">
+    {
+      breadcrumbs && breadcrumbs.length > 0 && (
+        <nav aria-label={t('a11y.breadcrumb')} class="mb-4 text-sm text-muted">
+          <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+            {breadcrumbs.map((b, i) => (
+              <li class="flex items-center gap-2">
+                {i > 0 && <span aria-hidden="true">/</span>}
+                {b.href && i < breadcrumbs.length - 1 ? (
+                  <a href={b.href} class="hover:text-fg">
+                    {b.label}
+                  </a>
+                ) : (
+                  <span aria-current={i === breadcrumbs.length - 1 ? 'page' : undefined}>{b.label}</span>
+                )}
+              </li>
+            ))}
+          </ol>
+        </nav>
+      )
+    }
+    {eyebrow && <p class="micro mb-2 text-teal!">{eyebrow}</p>}
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <h1 class="uppercase">{title}</h1>
+      <slot name="actions" />
+    </div>
+    {lead && <p class="mt-4 max-w-2xl text-muted">{lead}</p>}
+    <slot />
+    {updated && <p class="micro mt-4">{t('common.updated', { date: formatDate(updated, lang) })}</p>}
+  </div>
+</header>

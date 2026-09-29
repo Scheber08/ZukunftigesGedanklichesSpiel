@@ -141,6 +141,44 @@ const consentTexts = {
     });
   }
 
+  // Ortszeit des Besuchers ergänzen, wenn sie von Europe/Berlin abweicht (Plan §4.3)
+  const visitorTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const berlinOffset = (d: Date) => new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Berlin' })).getTime();
+  const visitorOffset = (d: Date) => new Date(d.toLocaleString('en-US', { timeZone: visitorTz })).getTime();
+  document.querySelectorAll<HTMLTimeElement>('time[data-localtime]').forEach((el) => {
+    const d = new Date(el.dateTime);
+    if (Number.isNaN(d.getTime()) || berlinOffset(d) === visitorOffset(d)) return;
+    const lang = el.dataset.lang === 'en' ? 'en-GB' : 'de-DE';
+    const onlyTime = el.dataset.localtime === 'time';
+    const local = new Intl.DateTimeFormat(lang, {
+      ...(onlyTime ? {} : { weekday: 'short', day: '2-digit', month: '2-digit' }),
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    }).format(d);
+    const hint = document.createElement('span');
+    hint.className = 'localtime-hint';
+    hint.textContent = el.dataset.lang === 'en' ? ` (your time: ${local})` : ` (deine Zeit: ${local})`;
+    el.after(hint);
+  });
+
+  // „Link kopieren“
+  document.querySelectorAll<HTMLButtonElement>('[data-share]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        const label = btn.querySelector<HTMLElement>('[data-share-label]');
+        if (label) {
+          const before = label.textContent;
+          label.textContent = btn.dataset.copiedLabel ?? before;
+          setTimeout(() => (label.textContent = before), 2000);
+        }
+      } catch {
+        window.prompt('URL', window.location.href);
+      }
+    });
+  });
+
   // Einblenden beim Scrollen: nur Elemente unterhalb des sichtbaren Bereichs, einmalig
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const revealables = document.querySelectorAll<HTMLElement>('[data-reveal]');

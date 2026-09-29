@@ -1,0 +1,12 @@
+---
+/** Hinweis, wenn für EN nur die deutsche Fassung existiert (Plan §4.7, §7.4). */
+import { useT, type Lang } from '~/i18n';
+interface Props {
+  lang: Lang;
+  show: boolean;
+}
+const { lang, show } = Astro.props;
+const t = useT(lang);
+---
+
+{show && lang === 'en' && <p class="alert alert-warning my-4 text-sm" lang="en">{t('common.notTranslated')}</p>}

@@ -1,0 +1,45 @@
+---
+/** Teamname mit 4-px-Farbstreifen, keine Teamlogos (Plan §4.5). */
+import { url, type Lang } from '~/i18n';
+import type { TeamRow } from '~/lib/db/types';
+import { teamStyle } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  team: TeamRow | undefined | null;
+  link?: boolean;
+  short?: boolean;
+  stripe?: boolean;
+  class?: string;
+}
+const { lang, team, link = true, short = false, stripe = true, class: className } = Astro.props;
+const label = team ? (short ? team.short_name : team.name) : '–';
+---
+
+<span class:list={['team-name', className]} style={teamStyle(team)}>
+  {stripe && team && <span class="team-stripe" aria-hidden="true" />}
+  {
+    team && link ? (
+      <a href={url(lang, 'team', { slug: team.slug })} title={short ? team.name : undefined}>
+        {label}
+      </a>
+    ) : (
+      <span title={short && team ? team.name : undefined}>{label}</span>
+    )
+  }
+</span>
+
+<style>
+  .team-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .team-name a {
+    text-decoration: none;
+  }
+  .team-name a:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+</style>

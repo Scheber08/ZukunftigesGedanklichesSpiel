@@ -1,0 +1,165 @@
+---
+/**
+ * Punkteverlauf als serverseitig gerendertes SVG (Plan §3.5, §4.4):
+ * Linien in Teamfarbe mit Endmarke und Label, immer mit Tabelle als Alternative.
+ */
+import { useT, type Lang } from '~/i18n';
+import type { Id, RoundRow } from '~/lib/db/types';
+import type { ProgressionSeries } from '~/lib/domain/standings';
+import type { League } from '~/lib/league/league';
+import { roundLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  seasonId: Id;
+  kind: 'driver' | 'team';
+  /** Anzahl Linien (Top N nach aktuellem Stand) */
+  top?: number;
+  title?: string;
+}
+
+const { lang, league, seasonId, kind, top = 10, title } = Astro.props;
+const t = useT(lang);
+const rounds: RoundRow[] = league.countedRounds(seasonId);
+const allSeries: ProgressionSeries[] = kind === 'driver' ? league.driverProgression(seasonId) : league.teamProgression(seasonId);
+const order = (kind === 'driver' ? league.driverStandings(seasonId).map((s) => s.driverId) : league.teamStandings(seasonId).map((s) => s.teamId)).slice(0, top);
+const series = order.map((id) => allSeries.find((s) => s.id === id)).filter((s): s is ProgressionSeries => s != null);
+
+const W = 800;
+const H = 380;
+const M = { top: 16, right: 150, bottom: 36, left: 44 };
+const innerW = W - M.left - M.right;
+const innerH = H - M.top - M.bottom;
+const maxPoints = Math.max(10, ...series.flatMap((s) => s.points.map((p) => p.points)));
+const niceMax = Math.ceil(maxPoints / 25) * 25;
+const n = rounds.length;
+const x = (i: number) => M.left + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
+const y = (v: number) => M.top + innerH - (v / niceMax) * innerH;
+const ticks = Array.from({ length: 6 }, (_, i) => Math.round((niceMax / 5) * i));
+
+const seenTeams = new Map<Id, number>();
+const lines = series.map((s) => {
+  const teamId = kind === 'driver' ? league.driverStandings(seasonId).find((d) => d.driverId === s.id)?.teamId ?? null : s.id;
+  const team = teamId != null ? league.team(teamId) : undefined;
+  const seatIndex = teamId != null ? (seenTeams.get(teamId) ?? 0) : 0;
+  if (teamId != null) seenTeams.set(teamId, seatIndex + 1);
+  // Punkte je Runde auffüllen (vor dem ersten Einsatz = 0)
+  const values = rounds.map((r) => {
+    const hit = s.points.find((p) => p.roundId === r.id);
+    if (hit) return hit.points;
+    const before = s.points.filter((p) => p.roundNumber < r.number).at(-1);
+    return before?.points ?? 0;
+  });
+  const name = kind === 'driver' ? league.driverName(s.id, lang) : (team?.name ?? String(s.id));
+  return { id: s.id, name, color: team?.color_hex ?? '#A1A1AA', dashed: seatIndex > 0, values };
+});
+
+// Endlabels ohne Überlappung (mind. 14 px Abstand)
+const labels = lines
+  .map((l) => ({ id: l.id, name: l.name, color: l.color, y: y(l.values.at(-1) ?? 0), value: l.values.at(-1) ?? 0 }))
+  .sort((a, b) => a.y - b.y);
+for (let i = 1; i < labels.length; i++) {
+  const prev = labels[i - 1]!;
+  const cur = labels[i]!;
+  if (cur.y - prev.y < 14) cur.y = prev.y + 14;
+}
+const overflow = (labels.at(-1)?.y ?? 0) - (H - M.bottom);
+if (overflow > 0) labels.forEach((l) => (l.y -= overflow));
+
+const chartId = `chart-${kind}-${seasonId}`;
+const chartTitle = title ?? t('chart.title');
+---
+
+{
+  n >= 1 && lines.length > 0 && (
+    <figure class="card p-4">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-labelledby={`${chartId}-t ${chartId}-d`} class="h-auto w-full">
+        <title id={`${chartId}-t`}>{chartTitle}</title>
+        <desc id={`${chartId}-d`}>{t('chart.description')}</desc>
+        <g class="grid">
+          {ticks.map((v) => (
+            <g>
+              <line x1={M.left} x2={M.left + innerW} y1={y(v)} y2={y(v)} />
+              <text x={M.left - 8} y={y(v) + 4} text-anchor="end">
+                {v}
+              </text>
+            </g>
+          ))}
+          {rounds.map((r, i) => (
+            <text x={x(i)} y={H - M.bottom + 20} text-anchor="middle">
+              R{r.number}
+            </text>
+          ))}
+        </g>
+        {lines.map((l) => (
+          <g>
+            <polyline
+              points={l.values.map((v, i) => `${x(i)},${y(v)}`).join(' ')}
+              fill="none"
+              stroke={l.color}
+              stroke-width="2.5"
+              stroke-linejoin="round"
+              stroke-linecap="round"
+              stroke-dasharray={l.dashed ? '6 4' : undefined}
+            />
+            <circle cx={x(n - 1)} cy={y(l.values.at(-1) ?? 0)} r="4" fill={l.color} />
+          </g>
+        ))}
+        {labels.map((lab) => (
+          <text x={M.left + innerW + 10} y={lab.y + 4} class="end-label" fill={lab.color}>
+            {lab.name.toUpperCase()} · {lab.value}
+          </text>
+        ))}
+      </svg>
+      <details class="mt-3">
+        <summary class="cursor-pointer text-sm text-muted">{t('chart.asTable')}</summary>
+        <div class="table-wrap mt-3">
+          <table class="timing-table">
+            <caption class="sr-only">{chartTitle}</caption>
+            <thead>
+              <tr>
+                <th scope="col" class="sticky-col">{kind === 'driver' ? t('common.driver') : t('common.team')}</th>
+                {rounds.map((r) => (
+                  <th scope="col" class="num">
+                    <abbr title={roundLabel(r, league.track(r.track_id), lang)}>R{r.number}</abbr>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l) => (
+                <tr>
+                  <th scope="row" class="sticky-col font-semibold">{l.name}</th>
+                  {l.values.map((v) => (
+                    <td class="num">{v}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </figure>
+  )
+}
+
+<style>
+  .grid line {
+    stroke: var(--color-border);
+    stroke-width: 1;
+  }
+  .grid text {
+    font-family: var(--font-sans);
+    font-size: 12px;
+    fill: var(--color-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .end-label {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 12.5px;
+    letter-spacing: 0.03em;
+  }
+</style>

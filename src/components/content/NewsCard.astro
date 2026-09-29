@@ -1,0 +1,46 @@
+---
+/** News-Karte für Übersicht und Startseite (Plan §4.7). */
+import Badge from '~/components/ui/Badge.astro';
+import { url, useT, type Lang } from '~/i18n';
+import type { NewsRow } from '~/lib/db/types';
+import { formatDate } from '~/lib/domain/time';
+import { localized } from '~/lib/league/league';
+
+interface Props {
+  lang: Lang;
+  news: NewsRow;
+  headingLevel?: 'h2' | 'h3';
+}
+const { lang, news, headingLevel: H = 'h3' } = Astro.props;
+const t = useT(lang);
+const title = localized(news, 'title', lang);
+const excerpt = localized(news, 'excerpt', lang);
+const href = url(lang, 'newsArticle', { slug: lang === 'de' ? news.slug_de : news.slug_en });
+const date = news.publish_at ?? news.created_at;
+---
+
+<article class="card card-hover relative flex h-full flex-col overflow-hidden">
+  {
+    news.cover_image && (
+      <img
+        src={news.cover_image}
+        alt={(lang === 'en' ? news.cover_alt_en : null) ?? news.cover_alt_de ?? ''}
+        width="800"
+        height="450"
+        loading="lazy"
+        decoding="async"
+        class="aspect-video w-full object-cover"
+      />
+    )
+  }
+  <div class="flex flex-1 flex-col gap-3 p-5">
+    <div class="flex flex-wrap items-center gap-2">
+      <Badge variant="teal">{t(`news.category.${news.category}`)}</Badge>
+      <time datetime={date} class="text-xs text-muted">{formatDate(date, lang)}</time>
+    </div>
+    <H class="text-xl leading-snug">
+      <a href={href} class="after:absolute after:inset-0 hover:text-teal" lang={title.fallback ? 'de' : undefined}>{title.text}</a>
+    </H>
+    {excerpt.text && <p class="line-clamp-3 text-sm text-muted" lang={excerpt.fallback ? 'de' : undefined}>{excerpt.text}</p>}
+  </div>
+</article>
