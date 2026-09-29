@@ -14,6 +14,8 @@ import {
   seasonName,
   seasonStandingsPaths,
   standingsAfterPaths,
+  standingsNumber,
+  standingsNumbersAt,
   TAB_ANCHORS,
 } from '~/lib/standings/page';
 
@@ -218,6 +220,27 @@ describe('Wertungsseiten mit Demo-Daten', () => {
     expect(firstRow).toHaveLength(9);
     expect(firstRow[0]).toBe(String(standings[0]!.position));
     expect(firstRow[4]).toBe(String(standings[0]!.points));
+  });
+
+  it('nimmt Startnummern im Archiv zum Stand der letzten Runde – auf der Seite wie im CSV', () => {
+    const finished = league.archiveSeasons.find((s) => s.status === 'finished')!;
+    const active = league.archiveSeasons.find((s) => s.status === 'active')!;
+    const last = league.countedRounds(finished.id).at(-1)!;
+    expect(standingsNumbersAt(league, finished)?.toISOString()).toBe(new Date(last.start_utc).toISOString());
+    expect(standingsNumbersAt(league, active)).toBeNull();
+
+    const at = standingsNumbersAt(league, finished);
+    const standings = league.driverStandings(finished.id);
+    const rows = driverStandingsCsv(league, finished.id, useT('de')).slice(1).split('\r\n').slice(1, -1);
+    expect(rows).toHaveLength(standings.length);
+    rows.forEach((row, i) => {
+      const expected = standingsNumber(league, standings[i]!.driverId, at);
+      expect(row.split(';')[1]).toBe(expected == null ? '' : String(expected));
+    });
+    // Ehemalige Fahrer ohne aktuelle Nummer haben im Archiv trotzdem ihre damalige
+    const historic = standings.filter((s) => league.numberOf(s.driverId) == null && league.numberAt(s.driverId, at!) != null);
+    expect(historic.length).toBeGreaterThan(0);
+    for (const s of historic) expect(standingsNumber(league, s.driverId, at)).toBe(league.numberAt(s.driverId, at!));
   });
 
   it('hat für jede Sprache eigene Tab-Anker', () => {

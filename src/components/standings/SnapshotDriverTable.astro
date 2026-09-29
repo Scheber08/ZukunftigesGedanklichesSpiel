@@ -1,7 +1,8 @@
 ---
 /**
- * Fahrerwertung „Stand nach Runde X“ mit Positionsveränderung gegenüber der Vorrunde.
- * Startnummer und Reserve-Kennzeichen beziehen sich auf den Stand der Runde (Archiv-genau).
+ * Fahrerwertung mit Stichtag: „Stand nach Runde X“ (mit Positionsveränderung gegenüber der
+ * Vorrunde) und die Gesamtwertung abgeschlossener Saisons. Startnummer und Reserve-Kennzeichen
+ * beziehen sich auf den Stichtag (Archiv-genau, auch für ehemalige Fahrer) – wie im CSV-Export.
  */
 import Movement from './Movement.astro';
 import DriverLink from '~/components/ui/DriverLink.astro';
@@ -11,18 +12,19 @@ import { useT, type Lang } from '~/i18n';
 import type { Id } from '~/lib/db/types';
 import type { DriverStanding } from '~/lib/domain/standings';
 import type { League } from '~/lib/league/league';
-import type { Movement as MovementValue } from '~/lib/standings/page';
+import { standingsNumber, type Movement as MovementValue } from '~/lib/standings/page';
 
 interface Props {
   lang: Lang;
   league: League;
   standings: DriverStanding[];
-  movements: Map<Id, MovementValue>;
-  /** Zeitpunkt der Runde – für die damals gültige Startnummer */
+  /** Veränderung gegenüber der Vorrunde; leer = keine Spalte */
+  movements?: Map<Id, MovementValue>;
+  /** Stichtag – für die damals gültige Startnummer */
   at: Date;
   caption: string;
 }
-const { lang, league, standings, movements, at, caption } = Astro.props;
+const { lang, league, standings, movements = new Map<Id, MovementValue>(), at, caption } = Astro.props;
 const t = useT(lang);
 const showMovement = movements.size > 0;
 ---
@@ -76,7 +78,7 @@ const showMovement = movements.size > 0;
                     lang={lang}
                     driver={league.driver(s.driverId)}
                     team={team}
-                    number={league.numberAt(s.driverId, at) ?? league.numberOf(s.driverId)}
+                    number={standingsNumber(league, s.driverId, at)}
                     reserve={reserveOnly}
                   />
                 </th>

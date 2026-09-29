@@ -56,13 +56,15 @@ const isLatest = current != null && next == null;
 const dotd = season && current ? league.awardsOf(season.id).find((a) => a.type === 'driver_of_the_day' && a.round_id === current.id) : undefined;
 
 // Die laufende Saison hat ihre Gesamtwertung unter /wertung, abgeschlossene im Archiv
-const seasonHref =
-  season && season.id === league.currentSeason?.id ? url(lang, 'standings') : url(lang, 'seasonStandings', { season: seasonSlug });
+const isCurrentSeason = season != null && season.id === league.currentSeason?.id;
+const seasonHref = isCurrentSeason ? url(lang, 'standings') : url(lang, 'seasonStandings', { season: seasonSlug });
 const selfHref = pageAlternates[lang];
 
 const title = t('standingsPage.meta.afterTitle', { round: currentLabel, season: name });
+// Brotkrümel wie auf der Saison-Wertung: ältere Saisons hängen unter „Archiv“
 const breadcrumbs = [
   { label: t('nav.home'), href: url(lang, 'home') },
+  ...(isCurrentSeason ? [] : [{ label: t('nav.archive'), href: url(lang, 'archive') }]),
   { label: t('standingsPage.meta.title', { season: name }), href: seasonHref },
   { label: t('standingsPage.after.title', { round: currentLabel }) },
 ];

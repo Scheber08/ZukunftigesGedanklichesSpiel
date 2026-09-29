@@ -43,6 +43,22 @@ export function resolveSeason(league: League, seasonSlug?: string): SeasonRow | 
   return seasonSlug ? league.seasonBySlug(seasonSlug) : league.currentSeason;
 }
 
+/**
+ * Stichtag für Startnummern in der Gesamtwertung: Bei abgeschlossenen Saisons gilt die
+ * Nummer zum Start der letzten gewerteten Runde (Archiv-genau, auch für ehemalige Fahrer),
+ * sonst die aktuelle Nummer (null). Seite und CSV nutzen dieselbe Regel.
+ */
+export function standingsNumbersAt(league: League, season: Pick<SeasonRow, 'id' | 'status'>): Date | null {
+  if (season.status !== 'finished') return null;
+  const last = league.countedRounds(season.id).at(-1);
+  return last ? new Date(last.start_utc) : null;
+}
+
+/** Startnummer eines Fahrers in der Wertung – zum Stichtag, sonst die aktuelle. */
+export function standingsNumber(league: League, driverId: Id, at: Date | null): number | null {
+  return (at ? league.numberAt(driverId, at) : null) ?? league.numberOf(driverId);
+}
+
 /** getStaticPaths für /saison/[season]/wertung (+ CSV): alle Saisons mit Ergebnissen. */
 export function seasonStandingsPaths(league: League): Array<{ params: { season: string } }> {
   return league.archiveSeasons.map((s) => ({ params: { season: s.slug } }));

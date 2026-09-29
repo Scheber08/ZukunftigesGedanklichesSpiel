@@ -8,6 +8,8 @@
  * landet im Anker der URL – so teilt der „Link kopieren“-Button genau diese Ansicht.
  *
  * Die Panels liegen in der View; sie brauchen nur die passende `id` und `data-tab-panel`.
+ * Die Rolle „tablist“ bekommt ein inneres `div` – ein `nav` darf laut ARIA in HTML keine
+ * andere Rolle als „navigation“ tragen.
  */
 interface Props {
   /** Beschriftung der Navigation (aria-label) */
@@ -18,14 +20,16 @@ interface Props {
 const { label, tabs, class: className } = Astro.props;
 ---
 
-<nav class:list={['tabs standings-tabs', className]} aria-label={label} data-standings-tabs>
-  {
-    tabs.map((tab) => (
-      <a href={`#${tab.id}`} id={`tab-${tab.id}`} class="tab" data-tab={tab.id}>
-        {tab.label}
-      </a>
-    ))
-  }
+<nav aria-label={label} class={className}>
+  <div class="tabs standings-tabs" data-standings-tabs data-label={label}>
+    {
+      tabs.map((tab) => (
+        <a href={`#${tab.id}`} id={`tab-${tab.id}`} class="tab" data-tab={tab.id}>
+          {tab.label}
+        </a>
+      ))
+    }
+  </div>
 </nav>
 
 <style>
@@ -52,12 +56,15 @@ const { label, tabs, class: className } = Astro.props;
 
 <script>
   /** Macht aus der Sprungnavigation eine Tablist nach dem WAI-ARIA-Muster (automatische Aktivierung). */
-  function enhance(nav: HTMLElement) {
-    const tabs = [...nav.querySelectorAll<HTMLAnchorElement>('a[data-tab]')];
+  function enhance(list: HTMLElement) {
+    const tabs = [...list.querySelectorAll<HTMLAnchorElement>('a[data-tab]')];
     const panels = tabs.map((tab) => document.getElementById(tab.dataset.tab ?? ''));
     if (tabs.length < 2 || panels.some((p) => p == null)) return;
 
-    nav.setAttribute('role', 'tablist');
+    list.setAttribute('role', 'tablist');
+    if (list.dataset.label) list.setAttribute('aria-label', list.dataset.label);
+    // Merker für das Layout der View (Abstände zwischen den Panels)
+    list.closest('nav')?.setAttribute('data-tabs-enhanced', '');
     tabs.forEach((tab, i) => {
       const panel = panels[i]!;
       tab.setAttribute('role', 'tab');

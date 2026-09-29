@@ -7,6 +7,7 @@
 import type { UiKey, TParams } from '~/i18n';
 import type { Id } from '~/lib/db/types';
 import type { League } from '~/lib/league/league';
+import { standingsNumber, standingsNumbersAt } from './page';
 
 /** Byte Order Mark – damit Excel die Datei als UTF-8 erkennt (kein \u-Escape im Quelltext). */
 export const BOM = String.fromCharCode(0xfeff);
@@ -55,18 +56,18 @@ export const CSV_COLUMNS = [
 ] as const satisfies readonly UiKey[];
 
 /**
- * Fahrerwertung einer Saison als CSV. Die Startnummer ist die zum Zeitpunkt der
- * letzten gewerteten Runde gültige (fürs Archiv historisch korrekt), sonst die aktuelle.
+ * Fahrerwertung einer Saison als CSV. Startnummern nach derselben Regel wie auf der Seite
+ * (`standingsNumbersAt`): abgeschlossene Saison → Nummer zur letzten gewerteten Runde,
+ * laufende Saison → aktuelle Nummer.
  */
 export function driverStandingsCsv(league: League, seasonId: Id, t: Translate): string {
   const standings = league.driverStandings(seasonId);
-  const lastRound = league.countedRounds(seasonId).at(-1);
-  const at = lastRound ? new Date(lastRound.start_utc) : league.now;
-  const numberOf = (driverId: Id) => league.numberAt(driverId, at) ?? league.numberOf(driverId);
+  const season = league.season(seasonId);
+  const at = season ? standingsNumbersAt(league, season) : null;
 
   const rows = standings.map((s) => [
     s.position,
-    numberOf(s.driverId),
+    standingsNumber(league, s.driverId, at),
     league.driverName(s.driverId, 'de'),
     s.teamId != null ? (league.team(s.teamId)?.name ?? '') : '',
     s.points,
