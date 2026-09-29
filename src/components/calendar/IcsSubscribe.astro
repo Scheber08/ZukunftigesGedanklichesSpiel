@@ -72,8 +72,13 @@ const inputId = `ics-url-${lang}`;
 </section>
 
 <style>
-  [data-ics-copy][hidden] {
-    display: none;
+  .ics-box .btn {
+    white-space: normal;
+  }
+  @media (max-width: 400px) {
+    .ics-box {
+      padding: 1rem;
+    }
   }
   .howto summary {
     display: inline-flex;

@@ -44,7 +44,7 @@ const subline = [countryName(track?.country_code, lang), round.format === 'sprin
   <h2 id={headingId} class="sr-only">{heading}</h2>
   <div class="relative">
     <Countdown
-      client:visible
+      client:load
       targets={[{ startUtc: round.start_utc, label, href: raceHref, dateText: subline }]}
       previousStartUtc={previous?.start_utc ?? null}
       labels={{
@@ -92,6 +92,22 @@ const subline = [countryName(track?.country_code, lang), round.format === 'sprin
 <style>
   .round-countdown {
     border-color: rgb(52 196 208 / 0.45);
+  }
+  /* Ab 320 px ohne Überlauf: Ziffernblöcke teilen sich die Breite */
+  .round-countdown :global(.digits) {
+    gap: 0.5rem;
+  }
+  .round-countdown :global(.unit) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  @media (max-width: 400px) {
+    .round-countdown {
+      padding: 1rem;
+    }
+  }
+  .btn {
+    white-space: normal;
   }
   .glow-soft {
     position: absolute;

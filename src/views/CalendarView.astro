@@ -66,8 +66,8 @@ const updated = league.lastUpdated(rounds);
     }
   </PageHeader>
 
-  <div class="container-page grid gap-12 py-10 md:py-14">
-    <div class:list={['grid items-start gap-6', split.next && 'lg:grid-cols-[1.2fr_1fr]']}>
+  <div class="container-page grid grid-cols-[minmax(0,1fr)] gap-12 py-10 md:py-14">
+    <div class:list={['grid grid-cols-[minmax(0,1fr)] items-start gap-6', split.next && 'lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]']}>
       {
         split.next && (
           <RoundCountdown

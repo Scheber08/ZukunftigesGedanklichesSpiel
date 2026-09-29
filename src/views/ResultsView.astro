@@ -69,7 +69,7 @@ const jsonLd = breadcrumbJsonLd(
     </Fragment>
   </PageHeader>
 
-  <div class="container-page grid gap-14 py-10 md:py-14">
+  <div class="container-page grid grid-cols-[minmax(0,1fr)] gap-14 py-10 md:py-14">
     {
       season && (
         <section aria-labelledby={`season-${season.slug}`}>
@@ -226,11 +226,24 @@ const jsonLd = breadcrumbJsonLd(
 </BaseLayout>
 
 <style>
+  /* Fixierte Rundenspalte schmal halten, damit auf dem Handy Platz für die Werte bleibt */
+  .results-overview .sticky-col {
+    white-space: normal;
+    min-width: 8.5rem;
+    max-width: 11rem;
+  }
+  @media (min-width: 768px) {
+    .results-overview .sticky-col {
+      max-width: none;
+      white-space: nowrap;
+    }
+  }
   .round-link {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
     min-height: 44px;
+    line-height: 1.2;
     font-family: var(--font-display);
     font-weight: 700;
     text-transform: uppercase;
