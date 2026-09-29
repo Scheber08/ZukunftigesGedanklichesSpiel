@@ -19,8 +19,8 @@ brauchst du nicht: Ohne Konfiguration startet die Website im **Demo-Modus** mit 
 Beispieldaten (zwei Saisons, 30 Fahrer, Ergebnisse, Urteile, News).
 
 ```bash
-git clone https://github.com/<organisation>/<repository>.git
-cd <repository>
+git clone https://github.com/Scheber08/ZukunftigesGedanklichesSpiel.git
+cd ZukunftigesGedanklichesSpiel
 npm install
 npm run dev
 ```
