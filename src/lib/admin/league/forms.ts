@@ -127,6 +127,23 @@ export function parseTwitchChannel(value: string | null | undefined): { channel:
   return { channel: name.toLowerCase(), error: null };
 }
 
+/**
+ * Streckenkarte (Plan §7.5): SVG-Umriss entweder als eigene Datei unter
+ * `/brand/tracks/<name>.svg` oder als https-Adresse, die auf `.svg` endet.
+ * Pfade mit Unterordnern, `..`, Backslashes oder Protokoll-relativen Adressen sind verboten.
+ */
+export function isTrackMapUrl(value: string | null | undefined): boolean {
+  const v = (value ?? '').trim();
+  if (v === '') return false;
+  if (v.startsWith('/')) return /^\/brand\/tracks\/[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9_-]+)*\.svg$/i.test(v) && !v.includes('..');
+  try {
+    const url = new URL(v);
+    return url.protocol === 'https:' && url.hostname !== '' && url.username === '' && url.password === '' && /\.svg$/i.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
 /** Postfix-Zähler für eindeutige Namen: „F1 aktuell“ → „F1 aktuell (2)“. */
 export function uniqueName(base: string, taken: Iterable<string>): string {
   const set = new Set([...taken].map((t) => t.toLowerCase()));

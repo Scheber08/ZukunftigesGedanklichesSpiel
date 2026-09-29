@@ -44,7 +44,7 @@ const demoText: Record<(typeof STAFF_ROLES)[number], string> = {
         )
       }
 
-      <a href={discordHref} class="btn btn-primary w-full" data-discord-login>
+      <a href={discordHref} class="btn whitespace-normal btn-primary w-full" data-discord-login>
         <BrandIcon name="discord" size={20} />
         Mit Discord anmelden
       </a>
@@ -66,7 +66,7 @@ const demoText: Record<(typeof STAFF_ROLES)[number], string> = {
                   <form method="POST" action="/admin/auth/demo">
                     <input type="hidden" name="role" value={role} />
                     <input type="hidden" name="next" value={next} />
-                    <button type="submit" class="btn btn-secondary w-full justify-between">
+                    <button type="submit" class="btn whitespace-normal btn-secondary w-full justify-between">
                       <span>Als Demo-{STAFF_ROLE_LABELS[role]}</span>
                       <span class="sr-only">anmelden</span>
                     </button>

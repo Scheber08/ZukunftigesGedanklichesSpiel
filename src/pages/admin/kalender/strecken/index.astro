@@ -13,7 +13,7 @@ import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 import { countryName } from '~/lib/view';
 
-if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
 const outcome = await actionOutcome(Astro, [actions.admin.trackSave]);
 if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
 
@@ -29,6 +29,8 @@ const values = {
   game_track_id: f.str('game_track_id'),
   length_km: f.str('length_km'),
   laps_default: f.str('laps_default'),
+  map_url: f.str('map_url'),
+  map_credit: f.str('map_credit'),
 };
 const fmtKm = (n: number | null) => (n == null ? '–' : new Intl.NumberFormat('de-DE', { minimumFractionDigits: 3 }).format(n));
 ---
@@ -49,6 +51,7 @@ const fmtKm = (n: number | null) => (n == null ? '–' : new Intl.NumberFormat('
             <th scope="col" class="num">Länge</th>
             <th scope="col" class="num">Runden</th>
             <th scope="col" class="num">Rennen</th>
+            <th scope="col">Karte</th>
           </tr>
         </thead>
         <tbody>
@@ -72,6 +75,7 @@ const fmtKm = (n: number | null) => (n == null ? '–' : new Intl.NumberFormat('
                 <td class="num">{fmtKm(t.length_km)}</td>
                 <td class="num">{t.laps_default ?? '–'}</td>
                 <td class="num">{rounds.filter((r) => r.track_id === t.id).length}</td>
+                <td>{t.map_url ? <span title={t.map_credit ?? undefined}>✓ SVG</span> : <span class="muted">–</span>}</td>
               </tr>
             ))
           }

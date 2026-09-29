@@ -26,7 +26,7 @@ import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 import { intParam, roundLabel } from '~/lib/view';
 
-if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
 const A = actions.admin;
 const outcome = await actionOutcome(Astro, [A.driverSave, A.driverNumberAssign, A.driverNumberChange, A.driverNumberRelease, A.driverPseudonymize]);
 if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
@@ -37,7 +37,7 @@ const driver = driverId ? (await store.select('drivers', { eq: { id: driverId } 
 if (!driver) return Astro.redirect('/admin/fahrer?fehlt=1');
 
 const [priv] = await store.select('driver_private', { eq: { driver_id: driver.id } });
-const [numbers, seasons, seats, teams, rounds, tracks, registrations, drivers, resultRows] = await Promise.all([
+const [numbers, seasons, seats, teams, rounds, tracks, registrations, resultRows] = await Promise.all([
   store.select('driver_numbers'),
   store.select('seasons'),
   store.select('seats', { eq: { driver_id: driver.id } }),
@@ -45,7 +45,6 @@ const [numbers, seasons, seats, teams, rounds, tracks, registrations, drivers, r
   store.select('rounds'),
   store.select('tracks'),
   store.select('registrations', { eq: { driver_id: driver.id } }),
-  store.select('drivers'),
   store.select('results', { eq: { driver_id: driver.id } }),
 ]);
 const now = new Date();
@@ -54,7 +53,6 @@ const state = numberState(driver.id, numbers, now);
 const next = nextRound(rounds, now);
 const nextLabel = next ? `${seasons.find((s) => s.id === next.season_id)?.name ?? ''} · ${roundLabel(next, tracks.find((t) => t.id === next.track_id), 'de')}` : null;
 const free = freeNumbers(numbers, now).slice(0, 40);
-const holderName = (id: number) => drivers.find((d) => d.id === id)?.gamertag ?? `#${id}`;
 const displayName = driver.anonymized ? `Ehemaliger Fahrer #${driver.id}` : driver.gamertag;
 
 const f = formValues(outcome, A.driverSave);
@@ -84,7 +82,10 @@ const teamOf = (id: number) => teams.find((t) => t.id === id);
 ---
 
 <AdminLayout title={displayName} breadcrumbs={[{ label: 'Fahrer', href: '/admin/fahrer' }, { label: displayName }]}>
-  <a slot="actions" class="btn btn-ghost" href={url('de', 'driver', { slug: driver.slug })}>Öffentliches Profil</a>
+  <div slot="actions" class="flex flex-wrap gap-2">
+    <a class="btn whitespace-normal btn-ghost" href={`/admin/audit?entitaet=drivers&id=${driver.id}`}>Änderungsverlauf</a>
+    <a class="btn whitespace-normal btn-ghost" href={url('de', 'driver', { slug: driver.slug })}>Öffentliches Profil</a>
+  </div>
 
   <Notice
     outcome={outcome}
@@ -201,7 +202,7 @@ const teamOf = (id: number) => teams.find((t) => t.id === id);
                 <input id="num-change-note" name="note" class="input" value={change.str('note')} maxlength="200" aria-describedby="num-change-note-hint" />
               </Field>
               <div>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn whitespace-normal btn-primary">
                   Wechsel speichern
                 </button>
               </div>
@@ -296,7 +297,7 @@ const teamOf = (id: number) => teams.find((t) => t.id === id);
           </Field>
           <ConfirmField id="pseudo-confirm" label="Ja, der Fahrer hat die Löschung verlangt – endgültig pseudonymisieren." />
           <div>
-            <button type="submit" class="btn btn-danger">
+            <button type="submit" class="btn whitespace-normal btn-danger">
               Pseudonymisieren
             </button>
           </div>

@@ -10,13 +10,14 @@
 import { ActionError, defineAction } from 'astro:actions';
 import { z } from 'astro/zod';
 import { batchDates, localStartFrom, parseTrackList } from '~/lib/admin/league/calendar';
-import { driverSlug, findGamertagDuplicate, nextReserveOrder, confirmsGamertag } from '~/lib/admin/league/drivers';
+import { confirmsGamertag, findGamertagDuplicate, nextDriverSlug, nextReserveOrder } from '~/lib/admin/league/drivers';
 import {
   isDiscordWebhookUrl,
   isGaMeasurementId,
   isIsoDate,
   isNonIncreasing,
   isTime,
+  isTrackMapUrl,
   maskSecret,
   normalizeHex,
   parseIntList,
@@ -38,6 +39,7 @@ import {
   roundHasResults,
   syncSessions,
 } from '~/lib/admin/league/ops';
+import { WEBHOOK_CHANNEL_LABELS } from '~/lib/admin/league/labels';
 import type { AdminActionData } from '~/lib/admin/league/page';
 import { FROZEN_MESSAGE, isSeasonFrozen, openRoundsBeforeFinish } from '~/lib/admin/league/season';
 import { planSeatChange } from '~/lib/admin/league/seats';
@@ -59,6 +61,7 @@ import { getServiceStore } from '~/lib/server/db';
 import { EMBED_TEAL, inviteCodeFromUrl, sendWebhook, type WebhookChannel } from '~/lib/server/discord';
 import { isDemoMode } from '~/lib/server/env';
 import { requestRebuild } from '~/lib/server/rebuild';
+import { recordSlugChange } from '~/lib/server/redirects';
 import { readPrivateSettings, readPublicSettings, writeSetting } from '~/lib/server/settings';
 import { staffFrom, toActionError } from '../_helpers';
 
@@ -115,6 +118,26 @@ async function loadSeason(store: Store, id: Id): Promise<SeasonRow> {
 
 function assertNotFrozen(season: SeasonRow): void {
   if (isSeasonFrozen(season)) throw conflict(FROZEN_MESSAGE);
+}
+
+type SlugEntity = 'driver' | 'team' | 'season';
+
+/**
+ * Slug-Änderung: alte URL per 301 auf die neue umleiten (Plan §2.2). Beim Anlegen
+ * (before = null) gibt der neue Slug eine frühere Weiterleitung frei, sonst würde die
+ * alte Adresse eines anderen Eintrags die neue Seite überdecken.
+ */
+async function slugChanged(store: Store, entity: SlugEntity, before: string | null, after: string): Promise<void> {
+  if (before == null) {
+    await store.remove('slug_redirects', { entity, old_slug: after });
+    return;
+  }
+  if (before !== after) await recordSlugChange(store, entity, before, after, null);
+}
+
+/** Gelöschter Eintrag: Weiterleitungen auf ihn laufen ins Leere und werden entfernt. */
+async function dropRedirectsTo(store: Store, entity: SlugEntity, slug: string): Promise<void> {
+  await store.remove('slug_redirects', { entity, new_slug: slug });
 }
 
 // ---------------------------------------------------------------------------- Zod-Bausteine (deutsche Meldungen)
@@ -246,11 +269,13 @@ const seasonSave = defineAction({
       };
       if (before) {
         const [saved] = await store.update('seasons', { id: before.id }, row);
+        await slugChanged(store, 'season', before.slug, row.slug);
         await audit(store, staff, 'update', 'seasons', before.id, before, saved);
         await requestRebuild(store, `Saison ${row.name} geändert`);
         return done(before.status !== 'active' && row.status === 'active' ? 'season_activated' : 'saved', `/admin/saisons/${before.id}`);
       }
       const created = await insertOne(store, 'seasons', { ...row, lobby_settings: {} });
+      await slugChanged(store, 'season', null, created.slug);
       await audit(store, staff, 'create', 'seasons', created.id, null, created);
       await requestRebuild(store, `Saison ${row.name} angelegt`);
       return done('season_created', `/admin/saisons/${created.id}`);
@@ -292,6 +317,7 @@ const seasonClone = defineAction({
         ends_on: input.ends_on || null,
         copySeats: input.copy_seats,
       });
+      await slugChanged(store, 'season', null, res.season.slug);
       await audit(store, staff, 'create', 'seasons', res.season.id, null, {
         ...res.season,
         cloned_from: res.source.id,
@@ -372,6 +398,7 @@ const seasonDelete = defineAction({
       const joined = await store.select('drivers', { eq: { joined_season_id: season.id } });
       for (const d of joined) await store.update('drivers', { id: d.id }, { joined_season_id: null });
       await store.remove('seasons', { id: season.id });
+      await dropRedirectsTo(store, 'season', season.slug);
       await audit(store, staff, 'delete', 'seasons', season.id, season, null);
       await requestRebuild(store, `Saison ${season.name} gelöscht`);
       return done('deleted', '/admin/saisons');
@@ -714,6 +741,13 @@ const trackSave = defineAction({
     game_track_id: optInt('Spiel-ID', 0, 999),
     length_km: opt('Länge', 12),
     laps_default: optInt('Runden', 1, 200),
+    map_url: z
+      .string()
+      .trim()
+      .max(500, 'Streckenkarte: höchstens 500 Zeichen.')
+      .optional()
+      .refine((v) => !v || isTrackMapUrl(v), 'Streckenkarte: https-Adresse einer SVG-Datei oder Pfad /brand/tracks/<name>.svg.'),
+    map_credit: opt('Quelle/Lizenz', 300),
   }),
   handler: async (input, context) => {
     const staff = staffFrom(context, 'admin');
@@ -722,6 +756,12 @@ const trackSave = defineAction({
       const all = await store.select('tracks');
       const slug = input.slug || slugify(input.name_en);
       if (all.some((t) => t.slug === slug && t.id !== input.id)) throw fieldError({ slug: `Der Slug „${slug}“ ist schon vergeben.` });
+      const mapUrl = input.map_url || null;
+      const mapCredit = mapUrl ? textOrNull(input.map_credit) : null;
+      // Fremde Karten (z. B. Wikimedia Commons) brauchen eine Quellen-/Lizenzangabe
+      if (mapUrl?.startsWith('https:') && !mapCredit) {
+        throw fieldError({ map_credit: 'Bitte Quelle und Lizenz angeben, z. B. „Wikimedia Commons, CC BY-SA 4.0“.' });
+      }
       const row = {
         slug,
         name_de: input.name_de,
@@ -730,6 +770,8 @@ const trackSave = defineAction({
         game_track_id: input.game_track_id ?? null,
         length_km: parseLength(input.length_km),
         laps_default: input.laps_default ?? null,
+        map_url: mapUrl,
+        map_credit: mapCredit,
       };
       if (input.id) {
         const before = all.find((t) => t.id === input.id);
@@ -805,11 +847,13 @@ const teamSave = defineAction({
         const before = all.find((t) => t.id === input.id);
         if (!before) throw notFound('Team');
         const [saved] = await store.update('teams', { id: before.id }, row);
+        await slugChanged(store, 'team', before.slug, row.slug);
         await audit(store, staff, 'update', 'teams', before.id, before, saved);
         await requestRebuild(store, `Team ${row.name} geändert`);
         return done('saved', `/admin/teams/${before.id}`);
       }
       const created = await insertOne(store, 'teams', row);
+      await slugChanged(store, 'team', null, created.slug);
       await audit(store, staff, 'create', 'teams', created.id, null, created);
       await requestRebuild(store, `Team ${row.name} angelegt`);
       return done('team_created', `/admin/teams/${created.id}`);
@@ -840,6 +884,7 @@ const teamDelete = defineAction({
         throw conflict('Das Team ist in Saisons, Cockpits oder Ergebnissen eingetragen. Setze es stattdessen auf „inaktiv“.');
       }
       await store.remove('teams', { id: input.id });
+      await dropRedirectsTo(store, 'team', before.slug);
       await audit(store, staff, 'delete', 'teams', input.id, before, null);
       await requestRebuild(store, `Team ${before.name} gelöscht`);
       return done('deleted', '/admin/teams');
@@ -1032,16 +1077,11 @@ const driverSave = defineAction({
       if (input.youtube_url && !/(youtube\.com|youtu\.be)\//i.test(input.youtube_url)) {
         throw fieldError({ youtube_url: 'Bitte einen YouTube-Link eintragen.' });
       }
-      const slugs = drivers.map((d) => d.slug);
-      let slug: string;
-      if (input.slug) {
-        if (drivers.some((d) => d.slug === input.slug && d.id !== input.id)) throw fieldError({ slug: `Der Slug „${input.slug}“ ist schon vergeben.` });
-        slug = input.slug;
-      } else if (before && before.gamertag === gamertag) {
-        slug = before.slug;
-      } else {
-        slug = driverSlug(gamertag, slugs, before?.slug);
+      const next = nextDriverSlug({ gamertag, slug: input.slug }, before, drivers.map((d) => d.slug));
+      if (next.custom && drivers.some((d) => d.slug === next.slug && d.id !== input.id)) {
+        throw fieldError({ slug: `Der Slug „${next.slug}“ ist schon vergeben.` });
       }
+      const slug = next.slug;
       if (input.joined_season_id != null && !(await selectOne(store, 'seasons', { id: input.joined_season_id }))) {
         throw fieldError({ joined_season_id: 'Saison nicht gefunden.' });
       }
@@ -1069,6 +1109,8 @@ const driverSave = defineAction({
 
       if (before) {
         const [saved] = await store.update('drivers', { id: before.id }, row);
+        // Auch eine Gamertag-Änderung ändert den Slug – die alte Profil-URL leitet weiter
+        await slugChanged(store, 'driver', before.slug, slug);
         const privBefore = await selectOne(store, 'driver_private', { driver_id: before.id });
         const [privSaved] = await store.upsert('driver_private', [{ driver_id: before.id, ...priv }], ['driver_id']);
         await audit(store, staff, 'update', 'drivers', before.id, before, saved);
@@ -1085,6 +1127,7 @@ const driverSave = defineAction({
         if (numberOps.error) throw fieldError({ number: numberOps.error });
       }
       const created = await insertOne(store, 'drivers', { ...row, anonymized: false });
+      await slugChanged(store, 'driver', null, created.slug);
       await store.insert('driver_private', { driver_id: created.id, ...priv });
       if (numberOps) {
         await applyNumberOps(
@@ -1253,6 +1296,7 @@ const registrationAccept = defineAction({
     const store = getServiceStore();
     try {
       const res = await acceptRegistration(store, input.id, staff.userId);
+      await slugChanged(store, 'driver', null, res.driver.slug);
       await audit(store, staff, 'create', 'drivers', res.driver.id, null, { ...res.driver, from_registration: input.id });
       await audit(store, staff, 'update', 'registrations', input.id, res.before, res.registration);
       await requestRebuild(store, `Neuer Fahrer ${res.driver.gamertag}`);
@@ -1383,15 +1427,7 @@ const settingsWebhooks = defineAction({
   },
 });
 
-const WEBHOOK_LABELS: Record<WebhookChannel, string> = {
-  registrations: 'Anmeldungen',
-  lineup: 'Aufstellung',
-  results: 'Ergebnisse',
-  incidents: 'Vorfälle (Stewards intern)',
-  decisions: 'Urteile',
-  news: 'News',
-  contact: 'Kontaktanfragen',
-};
+const webhookLabel = (ch: WebhookChannel) => WEBHOOK_CHANNEL_LABELS[ch].label;
 
 const settingsWebhookTest = defineAction({
   accept: 'form',
@@ -1401,12 +1437,12 @@ const settingsWebhookTest = defineAction({
     const store = getServiceStore();
     try {
       const url = (await readPrivateSettings(store)).webhooks[input.channel];
-      if (!url) throw conflict(`Für „${WEBHOOK_LABELS[input.channel]}“ ist keine Webhook-URL hinterlegt.`);
+      if (!url) throw conflict(`Für „${webhookLabel(input.channel)}“ ist keine Webhook-URL hinterlegt.`);
       const ok = await sendWebhook(url, {
         embeds: [
           {
             title: 'Test-Nachricht der Website',
-            description: `Dieser Channel ist für „${WEBHOOK_LABELS[input.channel]}“ verbunden. Ausgelöst von ${staff.name} im Admin-Bereich.`,
+            description: `Dieser Channel ist für „${webhookLabel(input.channel)}“ verbunden. Ausgelöst von ${staff.name} im Admin-Bereich.`,
             color: EMBED_TEAL,
             timestamp: new Date().toISOString(),
           },

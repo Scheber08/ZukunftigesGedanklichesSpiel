@@ -25,7 +25,7 @@ import { getServiceStore } from '~/lib/server/db';
 import { readPublicSettings } from '~/lib/server/settings';
 import { intParam } from '~/lib/view';
 
-if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
 const A = actions.admin;
 const outcome = await actionOutcome(Astro, [A.seasonSave, A.seasonLobbySave, A.seasonFinish, A.seasonReopen, A.seasonDelete]);
 if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
@@ -104,6 +104,7 @@ const stateIcon = { done: '✓', open: '○', manual: '•' } as const;
     <a class="btn btn-ghost" href={`/admin/kalender?saison=${season.id}`}>Kalender</a>
     <a class="btn btn-ghost" href={`/admin/teams/aufstellung?saison=${season.id}`}>Aufstellung</a>
     {season.status !== 'planned' && <a class="btn btn-ghost" href={url('de', 'seasonStandings', { season: season.slug })}>Wertung</a>}
+    <a class="btn btn-ghost" href={`/admin/audit?entitaet=seasons&id=${season.id}`}>Verlauf</a>
   </div>
 
   <Notice outcome={outcome} warnings={frozen ? [FROZEN_MESSAGE] : []} />
@@ -116,7 +117,7 @@ const stateIcon = { done: '✓', open: '○', manual: '•' } as const;
   <Section title="Stammdaten" id="stammdaten">
     <form method="POST" action={A.seasonSave}>
       <input type="hidden" name="id" value={season.id} />
-      <fieldset disabled={frozen} class="grid gap-4">
+      <fieldset disabled={frozen} class="grid min-w-0 gap-4">
         <legend class="sr-only">Stammdaten der Saison</legend>
         <SeasonFields prefix="season" values={values} err={edit.err} schemes={schemes} rulesVersions={rulesSorted} withStatus={!frozen} />
         <div>
@@ -155,7 +156,7 @@ const stateIcon = { done: '✓', open: '○', manual: '•' } as const;
           </p>
           <ConfirmField id="reopen-confirm" label="Ja, die Saison wieder öffnen." />
           <div>
-            <button type="submit" class="btn btn-danger">Saison wieder öffnen</button>
+            <button type="submit" class="btn whitespace-normal btn-danger">Saison wieder öffnen</button>
           </div>
         </form>
       </Section>
@@ -217,7 +218,7 @@ const stateIcon = { done: '✓', open: '○', manual: '•' } as const;
             </p>
           ))}
           <div>
-            <button type="submit" class="btn btn-primary" disabled={driverTop.length === 0}>
+            <button type="submit" class="btn whitespace-normal btn-primary" disabled={driverTop.length === 0}>
               Saison abschließen
             </button>
           </div>

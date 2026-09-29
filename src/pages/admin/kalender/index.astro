@@ -23,7 +23,7 @@ import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 import { roundLabel } from '~/lib/view';
 
-if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
 const A = actions.admin;
 const outcome = await actionOutcome(Astro, [A.roundSave, A.roundsBatchCreate]);
 if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
@@ -97,7 +97,7 @@ const weekdayOrder = [1, 2, 3, 4, 5, 6, 0];
 ---
 
 <AdminLayout title="Kalender" breadcrumbs={[{ label: 'Kalender' }]}>
-  <a slot="actions" class="btn btn-ghost" href="/admin/kalender/strecken">Strecken verwalten</a>
+  <a slot="actions" class="btn whitespace-normal btn-ghost" href="/admin/kalender/strecken">Strecken verwalten</a>
 
   <SeasonSwitch seasons={seasons} currentId={season?.id} base="/admin/kalender" />
   <Notice outcome={outcome} warnings={frozen ? [FROZEN_MESSAGE] : []} />
@@ -174,7 +174,7 @@ const weekdayOrder = [1, 2, 3, 4, 5, 6, 0];
         <Section title="Runde anlegen" id="neu">
           <form method="POST" action={A.roundSave}>
             <input type="hidden" name="season_id" value={season.id} />
-            <fieldset disabled={frozen} class="grid gap-4 sm:grid-cols-2">
+            <fieldset disabled={frozen} class="grid min-w-0 gap-4 sm:grid-cols-2">
               <legend class="sr-only">Neue Runde</legend>
               <Field id="round-track" label="Strecke" required error={single.err('track_id')}>
                 <TrackSelect id="round-track" tracks={tracks} value={single.str('track_id', '')} attrs={fieldAria('round-track', false, single.err('track_id'))} />
@@ -241,7 +241,7 @@ const weekdayOrder = [1, 2, 3, 4, 5, 6, 0];
           <form method="POST" action={A.roundsBatchCreate} class="grid gap-4">
             <input type="hidden" name="season_id" value={season.id} />
             <input type="hidden" name="saison" value={season.id} />
-            <fieldset disabled={frozen} class="grid gap-4">
+            <fieldset disabled={frozen} class="grid min-w-0 gap-4">
               <legend class="sr-only">Mehrere Runden anlegen</legend>
               <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Field id="batch-start" label="Ab Datum" required error={batchPosted.err('start_date')}>

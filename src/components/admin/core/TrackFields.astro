@@ -1,17 +1,32 @@
 ---
-/** Felder einer Strecke (Plan §6.1 `tracks`): Namen DE/EN, Land, Spiel-ID, Länge, Runden. */
+/**
+ * Felder einer Strecke (Plan §6.1 `tracks`): Namen DE/EN, Land, Spiel-ID, Länge, Runden,
+ * Streckenkarte (SVG-Umriss, Plan §7.5) mit Quelle/Lizenz und Live-Vorschau.
+ */
 import Field from '~/components/admin/ui/Field.astro';
 import CountrySelect from '~/components/admin/core/CountrySelect.astro';
+import { isTrackMapUrl } from '~/lib/admin/league/forms';
 import { fieldAria } from '~/lib/admin/league/page';
 
 interface Props {
   prefix: string;
-  values: { name_de: string; name_en: string; slug: string; country_code: string; game_track_id: string; length_km: string; laps_default: string };
+  values: {
+    name_de: string;
+    name_en: string;
+    slug: string;
+    country_code: string;
+    game_track_id: string;
+    length_km: string;
+    laps_default: string;
+    map_url: string;
+    map_credit: string;
+  };
   err: (name: string) => string[] | undefined;
 }
 const { prefix, values: v, err } = Astro.props;
 const fid = (n: string) => `${prefix}-${n}`;
 const aria = (n: string, hint = false) => fieldAria(fid(n), hint, err(n));
+const previewSrc = isTrackMapUrl(v.map_url) ? v.map_url.trim() : '';
 ---
 
 <div class="grid gap-4 sm:grid-cols-2">
@@ -37,3 +52,112 @@ const aria = (n: string, hint = false) => fieldAria(fid(n), hint, err(n));
     <input id={fid('laps_default')} name="laps_default" type="number" min="1" max="200" class="input" value={v.laps_default} {...aria('laps_default')} />
   </Field>
 </div>
+
+<fieldset class="mt-2 grid min-w-0 gap-4 border-t border-border pt-4" data-track-map>
+  <legend class="micro pt-2">Streckenkarte</legend>
+  <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
+    <div class="grid gap-4">
+      <Field
+        id={fid('map_url')}
+        label="Karte (SVG-Umriss)"
+        hint="Eigene Datei als /brand/tracks/<name>.svg oder eine https-Adresse, die auf .svg endet. Leer = keine Karte."
+        error={err('map_url')}
+      >
+        <input
+          id={fid('map_url')}
+          name="map_url"
+          class="input font-mono text-sm"
+          value={v.map_url}
+          maxlength="500"
+          inputmode="url"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="/brand/tracks/silverstone.svg"
+          data-track-map-input
+          {...aria('map_url', true)}
+        />
+      </Field>
+      <Field
+        id={fid('map_credit')}
+        label="Quelle / Lizenz"
+        hint="Pflicht bei fremden Karten, z. B. „Wikimedia Commons, CC BY-SA 4.0“. Wird unter der Karte angezeigt."
+        error={err('map_credit')}
+      >
+        <input
+          id={fid('map_credit')}
+          name="map_credit"
+          class="input"
+          value={v.map_credit}
+          maxlength="300"
+          data-track-map-credit
+          {...aria('map_credit', true)}
+        />
+      </Field>
+    </div>
+    <figure class="grid content-start gap-2">
+      <div class="grid grid-cols-2 gap-2" aria-live="polite">
+        <div class="map-preview map-dark flex aspect-square items-center justify-center rounded border border-border p-2">
+          <img src={previewSrc || undefined} alt="Vorschau der Streckenkarte auf dunklem Grund" class="max-h-full max-w-full" hidden={!previewSrc} data-track-map-img />
+          <span class="text-center text-xs text-muted" hidden={!!previewSrc} data-track-map-empty>Keine Vorschau</span>
+        </div>
+        <div class="map-preview map-light flex aspect-square items-center justify-center rounded border border-border p-2">
+          <img src={previewSrc || undefined} alt="Vorschau der Streckenkarte auf hellem Grund" class="max-h-full max-w-full" hidden={!previewSrc} data-track-map-img />
+        </div>
+      </div>
+      <figcaption class="text-xs text-muted" data-track-map-caption>{v.map_credit}</figcaption>
+    </figure>
+  </div>
+</fieldset>
+
+<style>
+  /* Vorschau auf dunklem und hellem Grund: helle und dunkle Umrisse bleiben sichtbar */
+  .map-dark {
+    background: var(--color-surface-2);
+  }
+  .map-light {
+    background: var(--color-fg);
+  }
+</style>
+
+<script>
+  // Live-Vorschau der Streckenkarte (gleiche Regeln wie serverseitig isTrackMapUrl)
+  const valid = (v: string): boolean => {
+    const s = v.trim();
+    if (s === '') return false;
+    if (s.startsWith('/')) return /^\/brand\/tracks\/[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9_-]+)*\.svg$/i.test(s) && !s.includes('..');
+    try {
+      const u = new URL(s);
+      return u.protocol === 'https:' && u.username === '' && u.password === '' && /\.svg$/i.test(u.pathname);
+    } catch {
+      return false;
+    }
+  };
+  for (const box of document.querySelectorAll<HTMLElement>('[data-track-map]')) {
+    const input = box.querySelector<HTMLInputElement>('[data-track-map-input]');
+    const credit = box.querySelector<HTMLInputElement>('[data-track-map-credit]');
+    const imgs = [...box.querySelectorAll<HTMLImageElement>('[data-track-map-img]')];
+    const empty = box.querySelector<HTMLElement>('[data-track-map-empty]');
+    const caption = box.querySelector<HTMLElement>('[data-track-map-caption]');
+    if (!input || imgs.length === 0 || !empty) continue;
+    const show = (on: boolean, text = 'Keine Vorschau') => {
+      for (const img of imgs) img.hidden = !on;
+      empty.hidden = on;
+      empty.textContent = text;
+    };
+    const update = () => {
+      const v = input.value.trim();
+      if (valid(v)) {
+        for (const img of imgs) if (img.getAttribute('src') !== v) img.src = v;
+        show(true);
+      } else {
+        for (const img of imgs) img.removeAttribute('src');
+        show(false, v === '' ? 'Keine Vorschau' : 'Ungültige Adresse');
+      }
+    };
+    imgs[0]!.addEventListener('error', () => show(false, 'Datei nicht gefunden'));
+    input.addEventListener('input', update);
+    credit?.addEventListener('input', () => {
+      if (caption) caption.textContent = credit.value;
+    });
+  }
+</script>

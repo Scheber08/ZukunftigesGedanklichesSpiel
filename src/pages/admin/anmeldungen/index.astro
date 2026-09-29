@@ -1,0 +1,147 @@
+---
+/**
+ * Anmeldungen (Plan §5 „Anmeldungen“): Eingang aus dem Web-Formular mit Status
+ * (neu, kontaktiert, angenommen, Warteliste, abgelehnt), Filter und Suche.
+ * Bearbeiten, „Annehmen & Fahrer anlegen“ und Löschen auf der Detailseite.
+ */
+export const prerender = false;
+
+import Badge from '~/components/ui/Badge.astro';
+import Flag from '~/components/ui/Flag.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import Pagination from '~/components/admin/core/Pagination.astro';
+import Section from '~/components/admin/core/Section.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { paginate } from '~/lib/admin/league/forms';
+import { PLATFORM_LABELS, REGISTRATION_STATUS_BADGE, REGISTRATION_STATUS_LABELS, WANTED_ROLE_LABELS } from '~/lib/admin/league/labels';
+import { filterRegistrations, parseRegistrationFilter, registrationCounts, REJECTED_RETENTION_MONTHS } from '~/lib/admin/league/registrations';
+import { REGISTRATION_STATUSES, type RegistrationStatus } from '~/lib/db/types';
+import { numberHolder } from '~/lib/domain/numbers';
+import { formatDateTime } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
+
+const store = getServiceStore();
+const [registrations, numbers, drivers] = await Promise.all([
+  store.select('registrations'),
+  store.select('driver_numbers'),
+  store.select('drivers'),
+]);
+const now = new Date();
+const filter = parseRegistrationFilter(Astro.url.searchParams);
+const list = filterRegistrations(registrations, filter);
+const counts = registrationCounts(registrations);
+const pageNo = Number(Astro.url.searchParams.get('seite') ?? '1');
+const page = paginate(list, pageNo, 25);
+
+const holderName = (n: number) => {
+  const id = numberHolder(n, numbers, now);
+  if (id == null) return null;
+  const d = drivers.find((x) => x.id === id);
+  return d ? (d.anonymized ? `Ehemaliger Fahrer #${d.id}` : d.gamertag) : `#${id}`;
+};
+const filterHref = (s: RegistrationStatus | null) => {
+  const u = new URLSearchParams();
+  if (filter.q) u.set('q', filter.q);
+  if (s) u.set('status', s);
+  const qs = u.toString();
+  return `/admin/anmeldungen${qs ? `?${qs}` : ''}`;
+};
+const title = filter.status ? `${REGISTRATION_STATUS_LABELS[filter.status]} (${list.length})` : `Alle Anmeldungen (${list.length})`;
+---
+
+<AdminLayout title="Anmeldungen" breadcrumbs={[{ label: 'Anmeldungen' }]}>
+  <div slot="actions" class="flex flex-wrap gap-2">
+    <a class="btn btn-ghost" href="/admin/einstellungen#anmeldung">Anmeldestatus</a>
+    <a class="btn btn-ghost" href="/admin/fahrer?status=reserve">Reservepool</a>
+  </div>
+
+  <Notice />
+
+  <Section title="Suche & Filter" id="suche">
+    <form method="GET" action="/admin/anmeldungen" class="flex flex-wrap items-end gap-3" role="search">
+      <div class="field min-w-0 flex-1">
+        <label class="label" for="reg-q">Suche</label>
+        <input id="reg-q" name="q" type="search" class="input" value={filter.q} placeholder="Gamertag, Discord, EA-ID oder Wunschnummer" />
+      </div>
+      {filter.status && <input type="hidden" name="status" value={filter.status} />}
+      <button type="submit" class="btn btn-secondary">Suchen</button>
+    </form>
+    <nav aria-label="Nach Status filtern" class="mt-4 overflow-x-auto">
+      <div class="segmented">
+        <a href={filterHref(null)} aria-current={!filter.status ? 'page' : undefined} class="inline-flex min-h-[44px] items-center px-3">
+          Alle ({registrations.length})
+        </a>
+        {
+          REGISTRATION_STATUSES.map((s) => (
+            <a href={filterHref(s)} aria-current={filter.status === s ? 'page' : undefined} class="inline-flex min-h-[44px] items-center px-3">
+              {REGISTRATION_STATUS_LABELS[s]} ({counts[s]})
+            </a>
+          ))
+        }
+      </div>
+    </nav>
+  </Section>
+
+  <Section title={title} id="liste" description={`Offene zuerst, die am längsten wartenden oben. Abgelehnte Anmeldungen werden nach ${REJECTED_RETENTION_MONTHS} Monaten automatisch gelöscht.`}>
+    {
+      page.items.length === 0 ? (
+        <p class="text-muted">{registrations.length === 0 ? 'Noch keine Anmeldungen eingegangen.' : 'Keine Anmeldungen für diesen Filter.'}</p>
+      ) : (
+        <div class="table-wrap">
+          <table class="timing-table">
+            <caption class="sr-only">
+              Anmeldungen{filter.status ? ` mit Status ${REGISTRATION_STATUS_LABELS[filter.status]}` : ''}, Seite {page.page} von {page.pages}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col" class="sticky-col">Gamertag</th>
+                <th scope="col">Status</th>
+                <th scope="col">Eingang</th>
+                <th scope="col">Discord</th>
+                <th scope="col">Plattform</th>
+                <th scope="col" class="num">Wunsch-Nr.</th>
+                <th scope="col">Rolle</th>
+              </tr>
+            </thead>
+            <tbody>
+              {page.items.map((r) => {
+                const holder = r.driver_id == null ? holderName(r.desired_number) : null;
+                return (
+                  <tr>
+                    <th scope="row" class="sticky-col">
+                      <span class="inline-flex items-center gap-2">
+                        <Flag code={r.nationality} lang="de" />
+                        <a class="gamertag underline" href={`/admin/anmeldungen/${r.id}`}>
+                          {r.gamertag}
+                        </a>
+                      </span>
+                    </th>
+                    <td>
+                      <Badge variant={REGISTRATION_STATUS_BADGE[r.status]}>{REGISTRATION_STATUS_LABELS[r.status]}</Badge>
+                    </td>
+                    <td class="whitespace-nowrap">{formatDateTime(r.created_at, 'de')}</td>
+                    <td class="muted">{r.discord_username || '–'}</td>
+                    <td>{PLATFORM_LABELS[r.platform]}</td>
+                    <td class="num">
+                      {r.desired_number}
+                      {holder && (
+                        <span class="block text-xs text-warning" title={`Vergeben an ${holder}`}>
+                          vergeben
+                        </span>
+                      )}
+                    </td>
+                    <td class="muted">{WANTED_ROLE_LABELS[r.wanted_role]}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    <Pagination page={page.page} pages={page.pages} />
+  </Section>
+</AdminLayout>

@@ -1,0 +1,95 @@
+---
+/**
+ * Kontaktanfrage lesen: Name, E-Mail (Antwort per mailto), Betreff, Nachricht.
+ * Als erledigt markieren bzw. wieder öffnen und löschen.
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import Badge from '~/components/ui/Badge.astro';
+import ConfirmField from '~/components/admin/core/ConfirmField.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import Section from '~/components/admin/core/Section.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { CONTACT_STATUS_LABELS } from '~/lib/admin/league/labels';
+import { actionOutcome } from '~/lib/admin/league/page';
+import { formatDateTime } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { intParam } from '~/lib/view';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
+const A = actions.admin;
+const outcome = await actionOutcome(Astro, [A.contactUpdate, A.contactDelete]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const msgId = intParam(Astro.params.id);
+const msg = msgId ? (await getServiceStore().select('contact_messages', { eq: { id: msgId } }))[0] : undefined;
+if (!msg) return Astro.redirect('/admin/kontakt?fehlt=1');
+
+// Nur eindeutige Adressen verlinken (kein „?cc=…“ o. Ä. im mailto-Link)
+const mailOk = /^[^\s@?&#,;:]+@[^\s@?&#,;:]+\.[^\s@?&#,;:]+$/.test(msg.email);
+const mailto = mailOk ? `mailto:${msg.email}?subject=${encodeURIComponent(`Re: ${msg.subject}`)}` : null;
+const done = msg.status === 'done';
+---
+
+<AdminLayout title={msg.subject} breadcrumbs={[{ label: 'Kontaktanfragen', href: '/admin/kontakt' }, { label: `Anfrage #${msg.id}` }]}>
+  <Notice outcome={outcome} />
+
+  <p class="mb-6 flex flex-wrap items-center gap-2 text-sm text-muted">
+    <Badge variant={done ? 'muted' : 'warning'}>{CONTACT_STATUS_LABELS[msg.status]}</Badge>
+    <span>Eingang {formatDateTime(msg.created_at, 'de')}</span>
+    {done && <span>· erledigt am {formatDateTime(msg.updated_at, 'de')}</span>}
+  </p>
+
+  <Section title="Nachricht" id="nachricht">
+    <dl class="mb-4 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+      <div>
+        <dt class="micro">Name</dt>
+        <dd class="break-words">{msg.name}</dd>
+      </div>
+      <div>
+        <dt class="micro">E-Mail</dt>
+        <dd class="break-all">
+          {mailto ? <a class="inline-flex min-h-[44px] items-center underline" href={mailto}>{msg.email}</a> : msg.email}
+        </dd>
+      </div>
+      <div class="sm:col-span-2">
+        <dt class="micro">Betreff</dt>
+        <dd class="break-words font-semibold">{msg.subject}</dd>
+      </div>
+    </dl>
+    <div class="rounded border border-border bg-surface-2 p-4">
+      <p class="whitespace-pre-line break-words">{msg.message}</p>
+    </div>
+    {
+      mailto && (
+        <p class="mt-4">
+          <a class="btn whitespace-normal btn-primary" href={mailto}>
+            Per E-Mail antworten
+          </a>
+        </p>
+      )
+    }
+  </Section>
+
+  <Section title="Status" id="status">
+    <form method="POST" action={A.contactUpdate} class="flex flex-wrap items-center gap-3">
+      <input type="hidden" name="id" value={msg.id} />
+      <input type="hidden" name="status" value={done ? 'new' : 'done'} />
+      <button type="submit" class:list={['btn', done ? 'btn-secondary' : 'btn-primary']}>
+        {done ? 'Wieder öffnen' : 'Als erledigt markieren'}
+      </button>
+    </form>
+  </Section>
+
+  <Section title="Löschen" id="loeschen" description="Löscht die Anfrage mit Name, E-Mail und Nachricht endgültig.">
+    <form method="POST" action={A.contactDelete} class="grid gap-3">
+      <input type="hidden" name="id" value={msg.id} />
+      <ConfirmField id="contact-delete-confirm" label="Ja, diese Anfrage endgültig löschen." />
+      <div>
+        <button type="submit" class="btn btn-danger">Anfrage löschen</button>
+      </div>
+    </form>
+  </Section>
+</AdminLayout>

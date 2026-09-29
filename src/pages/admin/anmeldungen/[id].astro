@@ -1,0 +1,257 @@
+---
+/**
+ * Anmeldung im Detail (Plan §5 „Anmeldungen“, §6.6): alle Angaben inkl. Discord-Name
+ * (privat – erscheint nirgends öffentlich), Einwilligungen, Status und Notizen,
+ * „Annehmen & Fahrer anlegen“ (Reserve, Wunschnummer falls frei) und Löschen.
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import Badge from '~/components/ui/Badge.astro';
+import Flag from '~/components/ui/Flag.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import ConfirmField from '~/components/admin/core/ConfirmField.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import Section from '~/components/admin/core/Section.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { url } from '~/i18n';
+import { planAcceptRegistration } from '~/lib/admin/league/drivers';
+import {
+  AVAILABILITY_LABELS,
+  DRIVER_STATUS_LABELS,
+  INPUT_DEVICE_LABELS,
+  PLATFORM_LABELS,
+  REGISTRATION_STATUS_BADGE,
+  REGISTRATION_STATUS_LABELS,
+  WANTED_ROLE_LABELS,
+} from '~/lib/admin/league/labels';
+import { actionOutcome, fieldAria, formValues } from '~/lib/admin/league/page';
+import { REJECTED_RETENTION_MONTHS, retentionDate, selectableStatuses } from '~/lib/admin/league/registrations';
+import { numberHolder } from '~/lib/domain/numbers';
+import { formatDate, formatDateTime } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { countryName, intParam } from '~/lib/view';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
+const A = actions.admin;
+const outcome = await actionOutcome(Astro, [A.registrationUpdate, A.registrationAccept, A.registrationDelete]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const store = getServiceStore();
+const regId = intParam(Astro.params.id);
+const reg = regId ? (await store.select('registrations', { eq: { id: regId } }))[0] : undefined;
+if (!reg) return Astro.redirect('/admin/anmeldungen?fehlt=1');
+
+const staff = Astro.locals.staff!;
+const [drivers, numbers, seasons, accounts] = await Promise.all([
+  store.select('drivers'),
+  store.select('driver_numbers'),
+  store.select('seasons'),
+  reg.processed_by ? store.select('staff_accounts', { eq: { user_id: reg.processed_by } }) : Promise.resolve([]),
+]);
+const now = new Date();
+const linked = reg.driver_id != null ? drivers.find((d) => d.id === reg.driver_id) : undefined;
+const plan = reg.driver_id == null ? planAcceptRegistration(reg, { drivers, numbers, seasons, now }) : null;
+const holderId = numberHolder(reg.desired_number, numbers, now);
+const holder = holderId != null ? drivers.find((d) => d.id === holderId) : undefined;
+const processedBy = !reg.processed_by ? null : (accounts[0]?.display_name ?? (reg.processed_by === staff.userId ? staff.name : 'Staff-Konto'));
+const deleteOn = retentionDate(reg);
+const joinSeason = plan ? seasons.find((s) => s.id === plan.driver.joined_season_id) : undefined;
+
+const f = formValues(outcome, A.registrationUpdate);
+const statusOptions = selectableStatuses(reg);
+const yes = (v: boolean | undefined) => (v ? 'Ja' : 'Nein');
+---
+
+<AdminLayout title={reg.gamertag} breadcrumbs={[{ label: 'Anmeldungen', href: '/admin/anmeldungen' }, { label: reg.gamertag }]}>
+  {linked && <a slot="actions" class="btn btn-ghost" href={`/admin/fahrer/${linked.id}`}>Zum Fahrer</a>}
+
+  <Notice
+    outcome={outcome}
+    warnings={deleteOn ? [`Abgelehnt – wird am ${formatDate(deleteOn, 'de')} automatisch gelöscht (Aufbewahrung ${REJECTED_RETENTION_MONTHS} Monate).`] : []}
+  />
+
+  <p class="mb-6 flex flex-wrap items-center gap-2 text-sm text-muted">
+    <Badge variant={REGISTRATION_STATUS_BADGE[reg.status]}>{REGISTRATION_STATUS_LABELS[reg.status]}</Badge>
+    <span>Eingang {formatDateTime(reg.created_at, 'de')}</span>
+    {reg.processed_at && <span>· zuletzt bearbeitet {formatDateTime(reg.processed_at, 'de')}{processedBy ? ` von ${processedBy}` : ''}</span>}
+  </p>
+
+  <Section title="Angaben" id="angaben" description="Aus dem Anmeldeformular. Discord-Name und EA-ID sind privat und erscheinen nie öffentlich.">
+    <dl class="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+      <div>
+        <dt class="micro">Gamertag</dt>
+        <dd class="gamertag font-semibold">{reg.gamertag}</dd>
+      </div>
+      <div>
+        <dt class="micro">Discord-Name <span class="normal-case">(privat)</span></dt>
+        <dd class="break-all font-mono">{reg.discord_username || '–'}</dd>
+      </div>
+      <div>
+        <dt class="micro">EA-ID <span class="normal-case">(privat)</span></dt>
+        <dd class="break-all">{reg.ea_id || '–'}</dd>
+      </div>
+      <div>
+        <dt class="micro">Plattform</dt>
+        <dd>{PLATFORM_LABELS[reg.platform]} · {INPUT_DEVICE_LABELS[reg.input_device]}</dd>
+      </div>
+      <div>
+        <dt class="micro">Nationalität</dt>
+        <dd>
+          {
+            reg.nationality ? (
+              <span class="inline-flex items-center gap-2">
+                <Flag code={reg.nationality} lang="de" decorative />
+                {countryName(reg.nationality, 'de')}
+              </span>
+            ) : (
+              'Keine Angabe (keine Flagge)'
+            )
+          }
+        </dd>
+      </div>
+      <div>
+        <dt class="micro">Wunschnummer</dt>
+        <dd>
+          <span class="font-semibold tabular">{reg.desired_number}</span>
+          {
+            holder && holder.id !== reg.driver_id ? (
+              <span class="text-warning"> · inzwischen vergeben an {holder.anonymized ? `Ehemaliger Fahrer #${holder.id}` : holder.gamertag}</span>
+            ) : !holder ? (
+              <span class="text-muted"> · frei</span>
+            ) : null
+          }
+        </dd>
+      </div>
+      <div>
+        <dt class="micro">Gewünschte Rolle</dt>
+        <dd>{WANTED_ROLE_LABELS[reg.wanted_role]}</dd>
+      </div>
+      <div>
+        <dt class="micro">Verfügbarkeit</dt>
+        <dd>{AVAILABILITY_LABELS[reg.availability]}</dd>
+      </div>
+      <div class="sm:col-span-2">
+        <dt class="micro">Erfahrung</dt>
+        <dd class="whitespace-pre-line break-words">{reg.experience || '–'}</dd>
+      </div>
+      <div class="sm:col-span-2">
+        <dt class="micro">Referenzzeit</dt>
+        <dd class="break-words">{reg.reference_time || '–'}</dd>
+      </div>
+    </dl>
+  </Section>
+
+  <Section title="Einwilligungen" id="einwilligungen" description="Beim Absenden bestätigt: Mindestalter 16 und Regelwerk.">
+    <dl class="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+      <div>
+        <dt class="micro">Mindestens 16 Jahre</dt>
+        <dd>{yes(reg.consents?.age16)}</dd>
+      </div>
+      <div>
+        <dt class="micro">Regelwerk akzeptiert</dt>
+        <dd>{yes(reg.consents?.rules)}{reg.consents?.rules_version ? ` (Version ${reg.consents.rules_version})` : ''}</dd>
+      </div>
+      <div>
+        <dt class="micro">Zeitpunkt</dt>
+        <dd>{reg.consents?.at ? formatDateTime(reg.consents.at, 'de') : '–'}</dd>
+      </div>
+    </dl>
+  </Section>
+
+  <Section title="Bearbeitung" id="bearbeitung" description="Status und interne Notizen (nur für Admins sichtbar).">
+    <form method="POST" action={A.registrationUpdate} class="grid gap-4">
+      <input type="hidden" name="id" value={reg.id} />
+      <Field
+        id="reg-status"
+        label="Status"
+        required
+        hint={reg.driver_id == null ? '„Angenommen“ setzt der Button „Annehmen & Fahrer anlegen“.' : undefined}
+        error={f.err('status')}
+      >
+        <select id="reg-status" name="status" class="select" required {...fieldAria('reg-status', reg.driver_id == null, f.err('status'))}>
+          {
+            statusOptions.map((s) => (
+              <option value={s} selected={f.str('status', reg.status) === s}>
+                {REGISTRATION_STATUS_LABELS[s]}
+              </option>
+            ))
+          }
+        </select>
+      </Field>
+      <Field id="reg-notes" label="Notizen" error={f.err('admin_notes')}>
+        <textarea id="reg-notes" name="admin_notes" class="textarea" rows="4" maxlength="4000" {...fieldAria('reg-notes', false, f.err('admin_notes'))}>{f.str('admin_notes', reg.admin_notes ?? '')}</textarea>
+      </Field>
+      <div>
+        <button type="submit" class="btn btn-primary">Speichern</button>
+      </div>
+    </form>
+  </Section>
+
+  {
+    linked ? (
+      <Section title="Fahrer" id="fahrer">
+        <p>
+          Angenommen als <a class="gamertag font-semibold underline" href={`/admin/fahrer/${linked.id}`}>{linked.anonymized ? `Ehemaliger Fahrer #${linked.id}` : linked.gamertag}</a>
+          <span class="text-muted"> · {DRIVER_STATUS_LABELS[linked.status]}</span>
+        </p>
+      </Section>
+    ) : plan ? (
+      <Section
+        title="Annehmen & Fahrer anlegen"
+        id="annehmen"
+        description="Legt den Fahrer als Reserve ans Ende des Reservepools an, übernimmt Discord-Name und EA-ID in die privaten Daten und setzt die Anmeldung auf „Angenommen“."
+      >
+        {plan.error ? (
+          <p class="alert alert-danger" role="alert">
+            {plan.error} Prüfe, ob es derselbe Fahrer ist – sonst den Gamertag im Fahrerprofil anpassen.
+          </p>
+        ) : (
+          <form method="POST" action={A.registrationAccept} class="grid gap-3">
+            <input type="hidden" name="id" value={reg.id} />
+            <ul class="grid gap-1 text-sm">
+              <li>
+                Status: <span class="font-semibold">Reserve</span>, Position {plan.driver.reserve_order} im Pool
+              </li>
+              <li>Dabei seit: {joinSeason?.name ?? '–'}</li>
+              <li>
+                Startnummer:{' '}
+                {plan.number != null ? <span class="font-semibold">{plan.number} (Wunschnummer, gilt sofort)</span> : <span class="text-warning">keine – bitte danach im Fahrerprofil vergeben</span>}
+              </li>
+              <li>
+                Profil-URL: <span class="break-all font-mono">{url('de', 'driver', { slug: plan.driver.slug })}</span>
+              </li>
+            </ul>
+            {plan.warnings.length > 0 && (
+              <ul class="alert alert-warning text-sm">
+                {plan.warnings.map((w) => (
+                  <li>{w}</li>
+                ))}
+              </ul>
+            )}
+            <div>
+              <button type="submit" class="btn whitespace-normal btn-primary">
+                Annehmen & Fahrer anlegen
+              </button>
+            </div>
+          </form>
+        )}
+      </Section>
+    ) : null
+  }
+
+  <Section
+    title="Löschen"
+    id="loeschen"
+    description={linked ? 'Löscht nur die Anmeldung. Der angelegte Fahrer bleibt bestehen.' : 'Löscht die Anmeldung mit allen Angaben endgültig (z. B. auf Wunsch oder bei Spam).'}
+  >
+    <form method="POST" action={A.registrationDelete} class="grid gap-3">
+      <input type="hidden" name="id" value={reg.id} />
+      <ConfirmField id="reg-delete-confirm" label={`Ja, die Anmeldung von ${reg.gamertag} endgültig löschen.`} />
+      <div>
+        <button type="submit" class="btn whitespace-normal btn-danger">Anmeldung löschen</button>
+      </div>
+    </form>
+  </Section>
+</AdminLayout>

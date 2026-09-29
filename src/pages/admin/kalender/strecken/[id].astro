@@ -1,5 +1,5 @@
 ---
-/** Strecke bearbeiten bzw. löschen (nur ohne Runden im Kalender). */
+/** Strecke bearbeiten (inkl. Streckenkarte mit Quelle/Lizenz) bzw. löschen (nur ohne Runden im Kalender). */
 export const prerender = false;
 
 import { actions } from 'astro:actions';
@@ -13,7 +13,7 @@ import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 import { intParam } from '~/lib/view';
 
-if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
 const outcome = await actionOutcome(Astro, [actions.admin.trackSave, actions.admin.trackDelete]);
 if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
 
@@ -31,6 +31,8 @@ const values = {
   game_track_id: f.str('game_track_id', track.game_track_id ?? ''),
   length_km: f.str('length_km', track.length_km != null ? String(track.length_km).replace('.', ',') : ''),
   laps_default: f.str('laps_default', track.laps_default ?? ''),
+  map_url: f.str('map_url', track.map_url ?? ''),
+  map_credit: f.str('map_credit', track.map_credit ?? ''),
 };
 ---
 

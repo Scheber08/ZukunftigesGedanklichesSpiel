@@ -1,0 +1,91 @@
+---
+/**
+ * Kontaktanfragen aus dem öffentlichen Formular: offene zuerst, Filter nach Status.
+ * Lesen, als erledigt markieren und löschen auf der Detailseite.
+ */
+export const prerender = false;
+
+import Badge from '~/components/ui/Badge.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import Pagination from '~/components/admin/core/Pagination.astro';
+import Section from '~/components/admin/core/Section.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { paginate } from '~/lib/admin/league/forms';
+import { CONTACT_STATUS_LABELS } from '~/lib/admin/league/labels';
+import { formatDateTime } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
+
+type Status = 'new' | 'done';
+const statusParam = Astro.url.searchParams.get('status');
+// Standard: offene Anfragen; „alle“ zeigt alles
+const status: Status | null = statusParam === 'done' ? 'done' : statusParam === 'alle' ? null : 'new';
+
+const messages = await getServiceStore().select('contact_messages');
+const counts = { new: messages.filter((m) => m.status === 'new').length, done: messages.filter((m) => m.status === 'done').length };
+const list = messages
+  .filter((m) => !status || m.status === status)
+  .sort((a, b) => (a.status === b.status ? 0 : a.status === 'new' ? -1 : 1) || b.created_at.localeCompare(a.created_at) || b.id - a.id);
+const page = paginate(list, Number(Astro.url.searchParams.get('seite') ?? '1'), 25);
+const tabs: Array<{ key: string; label: string; count: number; current: boolean }> = [
+  { key: 'new', label: 'Offen', count: counts.new, current: status === 'new' },
+  { key: 'done', label: 'Erledigt', count: counts.done, current: status === 'done' },
+  { key: 'alle', label: 'Alle', count: messages.length, current: status === null },
+];
+const preview = (text: string) => {
+  const t = text.replace(/\s+/g, ' ').trim();
+  return t.length > 120 ? `${t.slice(0, 119)}…` : t;
+};
+---
+
+<AdminLayout title="Kontaktanfragen" breadcrumbs={[{ label: 'Kontaktanfragen' }]}>
+  <Notice />
+
+  <nav aria-label="Nach Status filtern" class="mb-6 overflow-x-auto">
+    <div class="segmented">
+      {
+        tabs.map((t) => (
+          <a
+            href={t.key === 'new' ? '/admin/kontakt' : `/admin/kontakt?status=${t.key}`}
+            aria-current={t.current ? 'page' : undefined}
+            class="inline-flex min-h-[44px] items-center px-3"
+          >
+            {t.label} ({t.count})
+          </a>
+        ))
+      }
+    </div>
+  </nav>
+
+  <Section
+    title={status === 'new' ? 'Offene Anfragen' : status === 'done' ? 'Erledigte Anfragen' : 'Alle Anfragen'}
+    id="liste"
+    description="Antworten per E-Mail aus deinem eigenen Postfach. Kontaktanfragen sind nur für Admins sichtbar."
+  >
+    {
+      page.items.length === 0 ? (
+        <p class="text-muted">{status === 'new' ? '✓ Keine offenen Anfragen.' : 'Keine Anfragen.'}</p>
+      ) : (
+        <ul class="grid gap-3">
+          {page.items.map((m) => (
+            <li>
+              <a href={`/admin/kontakt/${m.id}`} class="card card-hover block min-h-[44px] p-4 no-underline">
+                <span class="flex flex-wrap items-baseline justify-between gap-2">
+                  <span class="min-w-0 break-words font-semibold">{m.subject}</span>
+                  <Badge variant={m.status === 'new' ? 'warning' : 'muted'}>{CONTACT_STATUS_LABELS[m.status]}</Badge>
+                </span>
+                <span class="mt-1 block text-sm text-muted">
+                  {m.name} · {formatDateTime(m.created_at, 'de')}
+                </span>
+                <span class="mt-2 block break-words text-sm">{preview(m.message)}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+    <Pagination page={page.page} pages={page.pages} />
+  </Section>
+</AdminLayout>

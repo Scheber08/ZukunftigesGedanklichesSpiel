@@ -18,7 +18,7 @@ import { actionOutcome, fieldAria, formValues } from '~/lib/admin/league/page';
 import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 
-if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
 const outcome = await actionOutcome(Astro, [actions.admin.teamSave]);
 if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
 
@@ -44,7 +44,7 @@ const f = formValues(outcome, actions.admin.teamSave);
       {
         seasons.map((s) => (
           <li>
-            <a class:list={['btn', s.id === current?.id ? 'btn-primary' : 'btn-secondary']} href={`/admin/teams/aufstellung?saison=${s.id}`}>
+            <a class:list={['btn whitespace-normal', s.id === current?.id ? 'btn-primary' : 'btn-secondary']} href={`/admin/teams/aufstellung?saison=${s.id}`}>
               {s.name} <span class="sr-only">({SEASON_STATUS_LABELS[s.status]})</span>
             </a>
           </li>

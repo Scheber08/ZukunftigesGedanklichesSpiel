@@ -23,14 +23,14 @@ const fid = (n: string) => `${prefix}-${n}`;
 const aria = (n: string, hint = false) => fieldAria(fid(n), hint, err(n));
 ---
 
-<fieldset class="grid gap-4 sm:grid-cols-2">
+<fieldset class="grid min-w-0 gap-4 sm:grid-cols-2">
   <legend class="label mb-1 sm:col-span-2">Öffentliches Profil</legend>
   <Field id={fid('gamertag')} label="Gamertag / EA-ID" required hint="Wird normalisiert (Leerzeichen, unsichtbare Zeichen)." error={err('gamertag')}>
     <input id={fid('gamertag')} name="gamertag" class="input" value={v('gamertag')} maxlength="40" required autocomplete="off" {...aria('gamertag', true)} />
   </Field>
   {
     mode === 'edit' ? (
-      <Field id={fid('slug')} label="Slug (Profil-URL)" hint="Leer = aus dem Gamertag. Ändert die Adresse /fahrer/<slug>." error={err('slug')}>
+      <Field id={fid('slug')} label="Slug (Profil-URL)" hint="Adresse /fahrer/<slug>. Folgt dem Gamertag, solange du ihn nicht selbst änderst. Alte Adressen leiten per 301 weiter." error={err('slug')}>
         <input id={fid('slug')} name="slug" class="input font-mono" value={v('slug')} maxlength="60" {...aria('slug', true)} />
       </Field>
     ) : (
@@ -88,7 +88,7 @@ const aria = (n: string, hint = false) => fieldAria(fid(n), hint, err(n));
   }
 </fieldset>
 
-<fieldset class="mt-6 grid gap-4 rounded-lg border border-border p-4 sm:grid-cols-2">
+<fieldset class="mt-6 grid min-w-0 gap-4 rounded-lg border border-border p-4 sm:grid-cols-2">
   <legend class="label px-1">Privat – nur im Admin sichtbar</legend>
   <Field id={fid('discord_username')} label="Discord-Name" error={err('discord_username')}>
     <input id={fid('discord_username')} name="discord_username" class="input" value={v('discord_username')} maxlength="64" autocomplete="off" {...aria('discord_username')} />

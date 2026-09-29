@@ -16,7 +16,7 @@ import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 import { intParam } from '~/lib/view';
 
-if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
 const outcome = await actionOutcome(Astro, [actions.admin.schemeSave, actions.admin.schemeDelete]);
 if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
 
@@ -58,7 +58,7 @@ const usedActive = used.filter((s) => s.status !== 'planned');
       {
         (Object.keys(POINTS_TEMPLATES) as TemplateKey[]).map((k) => (
           <li>
-            <a class="btn btn-ghost" href={`/admin/punkteschemata/${scheme.id}?vorlage=${k}#bearbeiten`}>
+            <a class="btn whitespace-normal btn-ghost" href={`/admin/punkteschemata/${scheme.id}?vorlage=${k}#bearbeiten`}>
               {POINTS_TEMPLATES[k].name}
             </a>
           </li>

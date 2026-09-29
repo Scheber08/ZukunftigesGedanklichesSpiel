@@ -24,7 +24,7 @@ import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 import { roundLabel } from '~/lib/view';
 
-if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
 const A = actions.admin;
 const outcome = await actionOutcome(Astro, [A.seasonTeamsSave, A.seatSave, A.seatRemove]);
 if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
@@ -288,7 +288,7 @@ const postedSlot = seatForm.active ? `${seatForm.str('team_id')}:${seatForm.str(
           <Section title="Teams der Saison" id="teams" description="Häkchen = Team fährt in dieser Saison. Reihenfolge bestimmt die Anzeige (Aufstellung, Grid, Wertung).">
             <form method="POST" action={A.seasonTeamsSave} class="grid gap-3">
               <input type="hidden" name="season_id" value={season.id} />
-              <fieldset disabled={frozen}>
+              <fieldset disabled={frozen} class="min-w-0">
                 <legend class="sr-only">Teams und Reihenfolge</legend>
                 <div class="table-wrap">
                   <table class="timing-table">

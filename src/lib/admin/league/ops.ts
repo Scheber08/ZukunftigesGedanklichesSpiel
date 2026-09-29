@@ -219,6 +219,10 @@ export async function pseudonymizeDriver(store: Store, driverId: Id, now = new D
   const all = await store.select('drivers');
   const patch = pseudonymizedDriverPatch(driver, all.map((d) => d.slug));
   const [updated] = await store.update('drivers', { id: driverId }, patch);
+  // Datenschutz: KEINE Weiterleitung alte → Pseudonym-URL. Die alte Profil-URL (und
+  // frühere Namen, die auf sie umleiten) enthalten den Gamertag und liefern künftig 404.
+  await store.remove('slug_redirects', { entity: 'driver', new_slug: driver.slug });
+  await store.remove('slug_redirects', { entity: 'driver', old_slug: driver.slug });
 
   await store.remove('driver_private', { driver_id: driverId });
   const regs = await store.select('registrations', { eq: { driver_id: driverId } });

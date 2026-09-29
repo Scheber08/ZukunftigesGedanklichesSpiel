@@ -53,7 +53,7 @@ export function missingTranslations(input: TranslationInput): MissingTranslation
   push(
     'faq',
     'FAQ',
-    '/admin/inhalte',
+    '/admin/inhalte/faq',
     input.faq.filter((f) => blank(f.question_en) || blank(f.answer_en)).map((f) => f.question_de),
   );
   // Regelwerk: nur aktuelle Versionen (Entwurf und veröffentlicht, nicht archiviert)
@@ -70,19 +70,19 @@ export function missingTranslations(input: TranslationInput): MissingTranslation
   push(
     'positions',
     'Offene Rollen',
-    '/admin/inhalte',
+    '/admin/inhalte/rollen',
     input.positions.filter((p) => p.active && (blank(p.title_en) || blank(p.description_en))).map((p) => p.title_de),
   );
   push(
     'partners',
     'Partner',
-    '/admin/inhalte',
+    '/admin/inhalte/partner',
     input.partners.filter((p) => p.active && !blank(p.text_de) && blank(p.text_en)).map((p) => p.name),
   );
   push(
     'staff',
     'Orga-Team',
-    '/admin/inhalte',
+    '/admin/inhalte/team',
     input.staff.filter((s) => blank(s.role_en)).map((s) => `${s.gamertag} (${s.role_de})`),
   );
   return out;

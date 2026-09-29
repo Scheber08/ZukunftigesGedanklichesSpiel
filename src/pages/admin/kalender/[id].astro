@@ -24,7 +24,7 @@ import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 import { intParam, roundLabel } from '~/lib/view';
 
-if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
 const A = actions.admin;
 const outcome = await actionOutcome(Astro, [A.roundSave, A.roundMediaSave, A.roundCancel, A.roundDelete]);
 if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
@@ -81,7 +81,7 @@ if (!frozen && (round.status === 'provisional' || round.status === 'final' || ro
       <input type="hidden" name="season_id" value={round.season_id} />
       <input type="hidden" name="vod_url" value={round.vod_url ?? ''} />
       <input type="hidden" name="highlights_url" value={round.highlights_url ?? ''} />
-      <fieldset disabled={frozen} class="grid gap-4 sm:grid-cols-2">
+      <fieldset disabled={frozen} class="grid min-w-0 gap-4 sm:grid-cols-2">
         <legend class="sr-only">Termin und Strecke</legend>
         <Field id="r-track" label="Strecke" required error={f.err('track_id')}>
           <TrackSelect id="r-track" tracks={tracks} value={f.str('track_id', round.track_id)} attrs={fieldAria('r-track', false, f.err('track_id'))} />
@@ -171,7 +171,7 @@ if (!frozen && (round.status === 'provisional' || round.status === 'final' || ro
           <input type="hidden" name="restore" value="true" />
           <p class="text-muted">Die Runde ist abgesagt und erscheint so im öffentlichen Kalender.</p>
           <div>
-            <button type="submit" class="btn btn-secondary" disabled={frozen}>
+            <button type="submit" class="btn whitespace-normal btn-secondary" disabled={frozen}>
               Absage zurücknehmen
             </button>
           </div>

@@ -15,7 +15,7 @@ import { POINTS_TEMPLATES } from '~/lib/domain/points';
 import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 
-if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
 const outcome = await actionOutcome(Astro, [actions.admin.schemeSave]);
 if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
 
@@ -86,7 +86,7 @@ const bonusText = (s: { fastest_lap_bonus: number; fastest_lap_max_pos: number |
       {
         (Object.keys(POINTS_TEMPLATES) as TemplateKey[]).map((k) => (
           <li>
-            <a class="btn btn-secondary" href={`/admin/punkteschemata?vorlage=${k}#neu`} aria-current={k === templateKey ? 'true' : undefined}>
+            <a class="btn whitespace-normal btn-secondary" href={`/admin/punkteschemata?vorlage=${k}#neu`} aria-current={k === templateKey ? 'true' : undefined}>
               {POINTS_TEMPLATES[k].name}
             </a>
           </li>

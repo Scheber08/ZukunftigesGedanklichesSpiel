@@ -1,0 +1,419 @@
+---
+/**
+ * Einstellungen (Plan §5 „Einstellungen“, §8.1–8.3), nur Admin:
+ * Discord-Invite (+ Invites je Quelle), Webhooks je Channel (maskiert, mit Test),
+ * Social-Links, Twitch-Kanal (leer = aus), GA4-Messungs-ID, Discord-Rollen je App-Rolle,
+ * Anmeldestatus, Startseiten-Claim und der Stand des gebündelten Neubaus.
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import Badge from '~/components/ui/Badge.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import Section from '~/components/admin/core/Section.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { maskSecret } from '~/lib/admin/league/forms';
+import {
+  INVITE_SOURCE_LABELS,
+  REGISTRATION_STATE_LABELS,
+  STAFF_ROLE_LABELS,
+  WEBHOOK_CHANNEL_LABELS,
+} from '~/lib/admin/league/labels';
+import { actionOutcome, fieldAria, formValues } from '~/lib/admin/league/page';
+import { idsToText, rebuildSummary } from '~/lib/admin/league/settings-view';
+import { STAFF_ROLES } from '~/lib/db/types';
+import { formatDateTime } from '~/lib/domain/time';
+import type { PrivateSettings, RegistrationState } from '~/lib/settings';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { env, isDemoMode } from '~/lib/server/env';
+import { readPrivateSettings, readPublicSettings } from '~/lib/server/settings';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
+const A = actions.admin;
+const outcome = await actionOutcome(Astro, [
+  A.settingsDiscord,
+  A.settingsWebhooks,
+  A.settingsWebhookTest,
+  A.settingsSocial,
+  A.settingsAnalytics,
+  A.settingsRoles,
+  A.settingsRegistration,
+  A.settingsHome,
+  A.settingsRebuild,
+]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const store = getServiceStore();
+const [pub, priv, seasons, accounts, reserveDrivers] = await Promise.all([
+  readPublicSettings(store),
+  readPrivateSettings(store),
+  store.select('seasons'),
+  store.select('staff_accounts'),
+  store.select('drivers', { eq: { status: 'reserve' } }),
+]);
+const now = new Date();
+const demo = isDemoMode();
+const rebuild = rebuildSummary(priv.rebuild, now);
+
+// Orientierung für den Anmeldestatus: besetzte Cockpits der aktiven bzw. nächsten Saison
+const current = seasons.find((s) => s.status === 'active') ?? [...seasons].filter((s) => s.status === 'planned').sort((a, b) => a.number - b.number)[0];
+const openSeats = current ? (await store.select('seats', { eq: { season_id: current.id } })).filter((s) => s.to_round == null).length : 0;
+
+const channels = Object.keys(WEBHOOK_CHANNEL_LABELS) as Array<keyof PrivateSettings['webhooks']>;
+const sources = Object.keys(INVITE_SOURCE_LABELS) as Array<keyof PrivateSettings['discord_invites']>;
+
+const fDiscord = formValues(outcome, A.settingsDiscord);
+const fHooks = formValues(outcome, A.settingsWebhooks);
+const fSocial = formValues(outcome, A.settingsSocial);
+const fGa = formValues(outcome, A.settingsAnalytics);
+const fRoles = formValues(outcome, A.settingsRoles);
+const fReg = formValues(outcome, A.settingsRegistration);
+const fHome = formValues(outcome, A.settingsHome);
+const states = Object.keys(REGISTRATION_STATE_LABELS) as RegistrationState[];
+const stateHints: Record<RegistrationState, string> = {
+  open: 'Formular offen, freie Plätze werden angezeigt.',
+  waitlist: 'Formular offen, neue Fahrer landen auf der Warteliste.',
+  closed: 'Formular geschlossen, Hinweis statt Formular.',
+};
+const yesNo = (v: boolean) => (v ? 'eingerichtet' : 'fehlt');
+---
+
+<AdminLayout title="Einstellungen" breadcrumbs={[{ label: 'Einstellungen' }]}>
+  <Notice outcome={outcome} warnings={demo ? ['Demo-Modus: Einstellungen landen nur im Speicher, Webhooks und Neubau sind ohne Wirkung.'] : []} />
+
+  <nav aria-label="Abschnitte" class="mb-6">
+    <ul class="flex flex-wrap gap-2 text-sm">
+      <li><a class="btn btn-ghost btn-sm" href="#discord">Discord</a></li>
+      <li><a class="btn btn-ghost btn-sm" href="#webhooks">Webhooks</a></li>
+      <li><a class="btn btn-ghost btn-sm" href="#social">Social & Twitch</a></li>
+      <li><a class="btn btn-ghost btn-sm" href="#analytics">Analytics</a></li>
+      <li><a class="btn btn-ghost btn-sm" href="#rollen">Rollen</a></li>
+      <li><a class="btn btn-ghost btn-sm" href="#anmeldung">Anmeldestatus</a></li>
+      <li><a class="btn btn-ghost btn-sm" href="#startseite">Startseite</a></li>
+      <li><a class="btn btn-ghost btn-sm" href="#rebuild">Neubau</a></li>
+    </ul>
+  </nav>
+
+  <Section
+    title="Discord-Einladung"
+    id="discord"
+    description="Dauerhafter Invite für die Website (Discord-Karte und Buttons). Je Quelle ein eigener Invite macht messbar, woher neue Mitglieder kommen."
+  >
+    <form method="POST" action={A.settingsDiscord} class="grid gap-4">
+      <Field id="set-invite" label="Invite-Link (Website)" hint="z. B. https://discord.gg/abc123 – dauerhaft und ohne Nutzungslimit anlegen." error={fDiscord.err('invite_url')}>
+        <input
+          id="set-invite"
+          name="invite_url"
+          type="url"
+          class="input"
+          value={fDiscord.str('invite_url', pub.discord_invite.url ?? '')}
+          maxlength="200"
+          placeholder="https://discord.gg/…"
+          {...fieldAria('set-invite', true, fDiscord.err('invite_url'))}
+        />
+      </Field>
+      <p class="text-sm text-muted">
+        Invite-Code: <span class="font-mono text-fg">{pub.discord_invite.code ?? '–'}</span>
+        {
+          pub.discord_counts.checked_at && (
+            <>
+              {' '}
+              · {pub.discord_counts.members ?? '–'} Mitglieder, {pub.discord_counts.online ?? '–'} online (Stand {formatDateTime(pub.discord_counts.checked_at, 'de')})
+            </>
+          )
+        }
+      </p>
+      <fieldset class="grid min-w-0 gap-4 sm:grid-cols-2">
+        <legend class="micro mb-2">Invites je Quelle (privat, für die Statistik)</legend>
+        {
+          sources.map((src) => (
+            <Field id={`set-inv-${src}`} label={INVITE_SOURCE_LABELS[src]} hint="Link oder Code" error={fDiscord.err(`invite_${src}`)}>
+              <input
+                id={`set-inv-${src}`}
+                name={`invite_${src}`}
+                class="input"
+                value={fDiscord.str(`invite_${src}`, priv.discord_invites[src] ?? '')}
+                maxlength="200"
+                {...fieldAria(`set-inv-${src}`, true, fDiscord.err(`invite_${src}`))}
+              />
+            </Field>
+          ))
+        }
+      </fieldset>
+      <div>
+        <button type="submit" class="btn btn-primary">Speichern</button>
+      </div>
+    </form>
+  </Section>
+
+  <Section
+    title="Webhooks"
+    id="webhooks"
+    description="Je Discord-Channel eine eigene Webhook-URL. Die URLs sind geheim und nur dem Server bekannt – hier nur gekürzt angezeigt. Leeres Feld = unverändert."
+  >
+    <form method="POST" action={A.settingsWebhooks} class="grid gap-4">
+      <ul class="grid gap-4">
+        {
+          channels.map((ch) => {
+            const info = WEBHOOK_CHANNEL_LABELS[ch];
+            const saved = priv.webhooks[ch];
+            const id = `set-wh-${ch}`;
+            return (
+              <li class="grid gap-2 border-b border-border pb-4 last:border-0">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <span class="font-semibold">
+                    {info.label} <span class="font-normal text-muted">· {info.channel}</span>
+                  </span>
+                  {saved ? <Badge variant="green">Verbunden</Badge> : <Badge variant="muted">Nicht hinterlegt</Badge>}
+                </div>
+                <p class="text-sm text-muted">{info.hint}</p>
+                {saved && (
+                  <p class="break-all font-mono text-xs text-muted">
+                    Gespeichert: {maskSecret(saved)}
+                  </p>
+                )}
+                <Field id={id} label={saved ? 'Neue Webhook-URL' : 'Webhook-URL'} error={fHooks.err(`wh_${ch}`)}>
+                  <input
+                    id={id}
+                    name={`wh_${ch}`}
+                    type="url"
+                    class="input font-mono text-sm"
+                    value={fHooks.str(`wh_${ch}`)}
+                    maxlength="300"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="https://discord.com/api/webhooks/…"
+                    {...fieldAria(id, false, fHooks.err(`wh_${ch}`))}
+                  />
+                </Field>
+                {saved && (
+                  <label class="checkbox text-sm" for={`set-wh-clear-${ch}`}>
+                    <input type="checkbox" id={`set-wh-clear-${ch}`} name={`clear_${ch}`} value="true" checked={fHooks.bool(`clear_${ch}`, false)} />
+                    <span>URL entfernen</span>
+                  </label>
+                )}
+              </li>
+            );
+          })
+        }
+      </ul>
+      <div>
+        <button type="submit" class="btn whitespace-normal btn-primary">Webhooks speichern</button>
+      </div>
+    </form>
+    {
+      channels.some((ch) => priv.webhooks[ch]) && (
+        <div class="mt-6 border-t border-border pt-4">
+          <h3 class="mb-1 text-lg uppercase">Verbindung testen</h3>
+          <p class="mb-3 text-sm text-muted">Schickt eine Test-Nachricht an die gespeicherte URL – neue URLs zuerst speichern.</p>
+          <ul class="flex flex-wrap gap-2">
+            {channels
+              .filter((ch) => priv.webhooks[ch])
+              .map((ch) => (
+                <li>
+                  <form method="POST" action={A.settingsWebhookTest}>
+                    <input type="hidden" name="channel" value={ch} />
+                    <button type="submit" class="btn whitespace-normal btn-secondary btn-sm">
+                      <span class="sr-only">Test an </span>
+                      {WEBHOOK_CHANNEL_LABELS[ch].label}
+                    </button>
+                  </form>
+                </li>
+              ))}
+          </ul>
+        </div>
+      )
+    }
+  </Section>
+
+  <Section title="Social & Twitch" id="social" description="Links im Footer und auf der Startseite. Leere Felder werden ausgeblendet.">
+    <form method="POST" action={A.settingsSocial} class="grid gap-4">
+      <div class="grid gap-4 sm:grid-cols-2">
+        <Field id="set-instagram" label="Instagram" error={fSocial.err('instagram')}>
+          <input id="set-instagram" name="instagram" type="url" class="input" value={fSocial.str('instagram', pub.socials.instagram ?? '')} maxlength="500" placeholder="https://www.instagram.com/…" {...fieldAria('set-instagram', false, fSocial.err('instagram'))} />
+        </Field>
+        <Field id="set-tiktok" label="TikTok" error={fSocial.err('tiktok')}>
+          <input id="set-tiktok" name="tiktok" type="url" class="input" value={fSocial.str('tiktok', pub.socials.tiktok ?? '')} maxlength="500" placeholder="https://www.tiktok.com/@…" {...fieldAria('set-tiktok', false, fSocial.err('tiktok'))} />
+        </Field>
+        <Field id="set-youtube" label="YouTube" error={fSocial.err('youtube')}>
+          <input id="set-youtube" name="youtube" type="url" class="input" value={fSocial.str('youtube', pub.socials.youtube ?? '')} maxlength="500" placeholder="https://www.youtube.com/@…" {...fieldAria('set-youtube', false, fSocial.err('youtube'))} />
+        </Field>
+        <Field
+          id="set-twitch"
+          label="Twitch-Kanal"
+          hint="Name oder Link. Leer = Live-Anzeige und Stream-Seite ausgeblendet."
+          error={fSocial.err('twitch_channel')}
+        >
+          <input id="set-twitch" name="twitch_channel" class="input" value={fSocial.str('twitch_channel', pub.twitch_channel ?? '')} maxlength="100" placeholder="ligakanal" {...fieldAria('set-twitch', true, fSocial.err('twitch_channel'))} />
+        </Field>
+      </div>
+      <p class="text-sm text-muted">
+        Twitch-API: {yesNo(!!env.twitchClientId && !!env.twitchClientSecret)}
+        {pub.twitch_channel && <> · Status: {pub.live_status.live ? <Badge variant="danger">Live</Badge> : 'offline'}{pub.live_status.checked_at ? ` (geprüft ${formatDateTime(pub.live_status.checked_at, 'de')})` : ''}</>}
+      </p>
+      <div>
+        <button type="submit" class="btn btn-primary">Speichern</button>
+      </div>
+    </form>
+  </Section>
+
+  <Section title="Google Analytics 4" id="analytics" description="GA lädt erst nach Einwilligung im Cookie-Banner (Consent Mode, vorher kein Request an Google). Leer = kein Analytics.">
+    <form method="POST" action={A.settingsAnalytics} class="grid gap-4">
+      <Field id="set-ga" label="Messungs-ID" hint="Format G-XXXXXXXXXX (GA4-Datenstream)." error={fGa.err('ga_measurement_id')}>
+        <input id="set-ga" name="ga_measurement_id" class="input font-mono" value={fGa.str('ga_measurement_id', pub.ga_measurement_id ?? '')} maxlength="20" placeholder="G-…" autocomplete="off" {...fieldAria('set-ga', true, fGa.err('ga_measurement_id'))} />
+      </Field>
+      <div>
+        <button type="submit" class="btn btn-primary">Speichern</button>
+      </div>
+    </form>
+  </Section>
+
+  <Section
+    title="Discord-Rollen"
+    id="rollen"
+    description="Welche Rollen auf dem Liga-Discord welche Rechte geben. Die Rollen werden beim Login und spätestens alle 15 Minuten neu geprüft – wer die Discord-Rolle verliert, verliert den Zugang."
+  >
+    <form method="POST" action={A.settingsRoles} class="grid gap-4">
+      <div class="grid gap-4 sm:grid-cols-3">
+        {
+          STAFF_ROLES.map((r) => (
+            <Field id={`set-role-${r}`} label={STAFF_ROLE_LABELS[r]} hint="Rollen-IDs, eine pro Zeile" error={fRoles.err(r)}>
+              <textarea id={`set-role-${r}`} name={r} class="textarea font-mono text-sm" rows="3" maxlength="1000" {...fieldAria(`set-role-${r}`, true, fRoles.err(r))}>{fRoles.str(r, idsToText(priv.discord_role_map[r]))}</textarea>
+            </Field>
+          ))
+        }
+      </div>
+      <p class="text-sm text-muted">
+        Rollen-ID in Discord: Entwicklermodus an → Rechtsklick auf die Rolle → „ID kopieren“. Admins haben auch Redaktionsrechte.
+        Bot-Token: {yesNo(!!env.discordBotToken)}, Server-ID: {yesNo(!!env.discordGuildId)}.
+      </p>
+      <div>
+        <button type="submit" class="btn btn-primary">Speichern</button>
+      </div>
+    </form>
+    {
+      accounts.length > 0 && (
+        <div class="table-wrap mt-6">
+          <table class="timing-table">
+            <caption class="text-left text-sm text-muted">Staff-Konten (zuletzt angemeldet)</caption>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Rollen</th>
+                <th scope="col">Zuletzt geprüft</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...accounts]
+                .sort((a, b) => a.display_name.localeCompare(b.display_name, 'de'))
+                .map((a) => (
+                  <tr>
+                    <th scope="row">{a.display_name}</th>
+                    <td>{a.roles.length ? a.roles.map((r) => STAFF_ROLE_LABELS[r]).join(', ') : <span class="muted">keine</span>}</td>
+                    <td class="muted">{a.roles_checked_at ? formatDateTime(a.roles_checked_at, 'de') : '–'}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+  </Section>
+
+  <Section
+    title="Anmeldestatus"
+    id="anmeldung"
+    description="Steuert die Seite „Mitfahren“ und die Anzeige freier Plätze. Die Texte kann auch die Redaktion unter Seiten-Inhalte → Texte pflegen."
+  >
+    <form method="POST" action={A.settingsRegistration} class="grid gap-4">
+      <fieldset class="grid min-w-0 gap-2">
+        <legend class="label mb-1">Zustand</legend>
+        {
+          states.map((s) => (
+            <label class="checkbox" for={`set-reg-${s}`}>
+              <input type="radio" id={`set-reg-${s}`} name="state" value={s} checked={fReg.str('state', pub.registration.state) === s} required />
+              <span>
+                <span class="font-semibold">{REGISTRATION_STATE_LABELS[s]}</span> <span class="text-sm text-muted">– {stateHints[s]}</span>
+              </span>
+            </label>
+          ))
+        }
+        {fReg.err('state')?.map((e) => <p class="field-error" role="alert">{e}</p>)}
+      </fieldset>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <Field
+          id="set-free-seats"
+          label="Freie Cockpits"
+          required
+          hint={current ? `${current.name}: ${openSeats} von 22 Cockpits besetzt.` : undefined}
+          error={fReg.err('free_seats')}
+        >
+          <input id="set-free-seats" name="free_seats" type="number" min="0" max="22" class="input" value={fReg.str('free_seats', pub.registration.free_seats)} required {...fieldAria('set-free-seats', !!current, fReg.err('free_seats'))} />
+        </Field>
+        <Field id="set-free-reserve" label="Freie Reserveplätze" required hint={`Aktuell ${reserveDrivers.length} Fahrer im Reservepool.`} error={fReg.err('free_reserve')}>
+          <input id="set-free-reserve" name="free_reserve" type="number" min="0" max="99" class="input" value={fReg.str('free_reserve', pub.registration.free_reserve)} required {...fieldAria('set-free-reserve', true, fReg.err('free_reserve'))} />
+        </Field>
+        <Field id="set-note-de" label="Hinweis (DE)" hint="Optional, z. B. „Nächste Sichtung am 12.10.“" error={fReg.err('note_de')}>
+          <textarea id="set-note-de" name="note_de" class="textarea" rows="2" maxlength="300" {...fieldAria('set-note-de', true, fReg.err('note_de'))}>{fReg.str('note_de', pub.registration.note_de ?? '')}</textarea>
+        </Field>
+        <Field id="set-note-en" label="Hinweis (EN)" hint="Fehlt EN, zeigt die englische Seite den deutschen Text." error={fReg.err('note_en')}>
+          <textarea id="set-note-en" name="note_en" class="textarea" rows="2" maxlength="300" lang="en" {...fieldAria('set-note-en', true, fReg.err('note_en'))}>{fReg.str('note_en', pub.registration.note_en ?? '')}</textarea>
+        </Field>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <button type="submit" class="btn btn-primary">Speichern</button>
+        <a class="inline-flex min-h-[44px] items-center text-sm underline" href="/admin/anmeldungen">Zu den Anmeldungen</a>
+      </div>
+    </form>
+  </Section>
+
+  <Section title="Startseite" id="startseite" description="Claim unter dem Logo im Hero der Startseite.">
+    <form method="POST" action={A.settingsHome} class="grid gap-4">
+      <div class="grid gap-4 sm:grid-cols-2">
+        <Field id="set-claim-de" label="Claim (DE)" required error={fHome.err('claim_de')}>
+          <input id="set-claim-de" name="claim_de" class="input" value={fHome.str('claim_de', pub.home.claim_de)} maxlength="160" required {...fieldAria('set-claim-de', false, fHome.err('claim_de'))} />
+        </Field>
+        <Field id="set-claim-en" label="Claim (EN)" required error={fHome.err('claim_en')}>
+          <input id="set-claim-en" name="claim_en" class="input" value={fHome.str('claim_en', pub.home.claim_en)} maxlength="160" required lang="en" {...fieldAria('set-claim-en', false, fHome.err('claim_en'))} />
+        </Field>
+      </div>
+      <div>
+        <button type="submit" class="btn btn-primary">Speichern</button>
+      </div>
+    </form>
+  </Section>
+
+  <Section
+    title="Neubau der Website"
+    id="rebuild"
+    description="Öffentliche Seiten sind statisch. Änderungen fordern automatisch einen gebündelten Neubau an; der Cron-Job startet ihn frühestens 60 s nach der letzten Änderung."
+  >
+    <dl class="mb-4 grid gap-x-6 gap-y-3 sm:grid-cols-3">
+      <div>
+        <dt class="micro">Stand</dt>
+        <dd>
+          <Badge variant={rebuild.state === 'done' ? 'green' : rebuild.state === 'never' ? 'muted' : 'warning'}>{rebuild.label}</Badge>
+        </dd>
+      </div>
+      <div>
+        <dt class="micro">Zuletzt angefordert</dt>
+        <dd>
+          {rebuild.requestedAt ? formatDateTime(rebuild.requestedAt, 'de') : '–'}
+          {priv.rebuild.reason && <span class="block break-words text-sm text-muted">{priv.rebuild.reason}</span>}
+        </dd>
+      </div>
+      <div>
+        <dt class="micro">Zuletzt ausgelöst</dt>
+        <dd>{rebuild.dispatchedAt ? formatDateTime(rebuild.dispatchedAt, 'de') : '–'}</dd>
+      </div>
+    </dl>
+    <p class="mb-4 text-sm text-muted">
+      {rebuild.detail} GitHub-Deploy: {yesNo(!!env.githubRepository && !!env.githubDispatchToken)}.
+    </p>
+    <form method="POST" action={A.settingsRebuild}>
+      <button type="submit" class="btn btn-secondary">Jetzt neu bauen</button>
+    </form>
+  </Section>
+</AdminLayout>

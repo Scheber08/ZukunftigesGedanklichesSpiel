@@ -3,14 +3,18 @@
  * Admin-Dashboard (Plan §5): nächstes Rennen und offene Aufgaben je nach Rolle –
  * neue Anmeldungen, offene Vorfälle, vorläufige Ergebnisse mit Protestfristen,
  * Entscheidungs-Entwürfe, fehlende Übersetzungen, neue Kontaktanfragen.
+ *
+ * Zugleich die 403-Seite des Admin-Kerns: Module ohne passende Rolle schreiben per
+ * `Astro.rewrite('/admin?error=forbidden')` hierher um (URL bleibt, Status 403, keine Daten).
  */
 export const prerender = false;
 
 import Badge from '~/components/ui/Badge.astro';
+import NoAccess from '~/components/admin/core/NoAccess.astro';
 import Section from '~/components/admin/core/Section.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import { formatHoursLeft, missingTranslations, protestDeadlines } from '~/lib/admin/league/dashboard';
-import { ROUND_STATUS_BADGE, ROUND_STATUS_LABELS, ROUND_FORMAT_SHORT, SEASON_STATUS_LABELS, STAFF_ROLE_LABELS } from '~/lib/admin/league/labels';
+import { ROUND_STATUS_BADGE, ROUND_STATUS_LABELS, ROUND_FORMAT_SHORT, SEASON_STATUS_LABELS } from '~/lib/admin/league/labels';
 import { formatDateLong, formatDateTime, formatTime, timeZoneName } from '~/lib/domain/time';
 import { url } from '~/i18n';
 import { hasRole } from '~/lib/server/auth';
@@ -18,14 +22,20 @@ import { getServiceStore } from '~/lib/server/db';
 import { roundLabel } from '~/lib/view';
 
 const staff = Astro.locals.staff!;
-const isAdmin = hasRole(staff, 'admin');
-const isSteward = hasRole(staff, 'steward', 'admin');
-const isEditor = hasRole(staff, 'redakteur');
 const forbidden = Astro.url.searchParams.get('error') === 'forbidden';
+if (forbidden) Astro.response.status = 403;
+// Bei 403 nichts laden – nur der Hinweis
+const show = !forbidden;
+const isAdmin = show && hasRole(staff, 'admin');
+const isSteward = show && hasRole(staff, 'steward', 'admin');
+const isEditor = show && hasRole(staff, 'redakteur');
+const deniedPath = Astro.originPathname === '/admin' ? Astro.url.pathname : Astro.originPathname;
 
 const store = getServiceStore();
 const now = new Date();
-const [seasons, rounds, tracks] = await Promise.all([store.select('seasons'), store.select('rounds'), store.select('tracks')]);
+const [seasons, rounds, tracks] = show
+  ? await Promise.all([store.select('seasons'), store.select('rounds'), store.select('tracks')])
+  : [[], [], []];
 const trackOf = (id: number) => tracks.find((t) => t.id === id);
 const seasonOf = (id: number) => seasons.find((s) => s.id === id);
 
@@ -131,14 +141,13 @@ if (isEditor) {
 }
 ---
 
+{
+  forbidden ? (
+    <AdminLayout title="Keine Berechtigung">
+      <NoAccess path={deniedPath} roles={staff.roles} />
+    </AdminLayout>
+  ) : (
 <AdminLayout title="Dashboard">
-  {
-    forbidden && (
-      <p class="alert alert-warning mb-6" role="alert">
-        Dafür fehlt dir die Berechtigung. Deine Rolle{staff.roles.length > 1 ? 'n' : ''}: {staff.roles.map((r) => STAFF_ROLE_LABELS[r]).join(', ')}.
-      </p>
-    )
-  }
   <p class="mb-6 text-muted">
     Hallo {staff.name}! Hier siehst du, was gerade ansteht.
     {staff.demo && ' Du bist im Demo-Modus angemeldet – Änderungen landen nur im Speicher.'}
@@ -217,7 +226,7 @@ if (isEditor) {
             </div>
             {isAdmin && (
               <div class="mt-4 flex flex-wrap gap-2">
-                <a class="btn btn-ghost" href={`/admin/saisons/${active.id}`}>
+                <a class="btn whitespace-normal btn-ghost" href={`/admin/saisons/${active.id}`}>
                   Saison verwalten
                 </a>
                 <a class="btn btn-ghost" href={`/admin/kalender?saison=${active.id}`}>
@@ -343,3 +352,5 @@ if (isEditor) {
     )
   }
 </AdminLayout>
+  )
+}

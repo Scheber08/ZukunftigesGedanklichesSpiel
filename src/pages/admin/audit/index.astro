@@ -1,0 +1,228 @@
+---
+/**
+ * Audit-Log (Plan §5 „Audit-Log“, nur Admin): wer hat was wann geändert, mit
+ * Vorher/Nachher je Feld. Filter nach Bereich, Eintrag, Person, Aktion und Zeitraum
+ * (Liga-Zeit), seitenweise.
+ */
+export const prerender = false;
+
+import Badge from '~/components/ui/Badge.astro';
+import Pagination from '~/components/admin/core/Pagination.astro';
+import Section from '~/components/admin/core/Section.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { actorKey, auditActors, auditChanges, auditQuery, deletedEntries, filterAudit, parseAuditFilter } from '~/lib/admin/league/audit-view';
+import { paginate } from '~/lib/admin/league/forms';
+import { adminEntityHref, AUDIT_ACTION_LABELS, ENTITY_LABELS, type BadgeVariant } from '~/lib/admin/league/labels';
+import { formatDateTime } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
+
+const PER_PAGE = 25;
+const MAX_ROWS = 5000;
+const rows = await getServiceStore().select('audit_log', { order: { column: 'at', desc: true }, limit: MAX_ROWS });
+const { filter, errors } = parseAuditFilter(Astro.url.searchParams);
+const list = filterAudit(rows, filter);
+const page = paginate(list, Number(Astro.url.searchParams.get('seite') ?? '1'), PER_PAGE);
+const active = Object.values(filter).some((v) => v != null);
+
+const entityLabel = (e: string) => ENTITY_LABELS[e] ?? e;
+const entities = [...new Set([...rows.map((r) => r.entity), ...(filter.entity ? [filter.entity] : [])])].sort((a, b) =>
+  entityLabel(a).localeCompare(entityLabel(b), 'de'),
+);
+const actors = auditActors(rows);
+const deleted = deletedEntries(rows);
+const actionKeys = [...new Set([...Object.keys(AUDIT_ACTION_LABELS), ...rows.map((r) => r.action)])];
+const ACTION_BADGE: Record<string, BadgeVariant> = {
+  create: 'green',
+  update: 'teal',
+  delete: 'danger',
+  publish: 'green',
+  unpublish: 'warning',
+  finalize: 'green',
+  correct: 'warning',
+};
+const entryLabel = (entity: string, id: string | null) => `${entityLabel(entity)}${id ? (/^\d+$/.test(id) ? ` #${id}` : ` „${id}“`) : ''}`;
+---
+
+<AdminLayout title="Audit-Log" breadcrumbs={[{ label: 'Audit-Log' }]}>
+  {
+    errors.length > 0 && (
+      <div class="alert alert-warning mb-6" role="status">
+        {errors.map((e) => (
+          <p>{e}</p>
+        ))}
+      </div>
+    )
+  }
+
+  <Section title="Filter" id="filter">
+    <form method="GET" action="/admin/audit" class="grid gap-4">
+      {filter.entityId && <input type="hidden" name="id" value={filter.entityId} />}
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="field">
+          <label class="label" for="audit-entity">Bereich</label>
+          <select id="audit-entity" name="entitaet" class="select">
+            <option value="">Alle Bereiche</option>
+            {
+              entities.map((e) => (
+                <option value={e} selected={filter.entity === e}>
+                  {entityLabel(e)}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label class="label" for="audit-person">Person</label>
+          <select id="audit-person" name="person" class="select">
+            <option value="">Alle Personen</option>
+            {
+              actors.map((a) => (
+                <option value={a.key} selected={filter.actor === a.key}>
+                  {a.name}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label class="label" for="audit-action">Aktion</label>
+          <select id="audit-action" name="aktion" class="select">
+            <option value="">Alle Aktionen</option>
+            {
+              actionKeys.map((k) => (
+                <option value={k} selected={filter.action === k}>
+                  {AUDIT_ACTION_LABELS[k] ?? k}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label class="label" for="audit-from">Von</label>
+          <input id="audit-from" name="von" type="date" class="input" value={filter.from ?? ''} />
+        </div>
+        <div class="field">
+          <label class="label" for="audit-to">Bis</label>
+          <input id="audit-to" name="bis" type="date" class="input" value={filter.to ?? ''} aria-describedby="audit-dates-hint" />
+          <p class="field-hint" id="audit-dates-hint">Liga-Zeit (Europe/Berlin), jeweils einschließlich.</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <button type="submit" class="btn btn-secondary">Filtern</button>
+        {active && <a class="btn whitespace-normal btn-ghost" href="/admin/audit">Filter zurücksetzen</a>}
+        {
+          filter.entityId && (
+            <span class="text-sm text-muted">
+              Nur {entryLabel(filter.entity ?? '', filter.entityId).trim()} –{' '}
+              <a class="underline" href={`/admin/audit${auditQuery({ ...filter, entityId: null })}`}>
+                alle Einträge des Bereichs
+              </a>
+            </span>
+          )
+        }
+      </div>
+    </form>
+  </Section>
+
+  <Section
+    title={`${list.length} ${list.length === 1 ? 'Eintrag' : 'Einträge'}`}
+    id="eintraege"
+    description={rows.length >= MAX_ROWS ? `Durchsucht werden die neuesten ${MAX_ROWS} Einträge.` : 'Neueste zuerst. Private Werte (z. B. Webhook-URLs) sind gekürzt, nach einem Löschwunsch entfernt.'}
+  >
+    {
+      page.items.length === 0 ? (
+        <p class="text-muted">{rows.length === 0 ? 'Noch keine Einträge.' : 'Keine Einträge für diesen Filter.'}</p>
+      ) : (
+        <ol class="grid grid-cols-[minmax(0,1fr)] gap-3">
+          {page.items.map((r) => {
+            const changes = auditChanges(r.diff);
+            const gone = deleted.has(`${r.entity}:${r.entity_id}`);
+            const href = gone ? null : adminEntityHref(r.entity, r.entity_id);
+            const label = entryLabel(r.entity, r.entity_id);
+            return (
+              <li class="min-w-0 rounded border border-border p-3 sm:p-4">
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <Badge variant={ACTION_BADGE[r.action] ?? 'default'}>{AUDIT_ACTION_LABELS[r.action] ?? r.action}</Badge>
+                  <span class="min-w-0 break-words font-semibold">
+                    {href ? (
+                      <a class="inline-flex min-h-[44px] items-center underline" href={href}>
+                        {label}
+                      </a>
+                    ) : (
+                      label
+                    )}
+                    {gone && <span class="font-normal text-muted"> (gelöscht)</span>}
+                  </span>
+                  <span class="text-sm text-muted">
+                    <time datetime={r.at}>{formatDateTime(r.at, 'de')}</time> ·{' '}
+                    <a class="inline-flex min-h-[44px] items-center underline" href={`/admin/audit${auditQuery({ ...filter, actor: actorKey(r) })}`} title="Nur Einträge dieser Person">
+                      {r.actor_name ?? 'System'}
+                    </a>
+                    {r.entity_id && (
+                      <>
+                        {' '}
+                        ·{' '}
+                        <a class="inline-flex min-h-[44px] items-center underline" href={`/admin/audit${auditQuery({ entity: r.entity, entityId: r.entity_id })}`}>
+                          Verlauf
+                        </a>
+                      </>
+                    )}
+                  </span>
+                </div>
+                {r.diff == null ? (
+                  <p class="mt-2 text-sm text-muted">Keine Details gespeichert.</p>
+                ) : changes.length === 0 ? (
+                  <p class="mt-2 text-sm text-muted">Keine Feldänderungen.</p>
+                ) : (
+                  <details class="mt-1 min-w-0" open={changes.length <= 6}>
+                    <summary class="inline-flex min-h-[44px] cursor-pointer items-center text-sm text-muted">
+                      {changes.length} {changes.length === 1 ? 'Feld' : 'Felder'}
+                    </summary>
+                    <div class="table-wrap">
+                      <table class="timing-table text-sm">
+                        <caption class="sr-only">
+                          Vorher und Nachher: {label}, {formatDateTime(r.at, 'de')}
+                        </caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">Feld</th>
+                            <th scope="col">Vorher</th>
+                            <th scope="col">Nachher</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {changes.map((c) => (
+                            <tr>
+                              <th scope="row" class="font-mono text-xs">
+                                {c.field}
+                              </th>
+                              <td class="audit-value muted">{c.before}</td>
+                              <td class="audit-value">{c.after}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      )
+    }
+    <Pagination page={page.page} pages={page.pages} />
+  </Section>
+</AdminLayout>
+
+<style>
+  .audit-value {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    min-width: 8rem;
+    max-width: 28rem;
+  }
+</style>

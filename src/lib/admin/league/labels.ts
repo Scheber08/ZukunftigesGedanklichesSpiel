@@ -16,6 +16,7 @@ import type {
   StaffRole,
   WantedRole,
 } from '~/lib/db/types';
+import type { PrivateSettings, RegistrationState } from '~/lib/settings';
 
 export type BadgeVariant = 'default' | 'green' | 'teal' | 'warning' | 'danger' | 'muted' | 'solid';
 
@@ -145,6 +146,31 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   import: 'Import',
 };
 
+export const REGISTRATION_STATE_LABELS: Record<RegistrationState, string> = {
+  open: 'Offen',
+  waitlist: 'Warteliste',
+  closed: 'Geschlossen',
+};
+
+/** Discord-Webhooks je Channel (Plan §8.1) mit Kanal-Vorschlag. */
+export const WEBHOOK_CHANNEL_LABELS: Record<keyof PrivateSettings['webhooks'], { label: string; channel: string; hint: string }> = {
+  registrations: { label: 'Anmeldungen', channel: '#anmeldungen', hint: 'Nur Admins – Gamertag, Plattform, Wunschnummer, Link zum Admin.' },
+  lineup: { label: 'Aufstellung', channel: '#aufstellung', hint: 'Veröffentlichte Aufstellung mit Ersatzfahrern.' },
+  results: { label: 'Ergebnisse', channel: '#ergebnisse', hint: 'Vorläufig, final und korrigiert – mit Protestfrist.' },
+  incidents: { label: 'Vorfälle (Stewards intern)', channel: '#stewards-intern', hint: 'Nur Stewards – neue Meldungen mit Clip-Link.' },
+  decisions: { label: 'Urteile', channel: '#urteile', hint: 'Veröffentlichte Steward-Entscheidungen.' },
+  news: { label: 'News', channel: '#news', hint: 'Optional – neue Artikel mit Teaser.' },
+  contact: { label: 'Kontaktanfragen', channel: '#orga', hint: 'Nur Orga – neue Nachrichten aus dem Kontaktformular.' },
+};
+
+/** Discord-Invites je Quelle (Plan §8.1: eigener dauerhafter Invite je Quelle). */
+export const INVITE_SOURCE_LABELS: Record<keyof PrivateSettings['discord_invites'], string> = {
+  website: 'Website',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+};
+
 /** Tabellen-/Entitätsnamen im Audit-Log. */
 export const ENTITY_LABELS: Record<string, string> = {
   seasons: 'Saison',
@@ -177,32 +203,70 @@ export const ENTITY_LABELS: Record<string, string> = {
   staff_members: 'Orga-Team',
   open_positions: 'Offene Rolle',
   partners: 'Partner',
+  slug_redirects: 'Weiterleitung',
+};
+
+/** Abschnitt der Einstellungsseite je Einstellungs-Schlüssel. */
+const SETTINGS_ANCHORS: Record<string, string> = {
+  discord_invite: 'discord',
+  discord_invites: 'discord',
+  webhooks: 'webhooks',
+  socials: 'social',
+  twitch_channel: 'social',
+  ga_measurement_id: 'analytics',
+  discord_role_map: 'rollen',
+  registration: 'anmeldung',
+  home: 'startseite',
+  rebuild: 'rebuild',
 };
 
 /** Admin-Link zu einer Entität (für das Audit-Log), falls es eine Detailseite gibt. */
 export function adminEntityHref(entity: string, entityId: string | null): string | null {
-  if (!entityId || !/^\d+$/.test(entityId)) {
-    if (entity === 'settings') return '/admin/einstellungen';
-    return null;
+  if (entity === 'settings') {
+    const anchor = SETTINGS_ANCHORS[(entityId ?? '').split(',')[0] ?? ''];
+    return `/admin/einstellungen${anchor ? `#${anchor}` : ''}`;
   }
+  if (!entityId || !/^\d+$/.test(entityId)) return null;
   switch (entity) {
     case 'seasons':
-      return `/admin/saisons/${entityId}`;
+    case 'season_teams':
+      return entity === 'seasons' ? `/admin/saisons/${entityId}` : `/admin/teams/aufstellung?saison=${entityId}`;
     case 'points_schemes':
       return `/admin/punkteschemata/${entityId}`;
     case 'tracks':
       return `/admin/kalender/strecken/${entityId}`;
     case 'rounds':
       return `/admin/kalender/${entityId}`;
+    // Renntag-Module protokollieren mit der Runden-ID
+    case 'results':
+    case 'round_entries':
+      return `/admin/runden/${entityId}`;
     case 'teams':
       return `/admin/teams/${entityId}`;
     case 'drivers':
     case 'driver_private':
+    case 'driver_numbers':
       return `/admin/fahrer/${entityId}`;
     case 'registrations':
       return `/admin/anmeldungen/${entityId}`;
     case 'contact_messages':
       return `/admin/kontakt/${entityId}`;
+    case 'incidents':
+      return `/admin/stewards/${entityId}`;
+    case 'decisions':
+      return `/admin/stewards/entscheidung/${entityId}`;
+    case 'news':
+      return `/admin/news/${entityId}`;
+    case 'rules_versions':
+      return `/admin/regelwerk/${entityId}`;
+    case 'faq_items':
+      return `/admin/inhalte/faq/${entityId}`;
+    case 'staff_members':
+      return `/admin/inhalte/team/${entityId}`;
+    case 'open_positions':
+      return `/admin/inhalte/rollen/${entityId}`;
+    case 'partners':
+      return `/admin/inhalte/partner/${entityId}`;
     default:
       return null;
   }

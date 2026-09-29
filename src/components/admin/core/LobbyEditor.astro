@@ -38,7 +38,7 @@ const base = `/admin/saisons/${seasonId}`;
     <form method="POST" action={actions.admin.seasonLobbySave} class="grid gap-3">
       <input type="hidden" name="season_id" value={seasonId} />
       <input type="hidden" name="mode" value="json" />
-      <fieldset disabled={disabled} class="grid gap-3">
+      <fieldset disabled={disabled} class="grid min-w-0 gap-3">
         <label for="lobby-json" class="label">
           Lobby-Einstellungen als JSON
         </label>
@@ -61,7 +61,7 @@ const base = `/admin/saisons/${seasonId}`;
           </p>
         ))}
         <div>
-          <button type="submit" class="btn btn-primary">
+          <button type="submit" class="btn whitespace-normal btn-primary">
             JSON prüfen & speichern
           </button>
         </div>
@@ -76,7 +76,7 @@ const base = `/admin/saisons/${seasonId}`;
           {e}
         </p>
       ))}
-      <fieldset disabled={disabled} class="grid gap-4">
+      <fieldset disabled={disabled} class="grid min-w-0 gap-4">
         <legend class="sr-only">Gruppen und Einträge</legend>
         {[...groups, null].map((g, gi) => {
           const items = [...(g?.items ?? []), ...Array.from({ length: g ? EXTRA_ITEMS : 3 }, () => null)];
@@ -184,7 +184,7 @@ const base = `/admin/saisons/${seasonId}`;
           </p>
         </div>
         <div>
-          <button type="submit" class="btn btn-primary">
+          <button type="submit" class="btn whitespace-normal btn-primary">
             Lobby-Einstellungen speichern
           </button>
         </div>

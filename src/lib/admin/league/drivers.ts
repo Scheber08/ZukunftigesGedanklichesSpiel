@@ -12,6 +12,34 @@ export function driverSlug(gamertag: string, takenSlugs: Iterable<string>, ownSl
   return uniqueSlug(slugify(gamertag), taken);
 }
 
+/** Wurde der Slug automatisch aus dem Gamertag erzeugt (ggf. mit Zähler „-2“)? */
+export function isAutoSlug(slug: string, gamertag: string): boolean {
+  const base = slugify(gamertag);
+  if (slug === base) return true;
+  return slug.startsWith(`${base}-`) && /^\d+$/.test(slug.slice(base.length + 1));
+}
+
+/**
+ * Slug beim Speichern eines Fahrers:
+ * - eigener Slug im Formular → der (nach Prüfung) gilt,
+ * - Gamertag geändert und der Slug war automatisch erzeugt und wurde nicht angefasst →
+ *   neuer Slug aus dem neuen Gamertag (die alte URL leitet dann per 301 weiter),
+ * - sonst bleibt der bisherige Slug.
+ */
+export function nextDriverSlug(
+  input: { gamertag: string; slug: string | null | undefined },
+  before: Pick<DriverRow, 'slug' | 'gamertag'> | null | undefined,
+  takenSlugs: Iterable<string>,
+): { slug: string; custom: boolean } {
+  const wanted = (input.slug ?? '').trim();
+  if (!before) return wanted ? { slug: wanted, custom: true } : { slug: driverSlug(input.gamertag, takenSlugs), custom: false };
+  const renamed = before.gamertag !== input.gamertag;
+  if (wanted && wanted !== before.slug) return { slug: wanted, custom: true };
+  if (!renamed) return { slug: before.slug, custom: false };
+  if (!wanted || isAutoSlug(before.slug, before.gamertag)) return { slug: driverSlug(input.gamertag, takenSlugs, before.slug), custom: false };
+  return { slug: before.slug, custom: false };
+}
+
 /** Gibt es schon einen (nicht pseudonymisierten) Fahrer mit diesem Gamertag? */
 export function findGamertagDuplicate(
   gamertag: string,

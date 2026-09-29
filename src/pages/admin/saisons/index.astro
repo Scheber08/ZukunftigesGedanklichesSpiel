@@ -18,7 +18,7 @@ import { formatDate } from '~/lib/domain/time';
 import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 
-if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
 const outcome = await actionOutcome(Astro, [actions.admin.seasonSave, actions.admin.seasonClone]);
 if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
 

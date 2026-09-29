@@ -44,7 +44,7 @@ const RULES_STATUS: Record<string, string> = { draft: 'Entwurf', published: 'ver
   <Field id={fid('name')} label="Name" required hint="z. B. „Saison 3“" error={err('name')}>
     <input id={fid('name')} name="name" class="input" value={v.name} maxlength="80" required {...aria('name', true)} />
   </Field>
-  <Field id={fid('slug')} label="Slug (URL)" hint="Leer = Saisonnummer. Erscheint in /saison/<slug>/wertung." error={err('slug')}>
+  <Field id={fid('slug')} label="Slug (URL)" hint="Leer = Saisonnummer. Erscheint in /saison/<slug>/wertung. Bei Änderung leitet die alte Adresse per 301 weiter." error={err('slug')}>
     <input id={fid('slug')} name="slug" class="input" value={v.slug} maxlength="40" pattern="[a-z0-9]+(-[a-z0-9]+)*" {...aria('slug', true)} />
   </Field>
   <Field id={fid('game_version')} label="Spielversion" required hint="z. B. „F1 25 · 2026 Season Pack“" error={err('game_version')}>
@@ -108,7 +108,7 @@ const RULES_STATUS: Record<string, string> = { draft: 'Entwurf', published: 'ver
   </Field>
 </div>
 
-<fieldset class="mt-4 grid gap-2">
+<fieldset class="mt-4 grid min-w-0 gap-2">
   <legend class="label mb-1">Regeln der Saison</legend>
   <label class="checkbox" for={fid('reserve')}>
     <input id={fid('reserve')} type="checkbox" name="reserve_points_for_constructors" value="true" checked={v.reserve_points_for_constructors} />

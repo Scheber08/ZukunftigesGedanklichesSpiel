@@ -1,0 +1,33 @@
+---
+/**
+ * Hinweis „Keine Berechtigung“ (die Seite liefert dazu Status 403, ohne Daten des Moduls).
+ * Nennt das angefragte Modul, die nötigen Rollen und die eigene Rolle.
+ */
+import { STAFF_ROLE_LABELS } from '~/lib/admin/league/labels';
+import { ADMIN_NAV } from '~/lib/admin/nav';
+import type { StaffRole } from '~/lib/db/types';
+
+interface Props {
+  /** Angefragter Pfad (für Modulname und Rollen) */
+  path: string;
+  roles: readonly StaffRole[];
+}
+const { path, roles } = Astro.props;
+const item = [...ADMIN_NAV]
+  .filter((n) => n.href !== '/admin' && (path === n.href || path.startsWith(`${n.href}/`)))
+  .sort((a, b) => b.href.length - a.href.length)[0];
+// Admin zuletzt nennen („Redaktion oder Admin“)
+const neededRoles: StaffRole[] = item && item.roles !== 'all' ? [...item.roles.filter((r) => r !== 'admin'), ...item.roles.filter((r) => r === 'admin')] : ['admin'];
+const needed = neededRoles.map((r) => STAFF_ROLE_LABELS[r]);
+const joinOr = (list: string[]) => (list.length <= 1 ? (list[0] ?? '') : `${list.slice(0, -1).join(', ')} oder ${list[list.length - 1]}`);
+---
+
+<div class="alert alert-danger" role="alert">
+  <p class="font-semibold">Keine Berechtigung</p>
+  <p class="mt-1 text-sm">
+    {item ? <>Das Modul „{item.label}“</> : <>Dieser Bereich</>} ist nur mit der Rolle {joinOr(needed)} zugänglich.
+    Deine Rolle{roles.length > 1 ? 'n' : ''}: {roles.map((r) => STAFF_ROLE_LABELS[r]).join(', ') || '–'}.
+  </p>
+  <p class="mt-1 text-sm text-muted">Die Rechte folgen aus deinen Rollen auf dem Liga-Discord. Wenn du Zugriff brauchst, melde dich bei der Ligaleitung.</p>
+</div>
+<p class="mt-4"><a class="btn btn-secondary" href="/admin">Zum Dashboard</a></p>
