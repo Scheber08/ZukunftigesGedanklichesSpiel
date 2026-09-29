@@ -82,6 +82,10 @@ describe('Regelwerk', () => {
     expect(out.match(/data-label="Vergehen"/g)).toHaveLength(2);
     expect(out).toContain('&lt;b&gt;');
     expect(out).toContain('<th scope="col">Code</th>');
+    // erste Spalte als Zeilenkopf
+    const rows = enhanceTables(html, { label: 'a', caption: 'b', rowHeaders: true });
+    expect(rows).toContain('<tr><th scope="row" data-label="Code">V-01</th><td data-label="Vergehen">');
+    expect(rows.match(/scope="row"/g)).toHaveLength(2);
     // ohne Tabelle unverändert
     expect(enhanceTables('<p>x</p>', { label: 'a', caption: 'b' })).toBe('<p>x</p>');
   });

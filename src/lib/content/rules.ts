@@ -81,10 +81,14 @@ function stripTags(html: string): string {
  * Tabellen aus `renderMarkdown()` zugänglich und responsiv machen:
  * - scrollbarer, per Tastatur fokussierbarer Bereich (role="region" mit Namen),
  * - `<caption>` (sichtbar nur für Screenreader),
- * - `data-label` je Zelle mit der Spaltenüberschrift (für schmale Ansichten).
+ * - `data-label` je Zelle mit der Spaltenüberschrift (für schmale Ansichten),
+ * - optional die erste Spalte als Zeilenkopf (`<th scope="row">`, z. B. Code im Strafenkatalog).
  * Rechnet mit der festen Ausgabe des eigenen Markdown-Renderers.
  */
-export function enhanceTables(html: string, opts: { label: string; caption: string; className?: string }): string {
+export function enhanceTables(
+  html: string,
+  opts: { label: string; caption: string; className?: string; /** erste Spalte als Zeilenkopf (th scope="row") */ rowHeaders?: boolean },
+): string {
   if (!html.includes('<table>')) return html;
   const cls = opts.className ?? 'md-table';
   return html.replace(/<table>([\s\S]*?)<\/table>/g, (_match, inner: string) => {
@@ -97,7 +101,8 @@ export function enhanceTables(html: string, opts: { label: string; caption: stri
           const label = headers[i++];
           return label ? `<td data-label="${escapeHtml(label)}"` : '<td';
         });
-        return `<tr>${withLabels}</tr>`;
+        const row = opts.rowHeaders ? withLabels.replace(/^<td\b([^>]*)>([\s\S]*?)<\/td>/, '<th scope="row"$1>$2</th>') : withLabels;
+        return `<tr>${row}</tr>`;
       });
       return `<tbody>${labelled}</tbody>`;
     });

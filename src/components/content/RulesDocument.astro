@@ -311,8 +311,14 @@ const t = useT(lang);
   .rules-doc :global(.rules-table tbody tr:nth-child(even) td) {
     background: rgb(255 255 255 / 0.02);
   }
-  .rules-doc :global(.rules-table tbody tr:nth-child(even) td:first-child) {
+  .rules-doc :global(.rules-table tbody tr:nth-child(even) > :first-child) {
     background: #111114;
+  }
+  /* Zeilenkopf (Code) wie eine normale Zelle, nicht wie die Kopfzeile */
+  .rules-doc :global(.rules-table tbody th) {
+    font-size: inherit;
+    letter-spacing: normal;
+    text-transform: none;
   }
   .rules-doc :global(.rules-table td:nth-child(2)) {
     min-width: 14rem;
