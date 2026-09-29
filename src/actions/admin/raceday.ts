@@ -291,7 +291,7 @@ export const racedayActions = {
       const staff = staffFrom(context, 'steward');
       return run(async () => {
         const res = await publishDecision(getServiceStore(), staff, input.decisionId);
-        return { decisionId: res.decision.id, published: res.published, effect: res.effect, discord: res.discord, message: res.message };
+        return { decisionId: res.decision.id, ref: res.decision.public_ref, published: res.published, effect: res.effect, discord: res.discord, message: res.message };
       });
     },
   }),
@@ -304,7 +304,7 @@ export const racedayActions = {
       const staff = staffFrom(context, 'steward');
       return run(async () => {
         const res = await revokeDecision(getServiceStore(), staff, input.decisionId, input.note ?? null);
-        return { decisionId: res.decision.id, effect: res.effect, discord: res.discord, message: res.message };
+        return { decisionId: res.decision.id, ref: res.decision.public_ref, effect: res.effect, discord: res.discord, message: res.message };
       });
     },
   }),

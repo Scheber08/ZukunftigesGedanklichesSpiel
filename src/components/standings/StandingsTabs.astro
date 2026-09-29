@@ -33,6 +33,10 @@ const { label, tabs, class: className } = Astro.props;
 </nav>
 
 <style>
+  /* .tabs scrollt (overflow-x: auto) und schneidet einen äußeren Fokusring ab – daher innen */
+  .standings-tabs .tab:focus-visible {
+    outline-offset: -2px;
+  }
   /* Drei Tabs passen auch bei 320 px nebeneinander */
   .standings-tabs .tab {
     flex: 1 1 auto;

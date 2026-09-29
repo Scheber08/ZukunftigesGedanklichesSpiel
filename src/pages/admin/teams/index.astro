@@ -1,0 +1,145 @@
+---
+/**
+ * Teams (Plan §5 „Teams und Cockpits“): alle Teams mit Farbe und Reihenfolge je Saison,
+ * neues Team anlegen, Einstieg in die Saisonaufstellung.
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import Badge from '~/components/ui/Badge.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import Section from '~/components/admin/core/Section.astro';
+import TeamColorFields from '~/components/admin/core/TeamColorFields.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { contrastReport, formatRatio } from '~/lib/admin/league/color';
+import { SEASON_STATUS_LABELS } from '~/lib/admin/league/labels';
+import { actionOutcome, fieldAria, formValues } from '~/lib/admin/league/page';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+const outcome = await actionOutcome(Astro, [actions.admin.teamSave]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const store = getServiceStore();
+const [teams, seasons, seasonTeams] = await Promise.all([
+  store.select('teams'),
+  store.select('seasons', { order: { column: 'number', desc: true } }),
+  store.select('season_teams'),
+]);
+const current = seasons.find((s) => s.status === 'active') ?? seasons[0];
+const order = new Map(current ? seasonTeams.filter((st) => st.season_id === current.id).map((st) => [st.team_id, st.sort_order]) : []);
+const sorted = [...teams].sort(
+  (a, b) => Number(!a.active) - Number(!b.active) || (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99) || a.name.localeCompare(b.name, 'de'),
+);
+const f = formValues(outcome, actions.admin.teamSave);
+---
+
+<AdminLayout title="Teams & Cockpits" breadcrumbs={[{ label: 'Teams & Cockpits' }]}>
+  <Notice outcome={outcome} />
+
+  <Section title="Saisonaufstellung" id="aufstellung" description="Teams je Saison mit Reihenfolge, zwei Cockpits pro Team, Transfers „gültig ab Runde X“.">
+    <ul class="flex flex-wrap gap-2">
+      {
+        seasons.map((s) => (
+          <li>
+            <a class:list={['btn', s.id === current?.id ? 'btn-primary' : 'btn-secondary']} href={`/admin/teams/aufstellung?saison=${s.id}`}>
+              {s.name} <span class="sr-only">({SEASON_STATUS_LABELS[s.status]})</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </Section>
+
+  <Section title={`Alle Teams (${teams.length})`} id="liste" description="Teamfarben erscheinen nur als schmaler Streifen – keine Logos.">
+    <div class="table-wrap">
+      <table class="timing-table">
+        <caption class="sr-only">Alle Teams</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="sticky-col">Team</th>
+            <th scope="col">Kurz</th>
+            <th scope="col">Farbe</th>
+            <th scope="col">Kontrast</th>
+            <th scope="col" class="num">Spiel-ID</th>
+            <th scope="col">Status</th>
+            <th scope="col">Saisons</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            sorted.map((t) => {
+              const report = contrastReport(t.color_hex, t.text_color_hex);
+              const inSeasons = seasonTeams.filter((st) => st.team_id === t.id).map((st) => seasons.find((s) => s.id === st.season_id)?.number).filter(Boolean);
+              return (
+                <tr>
+                  <th scope="row" class="sticky-col">
+                    <span class="inline-flex items-center gap-2" style={`--team-color:${t.color_hex}`}>
+                      <span class="team-stripe" aria-hidden="true" />
+                      <a class="font-semibold underline" href={`/admin/teams/${t.id}`}>
+                        {t.name}
+                      </a>
+                    </span>
+                  </th>
+                  <td>{t.short_name}</td>
+                  <td class="font-mono text-sm">
+                    {t.color_hex} <span class="muted">/ {t.text_color_hex}</span>
+                  </td>
+                  <td class="text-sm">
+                    {report ? (
+                      <span>
+                        {formatRatio(report.text)} {report.textOk ? '✓' : '✗ gering'}
+                      </span>
+                    ) : (
+                      '–'
+                    )}
+                  </td>
+                  <td class="num">{t.game_team_id ?? '–'}</td>
+                  <td>{t.active ? <Badge variant="green">Aktiv</Badge> : <Badge variant="muted">Inaktiv</Badge>}</td>
+                  <td class="muted">
+                    {inSeasons.length ? inSeasons.map((n) => `S${n}`).join(', ') : '–'}
+                  </td>
+                </tr>
+              );
+            })
+          }
+        </tbody>
+      </table>
+    </div>
+  </Section>
+
+  <Section title="Neues Team" id="neu">
+    <form method="POST" action={actions.admin.teamSave} class="grid gap-4">
+      <div class="grid gap-4 sm:grid-cols-2">
+        <Field id="team-name" label="Name" required hint="Beschreibend, ohne offizielle Logos/Marken-Zusätze." error={f.err('name')}>
+          <input id="team-name" name="name" class="input" value={f.str('name')} maxlength="60" required {...fieldAria('team-name', true, f.err('name'))} />
+        </Field>
+        <Field id="team-short" label="Kurzname" required hint="2–5 Zeichen, z. B. MCL." error={f.err('short_name')}>
+          <input id="team-short" name="short_name" class="input uppercase" value={f.str('short_name')} minlength="2" maxlength="5" required {...fieldAria('team-short', true, f.err('short_name'))} />
+        </Field>
+        <Field id="team-slug" label="Slug" hint="Leer = aus dem Namen." error={f.err('slug')}>
+          <input id="team-slug" name="slug" class="input font-mono" value={f.str('slug')} maxlength="40" {...fieldAria('team-slug', true, f.err('slug'))} />
+        </Field>
+        <Field id="team-game" label="Spiel-ID (UDP)" hint="Team-ID aus der Telemetrie, für den späteren Import." error={f.err('game_team_id')}>
+          <input id="team-game" name="game_team_id" type="number" min="0" max="255" class="input" value={f.str('game_team_id')} {...fieldAria('team-game', true, f.err('game_team_id'))} />
+        </Field>
+      </div>
+      <TeamColorFields
+        color={f.str('color_hex', '#37BE89')}
+        textColor={f.str('text_color_hex', '#000000')}
+        shortName={f.str('short_name', 'NEU') || 'NEU'}
+        errors={{ color: f.err('color_hex'), text: f.err('text_color_hex') }}
+        idPrefix="new-team"
+      />
+      <label class="checkbox" for="team-active">
+        <input id="team-active" type="checkbox" name="active" value="true" checked={f.bool('active', true)} />
+        <span>Aktiv (in neuen Saisons wählbar)</span>
+      </label>
+      <div>
+        <button type="submit" class="btn btn-primary">Team anlegen</button>
+      </div>
+    </form>
+  </Section>
+</AdminLayout>

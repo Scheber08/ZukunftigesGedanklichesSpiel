@@ -6,7 +6,7 @@
 import { Marked, type Tokens } from 'marked';
 import { escapeHtml } from './html';
 
-const SAFE_URL = /^(https?:|mailto:|\/(?!\/)|#|\.{0,2}\/)/i;
+const SAFE_URL = /^(https?:|mailto:|\/(?!\/)|#|\.{1,2}\/)/i;
 
 function safeHref(href: string): string | null {
   const trimmed = href.trim();

@@ -1,0 +1,110 @@
+---
+/** Team bearbeiten (Name, Kurzname, Farben mit Kontrast-Hinweis, Spiel-ID, aktiv) bzw. löschen. */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import Field from '~/components/admin/ui/Field.astro';
+import ConfirmField from '~/components/admin/core/ConfirmField.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import Section from '~/components/admin/core/Section.astro';
+import TeamColorFields from '~/components/admin/core/TeamColorFields.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { url } from '~/i18n';
+import { actionOutcome, fieldAria, formValues } from '~/lib/admin/league/page';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { intParam } from '~/lib/view';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+const outcome = await actionOutcome(Astro, [actions.admin.teamSave, actions.admin.teamDelete]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const store = getServiceStore();
+const teamId = intParam(Astro.params.id);
+const team = teamId ? (await store.select('teams', { eq: { id: teamId } }))[0] : undefined;
+if (!team) return Astro.redirect('/admin/teams?fehlt=1');
+const [seasonTeams, seats, results, seasons] = await Promise.all([
+  store.select('season_teams', { eq: { team_id: team.id } }),
+  store.select('seats', { eq: { team_id: team.id }, limit: 1 }),
+  store.select('results', { eq: { team_id: team.id }, limit: 1 }),
+  store.select('seasons'),
+]);
+const inUse = seasonTeams.length > 0 || seats.length > 0 || results.length > 0;
+const f = formValues(outcome, actions.admin.teamSave);
+---
+
+<AdminLayout title={team.name} breadcrumbs={[{ label: 'Teams & Cockpits', href: '/admin/teams' }, { label: team.name }]}>
+  <a slot="actions" class="btn btn-ghost" href={url('de', 'team', { slug: team.slug })}>Teamseite</a>
+  <Notice outcome={outcome} />
+
+  <Section title="Team bearbeiten" id="bearbeiten">
+    <form method="POST" action={actions.admin.teamSave} class="grid gap-4">
+      <input type="hidden" name="id" value={team.id} />
+      <div class="grid gap-4 sm:grid-cols-2">
+        <Field id="t-name" label="Name" required error={f.err('name')}>
+          <input id="t-name" name="name" class="input" value={f.str('name', team.name)} maxlength="60" required {...fieldAria('t-name', false, f.err('name'))} />
+        </Field>
+        <Field id="t-short" label="Kurzname" required hint="2–5 Zeichen." error={f.err('short_name')}>
+          <input id="t-short" name="short_name" class="input uppercase" value={f.str('short_name', team.short_name)} minlength="2" maxlength="5" required {...fieldAria('t-short', true, f.err('short_name'))} />
+        </Field>
+        <Field id="t-slug" label="Slug" hint="Teil der URL /teams/<slug> – ändern nur, wenn nötig." error={f.err('slug')}>
+          <input id="t-slug" name="slug" class="input font-mono" value={f.str('slug', team.slug)} maxlength="40" {...fieldAria('t-slug', true, f.err('slug'))} />
+        </Field>
+        <Field id="t-game" label="Spiel-ID (UDP)" error={f.err('game_team_id')}>
+          <input id="t-game" name="game_team_id" type="number" min="0" max="255" class="input" value={f.str('game_team_id', team.game_team_id ?? '')} {...fieldAria('t-game', false, f.err('game_team_id'))} />
+        </Field>
+      </div>
+      <TeamColorFields
+        color={f.str('color_hex', team.color_hex)}
+        textColor={f.str('text_color_hex', team.text_color_hex)}
+        shortName={team.short_name}
+        errors={{ color: f.err('color_hex'), text: f.err('text_color_hex') }}
+        idPrefix="team"
+      />
+      <label class="checkbox" for="t-active">
+        <input id="t-active" type="checkbox" name="active" value="true" checked={f.bool('active', team.active)} />
+        <span>Aktiv (in neuen Saisons wählbar)</span>
+      </label>
+      <div>
+        <button type="submit" class="btn btn-primary">Speichern</button>
+      </div>
+    </form>
+  </Section>
+
+  <Section title="Saisons" id="saisons">
+    {
+      seasonTeams.length === 0 ? (
+        <p class="text-muted">In keiner Saison eingetragen.</p>
+      ) : (
+        <ul class="flex flex-wrap gap-2">
+          {seasonTeams.map((st) => {
+            const s = seasons.find((x) => x.id === st.season_id);
+            return s ? (
+              <li>
+                <a class="btn btn-ghost" href={`/admin/teams/aufstellung?saison=${s.id}#team-${team.id}`}>
+                  {s.name} · Position {st.sort_order + 1}
+                </a>
+              </li>
+            ) : null;
+          })}
+        </ul>
+      )
+    }
+  </Section>
+
+  <Section title="Löschen" id="loeschen">
+    {
+      inUse ? (
+        <p class="text-muted">Das Team ist in Saisons, Cockpits oder Ergebnissen eingetragen. Setze es stattdessen auf „inaktiv“.</p>
+      ) : (
+        <form method="POST" action={actions.admin.teamDelete} class="grid gap-3">
+          <input type="hidden" name="id" value={team.id} />
+          <ConfirmField id="team-delete-confirm" label={`Ja, ${team.name} löschen.`} />
+          <div>
+            <button type="submit" class="btn btn-danger">Team löschen</button>
+          </div>
+        </form>
+      )
+    }
+  </Section>
+</AdminLayout>

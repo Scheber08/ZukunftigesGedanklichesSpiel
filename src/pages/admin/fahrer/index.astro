@@ -1,0 +1,182 @@
+---
+/**
+ * Fahrer (Plan §5): Liste mit Suche und Statusfilter, neuen Fahrer anlegen.
+ * Fahrer aus einer Anmeldung entstehen über „Annehmen“ unter Anmeldungen.
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import Badge from '~/components/ui/Badge.astro';
+import Flag from '~/components/ui/Flag.astro';
+import DriverFields from '~/components/admin/core/DriverFields.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import Section from '~/components/admin/core/Section.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { DRIVER_STATUS_BADGE, DRIVER_STATUS_LABELS, INPUT_DEVICE_LABELS, PLATFORM_LABELS } from '~/lib/admin/league/labels';
+import { actionOutcome, formValues } from '~/lib/admin/league/page';
+import { DRIVER_STATUSES, type DriverStatus } from '~/lib/db/types';
+import { currentNumber } from '~/lib/domain/numbers';
+import { gamertagKey } from '~/lib/domain/text';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+const outcome = await actionOutcome(Astro, [actions.admin.driverSave]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const store = getServiceStore();
+const [drivers, numbers, seasons, privates, teams] = await Promise.all([
+  store.select('drivers'),
+  store.select('driver_numbers'),
+  store.select('seasons'),
+  store.select('driver_private'),
+  store.select('teams'),
+]);
+const active = seasons.find((s) => s.status === 'active') ?? [...seasons].sort((a, b) => b.number - a.number)[0];
+const [seats, rounds] = active
+  ? await Promise.all([store.select('seats', { eq: { season_id: active.id } }), store.select('rounds', { eq: { season_id: active.id } })])
+  : [[], []];
+const nextRound = [...rounds].sort((a, b) => a.number - b.number).find((r) => r.status === 'scheduled' || r.status === 'lineup_published')?.number ?? rounds.length;
+const teamOf = (driverId: number) => {
+  const seat = seats.find((s) => s.driver_id === driverId && s.from_round <= Math.max(1, nextRound) && (s.to_round == null || s.to_round >= nextRound));
+  return seat ? teams.find((t) => t.id === seat.team_id) : undefined;
+};
+
+const q = (Astro.url.searchParams.get('q') ?? '').trim();
+const statusParam = Astro.url.searchParams.get('status') ?? '';
+const status = (DRIVER_STATUSES as readonly string[]).includes(statusParam) ? (statusParam as DriverStatus) : null;
+const now = new Date();
+const key = gamertagKey(q);
+const privateById = new Map(privates.map((p) => [p.driver_id, p]));
+const list = drivers
+  .filter((d) => !status || d.status === status)
+  .filter((d) => {
+    if (!key) return true;
+    const p = privateById.get(d.id);
+    const hay = [d.gamertag, d.slug, p?.discord_username ?? '', p?.ea_id ?? '', String(currentNumber(d.id, numbers, now) ?? '')].map((x) => gamertagKey(x));
+    return hay.some((h) => h.includes(key));
+  })
+  .sort(
+    (a, b) =>
+      DRIVER_STATUSES.indexOf(a.status) - DRIVER_STATUSES.indexOf(b.status) ||
+      (a.status === 'reserve' ? (a.reserve_order ?? 999) - (b.reserve_order ?? 999) : 0) ||
+      a.gamertag.localeCompare(b.gamertag, 'de'),
+  );
+const counts = Object.fromEntries(DRIVER_STATUSES.map((s) => [s, drivers.filter((d) => d.status === s).length])) as Record<DriverStatus, number>;
+
+const f = formValues(outcome, actions.admin.driverSave);
+const v = (name: string, fallback: string | number | null = '') => f.str(name, fallback);
+const defaults: Record<string, string> = { platform: 'pc_steam', input_device: 'wheel', status: 'reserve', joined_season_id: active ? String(active.id) : '' };
+const vc = (name: string, fallback?: string | number | null) => v(name, fallback ?? defaults[name] ?? '');
+const filterHref = (s: string | null) => {
+  const u = new URLSearchParams();
+  if (q) u.set('q', q);
+  if (s) u.set('status', s);
+  const qs = u.toString();
+  return `/admin/fahrer${qs ? `?${qs}` : ''}`;
+};
+---
+
+<AdminLayout title="Fahrer" breadcrumbs={[{ label: 'Fahrer' }]}>
+  <a slot="actions" class="btn btn-ghost" href="/admin/anmeldungen">Anmeldungen</a>
+  <Notice outcome={outcome} />
+
+  <Section title="Suche & Filter" id="suche">
+    <form method="GET" action="/admin/fahrer" class="flex flex-wrap items-end gap-3" role="search">
+      <div class="field min-w-0 flex-1">
+        <label class="label" for="driver-q">Suche</label>
+        <input id="driver-q" name="q" type="search" class="input" value={q} placeholder="Gamertag, Discord, EA-ID oder Nummer" />
+      </div>
+      {status && <input type="hidden" name="status" value={status} />}
+      <button type="submit" class="btn btn-secondary">Suchen</button>
+    </form>
+    <nav aria-label="Nach Status filtern" class="mt-4 overflow-x-auto">
+      <div class="segmented">
+        <a href={filterHref(null)} aria-current={!status ? 'page' : undefined} class="inline-flex min-h-[44px] items-center px-3">
+          Alle ({drivers.length})
+        </a>
+        {
+          DRIVER_STATUSES.map((s) => (
+            <a href={filterHref(s)} aria-current={status === s ? 'page' : undefined} class="inline-flex min-h-[44px] items-center px-3">
+              {DRIVER_STATUS_LABELS[s]} ({counts[s]})
+            </a>
+          ))
+        }
+      </div>
+    </nav>
+  </Section>
+
+  <Section title={`${list.length} Fahrer`} id="liste">
+    {
+      list.length === 0 ? (
+        <p class="text-muted">Keine Fahrer gefunden.</p>
+      ) : (
+        <div class="table-wrap">
+          <table class="timing-table">
+            <caption class="sr-only">Fahrerliste{status ? ` (${DRIVER_STATUS_LABELS[status]})` : ''}</caption>
+            <thead>
+              <tr>
+                <th scope="col" class="num">Nr.</th>
+                <th scope="col" class="sticky-col">Gamertag</th>
+                <th scope="col">Status</th>
+                <th scope="col">Team ({active?.name ?? '–'})</th>
+                <th scope="col">Plattform</th>
+                <th scope="col">Eingabe</th>
+                <th scope="col">Discord</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((d) => {
+                const team = teamOf(d.id);
+                return (
+                  <tr>
+                    <td class="num font-semibold">{currentNumber(d.id, numbers, now) ?? '–'}</td>
+                    <th scope="row" class="sticky-col">
+                      <span class="inline-flex items-center gap-2">
+                        <Flag code={d.nationality_code} lang="de" />
+                        <a class="gamertag underline" href={`/admin/fahrer/${d.id}`}>
+                          {d.anonymized ? `Ehemaliger Fahrer #${d.id}` : d.gamertag}
+                        </a>
+                      </span>
+                    </th>
+                    <td>
+                      <Badge variant={DRIVER_STATUS_BADGE[d.status]}>
+                        {DRIVER_STATUS_LABELS[d.status]}
+                        {d.status === 'reserve' && d.reserve_order != null ? ` · ${d.reserve_order}` : ''}
+                      </Badge>
+                    </td>
+                    <td>
+                      {team ? (
+                        <span class="inline-flex items-center gap-2" style={`--team-color:${team.color_hex}`}>
+                          <span class="team-stripe" aria-hidden="true" />
+                          {team.name}
+                        </span>
+                      ) : (
+                        <span class="muted">–</span>
+                      )}
+                    </td>
+                    <td>{PLATFORM_LABELS[d.platform]}</td>
+                    <td class="muted">{INPUT_DEVICE_LABELS[d.input_device]}</td>
+                    <td class="muted">{privateById.get(d.id)?.discord_username ?? '–'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+  </Section>
+
+  <Section title="Neuer Fahrer" id="neu" description="Direkt anlegen, z. B. für Gastfahrer. Neue Bewerber besser über „Anmeldungen → Annehmen“.">
+    <details open={f.active}>
+      <summary class="btn btn-ghost mb-4 cursor-pointer">Formular anzeigen</summary>
+      <form method="POST" action={actions.admin.driverSave} class="grid gap-4">
+        <DriverFields prefix="new-driver" v={vc} checked={f.bool} err={f.err} seasons={seasons} mode="create" />
+        <div>
+          <button type="submit" class="btn btn-primary">Fahrer anlegen</button>
+        </div>
+      </form>
+    </details>
+  </Section>
+</AdminLayout>

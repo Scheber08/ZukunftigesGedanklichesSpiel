@@ -1,0 +1,246 @@
+---
+/**
+ * Steward-Eingang (Plan §5.3): Vorfälle mit Status neu, in Prüfung, entschieden, abgelehnt,
+ * verspätet; Filter nach Saison, Runde und Status. Stewards und Admins sehen alles,
+ * entscheiden können nur Stewards.
+ */
+export const prerender = false;
+
+import Plus from '@lucide/astro/icons/plus';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import Badge from '~/components/ui/Badge.astro';
+import Forbidden from '~/components/admin/raceday/Forbidden.astro';
+import { flashText } from '~/lib/admin/raceday/flash';
+import {
+  DECISION_STATUS_LABEL,
+  DECISION_STATUS_VARIANT,
+  INCIDENT_STATUS_LABEL,
+  INCIDENT_STATUS_VARIANT,
+  SESSION_LABEL,
+  verdictText,
+} from '~/lib/admin/raceday/labels';
+import { listSeasons, pickSeason, stewardInbox } from '~/lib/admin/raceday/queries';
+import { INCIDENT_STATUSES, type IncidentStatus } from '~/lib/db/types';
+import { formatDateTime } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { incidentConflict } from '~/lib/server/stewarding';
+import { roundLabel, seasonLabel } from '~/lib/view';
+
+const staff = Astro.locals.staff;
+const allowed = hasRole(staff, 'steward', 'admin');
+const isSteward = hasRole(staff, 'steward');
+if (!allowed) Astro.response.status = 403;
+
+const params = Astro.url.searchParams;
+const store = getServiceStore();
+const seasons = allowed ? await listSeasons(store) : [];
+const roundParam = params.get('runde');
+// Runde aus dem Link des Runden-Hubs → Saison dieser Runde
+const seasonParam = params.get('saison');
+let roundFromParam =
+  allowed && roundParam && /^\d{1,6}$/.test(roundParam) ? (await store.select('rounds', { eq: { id: Number(roundParam) } }))[0] : undefined;
+// Saison gewechselt, Runde der alten Saison noch im Formular → Runde ignorieren
+if (roundFromParam && seasonParam && Number(seasonParam) !== roundFromParam.season_id) roundFromParam = undefined;
+const season = roundFromParam ? seasons.find((s) => s.id === roundFromParam!.season_id) : pickSeason(seasons, seasonParam);
+const statusParam = params.get('status');
+const status = (INCIDENT_STATUSES as readonly string[]).includes(statusParam ?? '') ? (statusParam as IncidentStatus) : null;
+const inbox = allowed && season ? await stewardInbox(store, { seasonId: season.id, roundId: roundFromParam?.id ?? null, status }) : null;
+
+const trackOf = (trackId: number | undefined) => inbox?.tracks.find((t) => t.id === trackId);
+const driverLabel = (id: number) => {
+  const d = inbox?.drivers.get(id);
+  if (!d) return `Fahrer #${id}`;
+  return d.anonymized ? `Ehemaliger Fahrer #${d.id}` : d.gamertag;
+};
+const filterHref = (next: { status?: IncidentStatus | null }) => {
+  const q = new URLSearchParams();
+  if (season) q.set('saison', String(season.id));
+  if (roundFromParam) q.set('runde', String(roundFromParam.id));
+  if (next.status) q.set('status', next.status);
+  return `/admin/stewards?${q.toString()}`;
+};
+const flash = flashText(params);
+const newHref = `/admin/stewards/neu${roundFromParam ? `?runde=${roundFromParam.id}` : ''}`;
+---
+
+<AdminLayout title="Stewards" breadcrumbs={[{ label: 'Stewards' }]} wide>
+  {
+    isSteward && (
+      <a slot="actions" href={newHref} class="btn btn-primary">
+        <Plus size={18} aria-hidden="true" />
+        Eigene Untersuchung
+      </a>
+    )
+  }
+  {
+    !allowed ? (
+      <Forbidden roles="Stewards und Admins" />
+    ) : !season || !inbox ? (
+      <p class="alert alert-warning">Es gibt noch keine Saison.</p>
+    ) : (
+      <>
+        {flash && (
+          <p class="alert alert-success mb-6" role="status">
+            {flash}
+          </p>
+        )}
+        {!isSteward && <p class="alert mb-6">Als Admin siehst du alle Vorfälle und Entscheidungen. Entscheiden können nur Stewards.</p>}
+
+        <form method="GET" class="mb-4 flex flex-wrap items-end gap-3" aria-label="Filter">
+          <div class="field">
+            <label for="f-saison" class="label">
+              Saison
+            </label>
+            <select id="f-saison" name="saison" class="select min-w-48">
+              {seasons.map((s) => (
+                <option value={s.id} selected={s.id === season.id}>
+                  {seasonLabel(s, 'de')}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div class="field">
+            <label for="f-runde" class="label">
+              Runde
+            </label>
+            <select id="f-runde" name="runde" class="select min-w-56">
+              <option value="">Alle Runden</option>
+              {inbox.rounds.map((r) => (
+                <option value={r.id} selected={r.id === roundFromParam?.id}>
+                  {roundLabel(r, trackOf(r.track_id), 'de')}
+                </option>
+              ))}
+            </select>
+          </div>
+          {status && <input type="hidden" name="status" value={status} />}
+          <button type="submit" class="btn btn-secondary">
+            Filtern
+          </button>
+        </form>
+
+        <nav aria-label="Status-Filter" class="mb-6 overflow-x-auto">
+          <div class="segmented">
+            <a href={filterHref({ status: null })} aria-current={status == null ? 'page' : undefined}>
+              Alle ({inbox.counts.all})
+            </a>
+            {INCIDENT_STATUSES.map((s) => (
+              <a href={filterHref({ status: s })} aria-current={status === s ? 'page' : undefined}>
+                {INCIDENT_STATUS_LABEL[s]} ({inbox.counts[s]})
+              </a>
+            ))}
+          </div>
+        </nav>
+
+        {inbox.items.length === 0 ? (
+          <p class="alert">Keine Vorfälle für diesen Filter.</p>
+        ) : (
+          <div class="table-wrap">
+            <table class="timing-table">
+              <caption class="sr-only">Vorfälle, neueste zuerst</caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="sticky-col">Vorfall</th>
+                  <th scope="col">Rennen</th>
+                  <th scope="col">Beteiligte</th>
+                  <th scope="col">Gemeldet von</th>
+                  <th scope="col">Eingang</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Entscheidungen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inbox.items.map(({ incident, round, track, session, decisions }) => (
+                  <tr>
+                    <th scope="row" class="sticky-col">
+                      <a href={`/admin/stewards/${incident.id}`} class="font-semibold underline hover:text-teal">
+                        #{incident.id}
+                      </a>
+                      {staff && incidentConflict(staff, incident) && (
+                        <Badge variant="danger" class="ml-1">
+                          befangen
+                        </Badge>
+                      )}
+                    </th>
+                    <td>
+                      {round ? roundLabel(round, track, 'de') : '–'}
+                      {session && <span class="muted"> · {SESSION_LABEL[session.type]}</span>}
+                      {incident.lap != null && <span class="muted"> · Rd. {incident.lap}</span>}
+                    </td>
+                    <td class="wrap">{incident.involved_driver_ids.map(driverLabel).join(', ')}</td>
+                    <td>
+                      {incident.source === 'steward'
+                        ? 'Stewards'
+                        : incident.reporter_driver_id != null
+                          ? driverLabel(incident.reporter_driver_id)
+                          : '–'}
+                    </td>
+                    <td>{formatDateTime(incident.submitted_at, 'de')}</td>
+                    <td>
+                      <Badge variant={INCIDENT_STATUS_VARIANT[incident.status]}>{INCIDENT_STATUS_LABEL[incident.status]}</Badge>
+                    </td>
+                    <td class="wrap">
+                      {decisions.length === 0 ? (
+                        <span class="muted">–</span>
+                      ) : (
+                        <ul>
+                          {decisions.map((d) => (
+                            <li>
+                              <a href={`/admin/stewards/entscheidung/${d.id}`} class="underline hover:text-teal">
+                                {d.public_ref}
+                              </a>{' '}
+                              <span class="muted">{verdictText(d)}</span>{' '}
+                              <Badge variant={DECISION_STATUS_VARIANT[d.status]}>{DECISION_STATUS_LABEL[d.status]}</Badge>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {inbox.looseDecisions.length > 0 && (
+          <section aria-labelledby="loose-title" class="mt-10">
+            <h2 id="loose-title" class="mb-3 text-xl uppercase">
+              Entscheidungen ohne Vorfall
+            </h2>
+            <ul class="grid gap-2">
+              {inbox.looseDecisions.map((d) => {
+                const round = inbox.rounds.find((r) => r.id === d.round_id);
+                return (
+                  <li class="card flex flex-wrap items-center gap-x-3 gap-y-1 p-3">
+                    <a href={`/admin/stewards/entscheidung/${d.id}`} class="font-semibold underline hover:text-teal">
+                      {d.public_ref}
+                    </a>
+                    <span>{driverLabel(d.driver_id)}</span>
+                    <span class="text-muted">{verdictText(d)}</span>
+                    {round && <span class="text-muted">{roundLabel(round, trackOf(round.track_id), 'de')}</span>}
+                    <Badge variant={DECISION_STATUS_VARIANT[d.status]}>{DECISION_STATUS_LABEL[d.status]}</Badge>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+      </>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .wrap {
+    white-space: normal;
+    min-width: 12rem;
+  }
+  .muted {
+    color: var(--color-muted);
+  }
+  .segmented > a {
+    min-height: 44px;
+    white-space: nowrap;
+  }
+</style>

@@ -15,6 +15,8 @@ import type {
   SessionRow,
   TrackRow,
 } from '../../db/types';
+import { RULES_V1, type RuleSectionSeed } from '../../seed/content/rules';
+import { CATALOG_ANCHOR, parsePenaltyCatalog, type CatalogEntry } from './catalog';
 import type { RoundFacts } from './steps';
 
 export async function listSeasons(store: Store): Promise<SeasonRow[]> {
@@ -174,5 +176,70 @@ export async function stewardInbox(
     tracks,
     drivers: new Map(drivers.map((d) => [d.id, d])),
     counts,
+  };
+}
+
+// ---------------------------------------------------------------------------- Steward-Seiten
+
+export interface StewardContext {
+  round: RoundRow;
+  season: SeasonRow;
+  track: TrackRow | undefined;
+  sessions: SessionRow[];
+  drivers: Map<Id, DriverRow>;
+  /** Auswahl für das Entscheidungsformular (Aufstellung der Runde + Beteiligte). */
+  driverOptions: Array<{ id: Id; label: string }>;
+  catalog: CatalogEntry[];
+}
+
+/** Strafenkatalog aus dem Regelwerk der Saison (§8.3), sonst aus dem mitgelieferten Regelwerk v1. */
+export async function loadCatalog(store: Store, rulesVersionId: Id | null): Promise<CatalogEntry[]> {
+  let versionId = rulesVersionId;
+  if (versionId == null) {
+    const published = await store.select('rules_versions', { eq: { status: 'published' }, order: { column: 'published_at', desc: true }, limit: 1 });
+    versionId = published[0]?.id ?? null;
+  }
+  if (versionId != null) {
+    const [section] = await store.select('rules_sections', { eq: { version_id: versionId, anchor: CATALOG_ANCHOR } });
+    const parsed = section ? parsePenaltyCatalog(section.body_de) : [];
+    if (parsed.length > 0) return parsed;
+  }
+  const find = (list: RuleSectionSeed[]): RuleSectionSeed | undefined => {
+    for (const s of list) {
+      if (s.anchor === CATALOG_ANCHOR) return s;
+      const hit = find(s.children ?? []);
+      if (hit) return hit;
+    }
+    return undefined;
+  };
+  return parsePenaltyCatalog(find(RULES_V1.sections)?.body_de ?? '');
+}
+
+export async function stewardContext(store: Store, roundId: Id, extraDriverIds: readonly Id[] = []): Promise<StewardContext | null> {
+  const [round] = await store.select('rounds', { eq: { id: roundId } });
+  if (!round) return null;
+  const [[season], [track], sessions, entries, drivers] = await Promise.all([
+    store.select('seasons', { eq: { id: round.season_id } }),
+    store.select('tracks', { eq: { id: round.track_id } }),
+    store.select('sessions', { eq: { round_id: roundId } }),
+    store.select('round_entries', { eq: { round_id: roundId } }),
+    store.select('drivers'),
+  ]);
+  if (!season) return null;
+  const byId = new Map(drivers.map((d) => [d.id, d]));
+  const ids = new Set<Id>([...entries.map((e) => e.driver_id), ...extraDriverIds]);
+  const pool = ids.size > 0 ? [...ids].map((id) => byId.get(id)).filter((d): d is DriverRow => d != null) : drivers.filter((d) => d.status === 'active' || d.status === 'reserve');
+  const numberOf = new Map(entries.map((e) => [e.driver_id, e.race_number]));
+  const order = { qualifying: 0, sprint: 1, race: 2 } as const;
+  return {
+    round,
+    season,
+    track,
+    sessions: sessions.sort((a, b) => order[a.type] - order[b.type]),
+    drivers: byId,
+    driverOptions: pool
+      .map((d) => ({ id: d.id, label: `${numberOf.get(d.id) != null ? `#${numberOf.get(d.id)} ` : ''}${d.anonymized ? `Ehemaliger Fahrer #${d.id}` : d.gamertag}` }))
+      .sort((a, b) => a.label.replace(/^#\d+ /, '').localeCompare(b.label.replace(/^#\d+ /, ''), 'de')),
+    catalog: await loadCatalog(store, season.rules_version_id),
   };
 }

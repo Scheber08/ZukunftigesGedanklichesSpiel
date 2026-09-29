@@ -1,0 +1,307 @@
+---
+/**
+ * Fahrer bearbeiten (Plan §5 „Fahrer“): Profil, private Kontaktdaten, Startnummern
+ * (vergeben, wechseln ab dem nächsten Rennen, freigeben bei inaktiven Fahrern, Historie),
+ * Cockpits und Pseudonymisierung auf Löschwunsch (Plan §6.7).
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import Badge from '~/components/ui/Badge.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import ConfirmField from '~/components/admin/core/ConfirmField.astro';
+import DriverFields from '~/components/admin/core/DriverFields.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import Section from '~/components/admin/core/Section.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { url } from '~/i18n';
+import { nextRound } from '~/lib/admin/league/drivers';
+import { DRIVER_STATUS_BADGE, DRIVER_STATUS_LABELS, REGISTRATION_STATUS_LABELS } from '~/lib/admin/league/labels';
+import { freeNumbers, numberState } from '~/lib/admin/league/numbers';
+import { actionOutcome, fieldAria, formValues } from '~/lib/admin/league/page';
+import { roundRangeLabel } from '~/lib/admin/league/seats';
+import { numberHistory } from '~/lib/domain/numbers';
+import { formatDateTime } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { intParam, roundLabel } from '~/lib/view';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+const A = actions.admin;
+const outcome = await actionOutcome(Astro, [A.driverSave, A.driverNumberAssign, A.driverNumberChange, A.driverNumberRelease, A.driverPseudonymize]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const store = getServiceStore();
+const driverId = intParam(Astro.params.id);
+const driver = driverId ? (await store.select('drivers', { eq: { id: driverId } }))[0] : undefined;
+if (!driver) return Astro.redirect('/admin/fahrer?fehlt=1');
+
+const [priv] = await store.select('driver_private', { eq: { driver_id: driver.id } });
+const [numbers, seasons, seats, teams, rounds, tracks, registrations, drivers, resultRows] = await Promise.all([
+  store.select('driver_numbers'),
+  store.select('seasons'),
+  store.select('seats', { eq: { driver_id: driver.id } }),
+  store.select('teams'),
+  store.select('rounds'),
+  store.select('tracks'),
+  store.select('registrations', { eq: { driver_id: driver.id } }),
+  store.select('drivers'),
+  store.select('results', { eq: { driver_id: driver.id } }),
+]);
+const now = new Date();
+const history = numberHistory(driver.id, numbers).reverse();
+const state = numberState(driver.id, numbers, now);
+const next = nextRound(rounds, now);
+const nextLabel = next ? `${seasons.find((s) => s.id === next.season_id)?.name ?? ''} · ${roundLabel(next, tracks.find((t) => t.id === next.track_id), 'de')}` : null;
+const free = freeNumbers(numbers, now).slice(0, 40);
+const holderName = (id: number) => drivers.find((d) => d.id === id)?.gamertag ?? `#${id}`;
+const displayName = driver.anonymized ? `Ehemaliger Fahrer #${driver.id}` : driver.gamertag;
+
+const f = formValues(outcome, A.driverSave);
+const dbValues: Record<string, string | number | null> = {
+  gamertag: driver.gamertag,
+  slug: driver.slug,
+  platform: driver.platform,
+  input_device: driver.input_device,
+  nationality_code: driver.nationality_code,
+  status: driver.status,
+  reserve_order: driver.reserve_order,
+  joined_season_id: driver.joined_season_id,
+  twitch_url: driver.twitch_url,
+  youtube_url: driver.youtube_url,
+  discord_username: priv?.discord_username ?? null,
+  discord_user_id: priv?.discord_user_id ?? null,
+  ea_id: priv?.ea_id ?? null,
+  notes: priv?.notes ?? null,
+};
+const v = (name: string, fallback?: string | number | null) => f.str(name, fallback ?? dbValues[name] ?? '');
+const checked = (name: string, fallback: boolean) => f.bool(name, name === 'show_links' ? driver.show_links : fallback);
+const assign = formValues(outcome, A.driverNumberAssign);
+const change = formValues(outcome, A.driverNumberChange);
+const pseudo = formValues(outcome, A.driverPseudonymize);
+const seasonName = (id: number) => seasons.find((s) => s.id === id)?.name ?? `Saison #${id}`;
+const teamOf = (id: number) => teams.find((t) => t.id === id);
+---
+
+<AdminLayout title={displayName} breadcrumbs={[{ label: 'Fahrer', href: '/admin/fahrer' }, { label: displayName }]}>
+  <a slot="actions" class="btn btn-ghost" href={url('de', 'driver', { slug: driver.slug })}>Öffentliches Profil</a>
+
+  <Notice
+    outcome={outcome}
+    warnings={driver.anonymized ? ['Dieser Fahrer wurde auf Wunsch pseudonymisiert. Ergebnisse bleiben für die Wertung erhalten, persönliche Daten sind gelöscht.'] : []}
+  />
+
+  <p class="mb-6 flex flex-wrap items-center gap-2 text-sm text-muted">
+    <Badge variant={DRIVER_STATUS_BADGE[driver.status]}>{DRIVER_STATUS_LABELS[driver.status]}</Badge>
+    <span>Startnummer: <span class="font-semibold text-fg">{state.active?.number ?? '–'}</span></span>
+    {state.pending && <span>· Wechsel auf {state.pending.number} ab {formatDateTime(state.pending.valid_from, 'de')}</span>}
+    <span>· {resultRows.length} Ergebnis-Zeilen</span>
+  </p>
+
+  {
+    !driver.anonymized && (
+      <Section title="Profil & Kontakt" id="profil">
+        <form method="POST" action={A.driverSave} class="grid gap-4">
+          <input type="hidden" name="id" value={driver.id} />
+          <DriverFields prefix="driver" v={v} checked={checked} err={f.err} seasons={seasons} mode="edit" />
+          <div>
+            <button type="submit" class="btn btn-primary">Speichern</button>
+          </div>
+        </form>
+      </Section>
+    )
+  }
+
+  <Section
+    title="Startnummern"
+    id="nummern"
+    description="Fahrer behalten ihre Nummer. Wechsel mit Admin-OK gelten ab dem nächsten Rennen; Nummern inaktiver Fahrer lassen sich freigeben. Die Historie bleibt erhalten."
+  >
+    {
+      history.length > 0 ? (
+        <div class="table-wrap mb-6">
+          <table class="timing-table">
+            <caption class="sr-only">Nummern-Historie von {displayName}</caption>
+            <thead>
+              <tr>
+                <th scope="col" class="num">Nr.</th>
+                <th scope="col">Gültig ab</th>
+                <th scope="col">Gültig bis</th>
+                <th scope="col">Stand</th>
+                <th scope="col">Notiz</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map((n) => (
+                <tr>
+                  <th scope="row" class="num text-lg">
+                    {n.number}
+                  </th>
+                  <td>{formatDateTime(n.valid_from, 'de')}</td>
+                  <td>{n.valid_to ? formatDateTime(n.valid_to, 'de') : '–'}</td>
+                  <td>
+                    {n.id === state.active?.id ? (
+                      <Badge variant="green">Aktuell</Badge>
+                    ) : n.id === state.pending?.id ? (
+                      <Badge variant="teal">Vorgemerkt</Badge>
+                    ) : (
+                      <Badge variant="muted">Historie</Badge>
+                    )}
+                  </td>
+                  <td class="muted">{n.note ?? '–'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p class="mb-4 text-muted">Noch keine Startnummer vergeben.</p>
+      )
+    }
+
+    {
+      !driver.anonymized && (
+        <div class="grid gap-6 lg:grid-cols-2">
+          {!state.active && !state.pending ? (
+            <form method="POST" action={A.driverNumberAssign} class="grid gap-3">
+              <h3 class="text-lg uppercase">Nummer vergeben</h3>
+              <input type="hidden" name="driver_id" value={driver.id} />
+              <Field id="num-assign" label="Startnummer" required hint="Gilt sofort." error={assign.err('number')}>
+                <input id="num-assign" name="number" type="number" min="1" max="99" class="input" value={assign.str('number')} required {...fieldAria('num-assign', true, assign.err('number'))} />
+              </Field>
+              <Field id="num-assign-note" label="Notiz" error={assign.err('note')}>
+                <input id="num-assign-note" name="note" class="input" value={assign.str('note')} maxlength="200" />
+              </Field>
+              <div>
+                <button type="submit" class="btn btn-primary">
+                  Vergeben
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form method="POST" action={A.driverNumberChange} class="grid gap-3">
+              <h3 class="text-lg uppercase">Nummer wechseln</h3>
+              <input type="hidden" name="driver_id" value={driver.id} />
+              <Field
+                id="num-change"
+                label="Neue Startnummer"
+                required
+                hint={
+                  state.pending
+                    ? `Vorgemerkt ist die ${state.pending.number}. Neue Eingabe ersetzt den Wechsel; die ${state.active?.number ?? '–'} nimmt ihn zurück.`
+                    : nextLabel
+                      ? `Gilt ab dem nächsten Rennen: ${nextLabel} (${formatDateTime(next!.start_utc, 'de')}).`
+                      : 'Kein Rennen geplant – der Wechsel gilt sofort.'
+                }
+                error={change.err('number')}
+              >
+                <input id="num-change" name="number" type="number" min="1" max="99" class="input" value={change.str('number')} required {...fieldAria('num-change', true, change.err('number'))} />
+              </Field>
+              <Field id="num-change-note" label="Notiz" hint="z. B. „Wunsch des Fahrers, OK von …“" error={change.err('note')}>
+                <input id="num-change-note" name="note" class="input" value={change.str('note')} maxlength="200" aria-describedby="num-change-note-hint" />
+              </Field>
+              <div>
+                <button type="submit" class="btn btn-primary">
+                  Wechsel speichern
+                </button>
+              </div>
+            </form>
+          )}
+          <div>
+            <h3 class="mb-2 text-lg uppercase">Freie Nummern</h3>
+            <p class="font-mono text-sm leading-7 text-muted">{free.join(' · ')}{free.length === 40 ? ' …' : ''}</p>
+            {(state.active || state.pending) && (
+              <form method="POST" action={A.driverNumberRelease} class="mt-6 grid gap-3 border-t border-border pt-4">
+                <h3 class="text-lg uppercase">Nummer freigeben</h3>
+                <input type="hidden" name="driver_id" value={driver.id} />
+                {driver.status === 'inactive' ? (
+                  <>
+                    <p class="text-sm text-muted">Die {state.active?.number ?? state.pending?.number} wird sofort für andere Fahrer frei. Die Historie bleibt.</p>
+                    <ConfirmField id="num-release-confirm" label="Ja, Nummer freigeben." />
+                    <div>
+                      <button type="submit" class="btn btn-danger">
+                        Freigeben
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p class="text-sm text-muted">Nur bei inaktiven Fahrern möglich – setze zuerst den Status auf „Inaktiv“.</p>
+                )}
+              </form>
+            )}
+          </div>
+        </div>
+      )
+    }
+  </Section>
+
+  <Section title="Cockpits" id="cockpits">
+    {
+      seats.length === 0 ? (
+        <p class="text-muted">Kein Stammcockpit eingetragen.</p>
+      ) : (
+        <ul class="grid gap-2">
+          {[...seats]
+            .sort((a, b) => b.season_id - a.season_id || a.from_round - b.from_round)
+            .map((s) => {
+              const team = teamOf(s.team_id);
+              return (
+                <li class="flex flex-wrap items-center gap-2" style={`--team-color:${team?.color_hex ?? ''}`}>
+                  <span class="team-stripe" aria-hidden="true" />
+                  <span class="font-semibold">{team?.name ?? '–'}</span>
+                  <span class="text-muted">
+                    · Cockpit {s.seat_no} · {seasonName(s.season_id)} · {roundRangeLabel(s)}
+                  </span>
+                  <a class="underline" href={`/admin/teams/aufstellung?saison=${s.season_id}#team-${s.team_id}`}>
+                    Aufstellung
+                  </a>
+                </li>
+              );
+            })}
+        </ul>
+      )
+    }
+  </Section>
+
+  {
+    registrations.length > 0 && (
+      <Section title="Anmeldung" id="anmeldung">
+        <ul class="grid gap-2">
+          {registrations.map((r) => (
+            <li>
+              <a class="underline" href={`/admin/anmeldungen/${r.id}`}>
+                Anmeldung #{r.id}
+              </a>{' '}
+              <span class="text-muted">
+                vom {formatDateTime(r.created_at, 'de')} · {REGISTRATION_STATUS_LABELS[r.status]}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Section>
+    )
+  }
+
+  {
+    !driver.anonymized && (
+      <Section
+        title="Pseudonymisieren (Löschwunsch)"
+        id="pseudonymisieren"
+        description="Gamertag wird „Ehemaliger Fahrer #ID“, Profil-URL, Flagge und Links verschwinden, private Kontaktdaten und verknüpfte Anmeldungen werden gelöscht, offene Nummern frei. Ergebnisse bleiben, damit die Wertungen stimmen. Nicht rückgängig zu machen."
+      >
+        <form method="POST" action={A.driverPseudonymize} class="grid max-w-xl gap-3">
+          <input type="hidden" name="driver_id" value={driver.id} />
+          <Field id="pseudo-text" label={`Zur Bestätigung den Gamertag „${driver.gamertag}“ eintippen`} required error={pseudo.err('confirm_text')}>
+            <input id="pseudo-text" name="confirm_text" class="input" autocomplete="off" required {...fieldAria('pseudo-text', false, pseudo.err('confirm_text'))} />
+          </Field>
+          <ConfirmField id="pseudo-confirm" label="Ja, der Fahrer hat die Löschung verlangt – endgültig pseudonymisieren." />
+          <div>
+            <button type="submit" class="btn btn-danger">
+              Pseudonymisieren
+            </button>
+          </div>
+        </form>
+      </Section>
+    )
+  }
+</AdminLayout>

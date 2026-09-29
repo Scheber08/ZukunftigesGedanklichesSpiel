@@ -1,0 +1,118 @@
+---
+/**
+ * Eine Entscheidung mit Status, Stimmen (Vier-Augen-Prinzip) und den möglichen Schritten:
+ * Entwurf → zustimmen / veröffentlichen / verwerfen, veröffentlicht → zurücknehmen.
+ */
+import Markdown from '~/components/ui/Markdown.astro';
+import { url } from '~/i18n/routes';
+import { DECISION_STATUS_LABEL, DECISION_STATUS_VARIANT, verdictText } from '~/lib/admin/raceday/labels';
+import type { DecisionRow } from '~/lib/db/types';
+import { formatDateTime } from '~/lib/domain/time';
+
+interface Props {
+  decision: DecisionRow;
+  driverLabel: string;
+  sessionLabel: string | null;
+  voters: string[];
+  twoStewardRule: boolean;
+  /** Aktuelle Person darf entscheiden (Steward und nicht befangen). */
+  canDecide: boolean;
+  /** Aktuelle Person hat schon zugestimmt. */
+  hasVoted: boolean;
+  actions: { vote: string; publish: string; discard: string; revoke: string };
+  editHref?: string | null;
+  resultAffecting: boolean;
+  roundFinal: boolean;
+}
+const { decision: d, driverLabel, sessionLabel, voters, twoStewardRule, canDecide, hasVoted, actions, editHref, resultAffecting, roundFinal } =
+  Astro.props;
+const needed = twoStewardRule ? 2 : 1;
+const votes = new Set(d.decided_by).size;
+const idp = `dec-${d.id}`;
+---
+
+<article class="card p-4" aria-labelledby={`${idp}-title`}>
+  <header class="flex flex-wrap items-center gap-2">
+    <h3 id={`${idp}-title`} class="text-lg">
+      {d.public_ref} · {driverLabel}
+    </h3>
+    <span class:list={['badge', `badge-${DECISION_STATUS_VARIANT[d.status]}`]}>{DECISION_STATUS_LABEL[d.status]}</span>
+    {editHref && <a href={editHref} class="ml-auto text-sm underline hover:text-teal">Details{d.status === 'draft' ? ' / bearbeiten' : ''}</a>}
+  </header>
+  <p class="mt-1 font-semibold">
+    {verdictText(d)}
+    {sessionLabel && <span class="font-normal text-muted"> · {sessionLabel}</span>}
+    {d.rule_ref && <span class="font-normal text-muted"> · {d.rule_ref}</span>}
+  </p>
+  <Markdown source={d.reasoning_de} class="mt-2 text-sm" />
+  {d.reasoning_en && <details class="mt-2 text-sm"><summary class="cursor-pointer text-muted">Englische Fassung</summary><Markdown source={d.reasoning_en} lang="en" class="mt-1" /></details>}
+
+  <p class="mt-3 text-sm text-muted">
+    Stimmen: {votes} von {needed}{voters.length > 0 && ` (${voters.join(', ')})`}
+    {d.published_at && ` · veröffentlicht ${formatDateTime(d.published_at, 'de')} Uhr`}
+    {d.status === 'published' && (
+      <>
+        {' · '}
+        <a href={url('de', 'decision', { ref: d.public_ref })} class="underline">öffentlich ansehen</a>
+      </>
+    )}
+  </p>
+  {
+    resultAffecting && d.status === 'draft' && (
+      <p class="mt-2 text-sm text-warning">
+        Wirkt beim Veröffentlichen aufs Ergebnis{roundFinal ? ' – die Runde ist final, es entsteht automatisch eine Korrektur („Urteil ' + d.public_ref + '“).' : ' (Neuberechnung).'}
+      </p>
+    )
+  }
+
+  {
+    canDecide && d.status === 'draft' && (
+      <div class="mt-4 flex flex-wrap gap-2">
+        {!hasVoted && (
+          <form method="POST" action={actions.vote}>
+            <input type="hidden" name="decisionId" value={d.id} />
+            <button type="submit" class="btn btn-secondary">
+              Zustimmen
+            </button>
+          </form>
+        )}
+        <form method="POST" action={actions.publish}>
+          <input type="hidden" name="decisionId" value={d.id} />
+          <button type="submit" class="btn btn-primary">
+            {twoStewardRule && votes + (hasVoted ? 0 : 1) < needed ? 'Zustimmen & zur Veröffentlichung vormerken' : 'Veröffentlichen'}
+          </button>
+        </form>
+        <form method="POST" action={actions.discard}>
+          <input type="hidden" name="decisionId" value={d.id} />
+          <button type="submit" class="btn btn-danger">
+            Entwurf verwerfen
+          </button>
+        </form>
+      </div>
+    )
+  }
+  {
+    canDecide && d.status === 'published' && (
+      <details class="mt-4">
+        <summary class="btn btn-ghost">Zurücknehmen …</summary>
+        <form method="POST" action={actions.revoke} class="mt-3 grid max-w-lg gap-3">
+          <input type="hidden" name="decisionId" value={d.id} />
+          <div class="field">
+            <label for={`${idp}-note`} class="label">
+              Notiz (intern, optional)
+            </label>
+            <input id={`${idp}-note`} name="note" class="input" maxlength="500" />
+          </div>
+          <p class="field-hint">
+            Die Entscheidung verschwindet aus dem Register.{resultAffecting ? ' Das Ergebnis wird neu berechnet' + (roundFinal ? ' (als Korrektur).' : '.') : ''}
+          </p>
+          <div>
+            <button type="submit" class="btn btn-danger">
+              Entscheidung zurücknehmen
+            </button>
+          </div>
+        </form>
+      </details>
+    )
+  }
+</article>

@@ -1,0 +1,192 @@
+---
+/**
+ * Eigene Untersuchung der Stewards ohne Meldung (Plan §5.3): legt einen Vorfall mit
+ * Quelle „steward“ an; danach wird wie gewohnt entschieden.
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import Forbidden from '~/components/admin/raceday/Forbidden.astro';
+import RaceActionMessage from '~/components/admin/raceday/RaceActionMessage.astro';
+import { flashQuery } from '~/lib/admin/raceday/flash';
+import { SESSION_LABEL } from '~/lib/admin/raceday/labels';
+import { listSeasons, pickSeason } from '~/lib/admin/raceday/queries';
+import { SESSION_TYPES } from '~/lib/db/types';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { roundLabel, seasonLabel } from '~/lib/view';
+
+const staff = Astro.locals.staff;
+const allowed = hasRole(staff, 'steward');
+if (!allowed) Astro.response.status = 403;
+
+const result = Astro.getActionResult(actions.admin.investigationOpen);
+if (allowed && result?.data) return Astro.redirect(`/admin/stewards/${result.data.incidentId}${flashQuery('opened')}`, 303);
+
+const store = getServiceStore();
+const seasons = allowed ? await listSeasons(store) : [];
+const season = pickSeason(seasons, null);
+const [rounds, tracks, drivers] = allowed && season
+  ? await Promise.all([store.select('rounds', { eq: { season_id: season.id } }), store.select('tracks'), store.select('drivers')])
+  : [[], [], []];
+rounds.sort((a, b) => a.number - b.number);
+const roundParam = Number(Astro.url.searchParams.get('runde'));
+const defaultRound =
+  rounds.find((r) => r.id === roundParam) ??
+  [...rounds].reverse().find((r) => r.status === 'provisional' || r.status === 'final' || r.status === 'corrected') ??
+  rounds[0];
+const driverList = drivers
+  .filter((d) => !d.anonymized && d.status !== 'inactive')
+  .sort((a, b) => a.gamertag.localeCompare(b.gamertag, 'de'));
+
+// Werte nach einem Fehler wiederherstellen
+let values = {
+  roundId: defaultRound?.id ?? null,
+  sessionType: 'race' as string,
+  involved: [] as number[],
+  lap: '',
+  corner: '',
+  description: '',
+  clipUrl: '',
+  clipTimestamp: '',
+};
+if (result?.error && Astro.request.method === 'POST') {
+  try {
+    const fd = await Astro.request.formData();
+    values = {
+      roundId: Number(fd.get('roundId')) || values.roundId,
+      sessionType: String(fd.get('sessionType') ?? 'race'),
+      involved: fd.getAll('involvedDriverIds').map(Number),
+      lap: String(fd.get('lap') ?? ''),
+      corner: String(fd.get('corner') ?? ''),
+      description: String(fd.get('description') ?? ''),
+      clipUrl: String(fd.get('clipUrl') ?? ''),
+      clipTimestamp: String(fd.get('clipTimestamp') ?? ''),
+    };
+  } catch {
+    // Körper nicht mehr lesbar
+  }
+}
+const self = staff?.driverId ?? null;
+---
+
+<AdminLayout title="Eigene Untersuchung" breadcrumbs={[{ label: 'Stewards', href: '/admin/stewards' }, { label: 'Eigene Untersuchung' }]}>
+  {
+    !allowed ? (
+      <Forbidden roles="Stewards" />
+    ) : !season || rounds.length === 0 ? (
+      <p class="alert alert-warning">In der aktuellen Saison gibt es noch keine Runden.</p>
+    ) : (
+      <>
+        <p class="mb-6 max-w-prose text-muted">
+          Für Vorfälle, die niemand gemeldet hat, die euch aber aufgefallen sind (z. B. im Stream). Die Untersuchung startet im Status
+          „in Prüfung“; danach legst du wie gewohnt eine Entscheidung an.
+        </p>
+        <RaceActionMessage result={result} />
+
+        <form method="POST" action={actions.admin.investigationOpen} class="grid max-w-3xl gap-5">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="field">
+              <label for="inv-round" class="label">
+                Rennen ({seasonLabel(season, 'de')}) <span class="req" aria-hidden="true">*</span>
+              </label>
+              <select id="inv-round" name="roundId" class="select" required>
+                {rounds.map((r) => (
+                  <option value={r.id} selected={r.id === values.roundId}>
+                    {roundLabel(r, tracks.find((t) => t.id === r.track_id), 'de')}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div class="field">
+              <label for="inv-session" class="label">
+                Session
+              </label>
+              <select id="inv-session" name="sessionType" class="select">
+                {SESSION_TYPES.map((t) => (
+                  <option value={t} selected={t === values.sessionType}>
+                    {SESSION_LABEL[t]}
+                  </option>
+                ))}
+              </select>
+              <p class="field-hint">Gibt es die Session in der Runde nicht (z. B. Sprint), bleibt sie leer.</p>
+            </div>
+          </div>
+
+          <fieldset class="card p-4">
+            <legend class="label px-1">
+              Beteiligte Fahrer <span class="req" aria-hidden="true">*</span>
+            </legend>
+            <div class="drivers mt-2">
+              {driverList.map((d) => (
+                <label class="checkbox">
+                  <input type="checkbox" name="involvedDriverIds" value={d.id} checked={values.involved.includes(d.id)} disabled={d.id === self} />
+                  <span>
+                    {d.gamertag}
+                    {d.status === 'reserve' && <span class="text-muted"> (Reserve)</span>}
+                    {d.id === self && <span class="text-muted"> (du – befangen)</span>}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="field">
+              <label for="inv-lap" class="label">
+                Runde (Lap)
+              </label>
+              <input id="inv-lap" name="lap" type="number" min="0" max="500" inputmode="numeric" class="input" value={values.lap} />
+            </div>
+            <div class="field">
+              <label for="inv-corner" class="label">
+                Kurve / Streckenabschnitt
+              </label>
+              <input id="inv-corner" name="corner" class="input" maxlength="80" value={values.corner} placeholder="Kurve 1" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="inv-desc" class="label">
+              Was ist passiert? <span class="req" aria-hidden="true">*</span>
+            </label>
+            <textarea id="inv-desc" name="description" class="textarea" rows="5" required minlength="10" maxlength="4000">{values.description}</textarea>
+          </div>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="field">
+              <label for="inv-clip" class="label">
+                Clip-Link
+              </label>
+              <input id="inv-clip" name="clipUrl" type="url" class="input" maxlength="500" placeholder="https://" value={values.clipUrl} />
+            </div>
+            <div class="field">
+              <label for="inv-ts" class="label">
+                Zeitstempel im Clip
+              </label>
+              <input id="inv-ts" name="clipTimestamp" class="input" maxlength="20" placeholder="1:02:10" value={values.clipTimestamp} />
+            </div>
+          </div>
+
+          <div>
+            <button type="submit" class="btn btn-primary">
+              Untersuchung eröffnen
+            </button>
+          </div>
+        </form>
+      </>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .drivers {
+    display: grid;
+    gap: 0 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+  }
+  .drivers .checkbox {
+    align-items: center;
+  }
+</style>

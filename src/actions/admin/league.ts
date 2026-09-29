@@ -916,7 +916,7 @@ const seatSave = defineAction({
   input: z.object({
     season_id: id,
     team_id: id,
-    seat_no: z.union([z.literal(1), z.literal(2)], { error: 'Ungültiges Cockpit.' }),
+    seat_no: int('Cockpit', 1, 2),
     driver_id: optId,
     from_round: int('Gültig ab Runde', 1, 99),
     release_other: bool,
@@ -945,7 +945,7 @@ const seatSave = defineAction({
         {
           season_id: season.id,
           team_id: input.team_id,
-          seat_no: input.seat_no,
+          seat_no: input.seat_no as 1 | 2,
           driver_id: input.driver_id ?? null,
           from_round: input.from_round,
           releaseOtherSeat: input.release_other,

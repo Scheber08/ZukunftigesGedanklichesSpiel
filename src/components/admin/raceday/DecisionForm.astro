@@ -1,0 +1,227 @@
+---
+/**
+ * Entscheidungsformular (Plan §5.3): Fahrer, Session, Art, Zeit/Plätze, Strafpunkte (nur wenn in
+ * der Saison aktiv), Begründung DE (Pflicht, Markdown) + EN, Regel-Referenz, Clip, Textbausteine
+ * aus dem Strafenkatalog. Funktioniert ohne JavaScript; mit JS fügt „Baustein einfügen“ Text ein
+ * und blendet unpassende Felder aus.
+ */
+import type { CatalogEntry } from '~/lib/admin/raceday/catalog';
+import { catalogSnippet, CATALOG_NUMBER, suggestVerdict } from '~/lib/admin/raceday/catalog';
+import { SESSION_LABEL, VERDICT_LABEL } from '~/lib/admin/raceday/labels';
+import type { Id, SessionRow, Verdict } from '~/lib/db/types';
+import { VERDICTS } from '~/lib/db/types';
+
+export interface DecisionFormValues {
+  decisionId?: Id | null;
+  incidentId?: Id | null;
+  driverId?: Id | null;
+  sessionId?: Id | null;
+  verdict?: Verdict;
+  timeSeconds?: number | null;
+  positions?: number | null;
+  penaltyPoints?: number | null;
+  reasoningDe?: string;
+  reasoningEn?: string | null;
+  ruleRef?: string | null;
+  clipUrl?: string | null;
+}
+
+interface Props {
+  action: string;
+  idPrefix: string;
+  roundId: Id;
+  values: DecisionFormValues;
+  sessions: SessionRow[];
+  driverOptions: Array<{ id: Id; label: string }>;
+  catalog: CatalogEntry[];
+  penaltyPointsEnabled: boolean;
+  submitLabel: string;
+  disabled?: boolean;
+  disabledReason?: string | null;
+}
+const { action, idPrefix: p, roundId, values: v, sessions, driverOptions, catalog, penaltyPointsEnabled, submitLabel, disabled = false, disabledReason } =
+  Astro.props;
+const verdict = v.verdict ?? 'no_action';
+const race = sessions.find((s) => s.type === 'race');
+const sessionId = v.sessionId ?? race?.id ?? null;
+---
+
+<form method="POST" action={action} class="decision-form" data-decision-form>
+  <input type="hidden" name="roundId" value={roundId} />
+  {v.decisionId != null && <input type="hidden" name="decisionId" value={v.decisionId} />}
+  {v.incidentId != null && <input type="hidden" name="incidentId" value={v.incidentId} />}
+
+  {disabled && disabledReason && <p class="alert alert-warning">{disabledReason}</p>}
+
+  <fieldset disabled={disabled} class="grid gap-4">
+    <legend class="sr-only">Entscheidung</legend>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div class="field">
+        <label for={`${p}-driver`} class="label">Fahrer <span class="req" aria-hidden="true">*</span></label>
+        <select id={`${p}-driver`} name="driverId" class="select" required>
+          <option value="" disabled selected={v.driverId == null}>Bitte wählen</option>
+          {
+            driverOptions.map((d) => (
+              <option value={d.id} selected={d.id === v.driverId}>
+                {d.label}
+              </option>
+            ))
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for={`${p}-session`} class="label">Session</label>
+        <select id={`${p}-session`} name="sessionId" class="select">
+          {
+            sessions.map((s) => (
+              <option value={s.id} selected={s.id === sessionId}>
+                {SESSION_LABEL[s.type]}
+              </option>
+            ))
+          }
+        </select>
+        <p class="field-hint">Zeit-, Positions- und DSQ-Strafen wirken auf diese Session.</p>
+      </div>
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-3">
+      <div class="field">
+        <label for={`${p}-verdict`} class="label">Art der Entscheidung <span class="req" aria-hidden="true">*</span></label>
+        <select id={`${p}-verdict`} name="verdict" class="select" required data-verdict>
+          {
+            VERDICTS.map((x) => (
+              <option value={x} selected={x === verdict}>
+                {VERDICT_LABEL[x]}
+              </option>
+            ))
+          }
+        </select>
+      </div>
+      <div class="field" data-for="time_penalty">
+        <label for={`${p}-time`} class="label">Zeitstrafe (Sekunden)</label>
+        <input id={`${p}-time`} name="timeSeconds" type="number" min="1" max="120" inputmode="numeric" class="input" value={v.timeSeconds ?? ''} />
+        <p class="field-hint">Nur bei Zeitstrafe.</p>
+      </div>
+      <div class="field" data-for="position_penalty grid_penalty_next">
+        <label for={`${p}-positions`} class="label">Plätze</label>
+        <input id={`${p}-positions`} name="positions" type="number" min="1" max="22" inputmode="numeric" class="input" value={v.positions ?? ''} />
+        <p class="field-hint">Nur bei Positions- oder Grid-Strafe.</p>
+      </div>
+    </div>
+
+    {
+      penaltyPointsEnabled && (
+        <div class="field max-w-xs">
+          <label for={`${p}-points`} class="label">Strafpunkte</label>
+          <input id={`${p}-points`} name="penaltyPoints" type="number" min="0" max="12" inputmode="numeric" class="input" value={v.penaltyPoints ?? ''} />
+        </div>
+      )
+    }
+
+    {
+      catalog.length > 0 && (
+        <div class="catalog card p-3">
+          <div class="field">
+            <label for={`${p}-catalog`} class="label">
+              Textbaustein aus dem Strafenkatalog ({CATALOG_NUMBER})
+            </label>
+            <div class="flex flex-wrap gap-2">
+              <select id={`${p}-catalog`} class="select catalog-select" data-catalog>
+                {catalog.map((c) => {
+                  const s = suggestVerdict(c.standardPenalty);
+                  return (
+                    <option value={c.code} data-snippet={catalogSnippet(c)} data-verdict={s?.verdict ?? ''} data-seconds={s?.timeSeconds ?? ''}>
+                      {c.code} · {c.offence} ({c.standardPenalty})
+                    </option>
+                  );
+                })}
+              </select>
+              <button type="button" class="btn btn-secondary" data-insert hidden>
+                Baustein einfügen
+              </button>
+            </div>
+            <p class="field-hint" data-catalog-hint>
+              Fügt den Text in die Begründung ein, setzt die Regel-Referenz und – wenn eindeutig – die Regelstrafe.
+            </p>
+          </div>
+        </div>
+      )
+    }
+
+    <div class="field">
+      <label for={`${p}-de`} class="label">Begründung (Deutsch) <span class="req" aria-hidden="true">*</span></label>
+      <textarea id={`${p}-de`} name="reasoningDe" class="textarea" rows="6" required minlength="10" aria-describedby={`${p}-de-hint`} data-reasoning
+        >{v.reasoningDe ?? ''}</textarea
+      >
+      <p id={`${p}-de-hint`} class="field-hint">Markdown möglich. Erscheint öffentlich im Steward-Register; die ersten Sätze gehen als Kurzbegründung nach Discord.</p>
+    </div>
+    <div class="field">
+      <label for={`${p}-en`} class="label">Begründung (Englisch, optional)</label>
+      <textarea id={`${p}-en`} name="reasoningEn" class="textarea" rows="4">{v.reasoningEn ?? ''}</textarea>
+    </div>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div class="field">
+        <label for={`${p}-rule`} class="label">Regel-Referenz</label>
+        <input id={`${p}-rule`} name="ruleRef" class="input" maxlength="80" placeholder="§8.3 · V-02" value={v.ruleRef ?? ''} data-rule />
+      </div>
+      <div class="field">
+        <label for={`${p}-clip`} class="label">Clip-Link</label>
+        <input id={`${p}-clip`} name="clipUrl" type="url" class="input" maxlength="500" placeholder="https://" value={v.clipUrl ?? ''} />
+      </div>
+    </div>
+    <div>
+      <button type="submit" class="btn btn-primary">{submitLabel}</button>
+    </div>
+  </fieldset>
+</form>
+
+<script>
+  // Progressive Verbesserung: Felder je Art ein-/ausblenden, Textbausteine einfügen
+  for (const form of document.querySelectorAll<HTMLFormElement>('[data-decision-form]')) {
+    const verdict = form.querySelector<HTMLSelectElement>('[data-verdict]');
+    const dependent = form.querySelectorAll<HTMLElement>('[data-for]');
+    const sync = () => {
+      for (const el of dependent) {
+        const show = (el.dataset.for ?? '').split(' ').includes(verdict?.value ?? '');
+        el.hidden = !show;
+        el.querySelectorAll('input').forEach((i) => (i.disabled = !show));
+      }
+    };
+    verdict?.addEventListener('change', sync);
+    sync();
+
+    const catalog = form.querySelector<HTMLSelectElement>('[data-catalog]');
+    const insert = form.querySelector<HTMLButtonElement>('[data-insert]');
+    const reasoning = form.querySelector<HTMLTextAreaElement>('[data-reasoning]');
+    const rule = form.querySelector<HTMLInputElement>('[data-rule]');
+    if (catalog && insert && reasoning) {
+      insert.hidden = false;
+      insert.addEventListener('click', () => {
+        const opt = catalog.selectedOptions[0];
+        if (!opt) return;
+        const snippet = opt.dataset.snippet ?? '';
+        reasoning.value = reasoning.value.trim() ? `${reasoning.value.trimEnd()}\n\n${snippet}` : snippet;
+        if (rule && !rule.value.trim()) rule.value = `§8.3 · ${opt.value}`;
+        const suggested = opt.dataset.verdict;
+        if (suggested && verdict) {
+          verdict.value = suggested;
+          const seconds = opt.dataset.seconds;
+          const time = form.querySelector<HTMLInputElement>('input[name="timeSeconds"]');
+          if (seconds && time) time.value = seconds;
+          sync();
+        }
+        reasoning.focus();
+      });
+    }
+  }
+</script>
+
+<style>
+  .catalog-select {
+    flex: 1;
+    min-width: 0;
+  }
+  fieldset[disabled] {
+    opacity: 0.7;
+  }
+</style>

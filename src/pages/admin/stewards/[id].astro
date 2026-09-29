@@ -1,0 +1,325 @@
+---
+/**
+ * Vorfall im Steward-Werkzeug (Plan §5.3): alle Angaben, Clip als Link, Kontakt der meldenden Person,
+ * Status setzen, Entscheidungen (auch mehrere pro Vorfall) anlegen, abstimmen, veröffentlichen.
+ * Sehen dürfen Stewards und Admins, entscheiden nur Stewards – und nie bei Befangenheit.
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import ExternalLink from '@lucide/astro/icons/external-link';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import Badge from '~/components/ui/Badge.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import DecisionCard from '~/components/admin/raceday/DecisionCard.astro';
+import DecisionForm, { type DecisionFormValues } from '~/components/admin/raceday/DecisionForm.astro';
+import Forbidden from '~/components/admin/raceday/Forbidden.astro';
+import RaceActionMessage from '~/components/admin/raceday/RaceActionMessage.astro';
+import { flashQuery, flashText } from '~/lib/admin/raceday/flash';
+import { INCIDENT_STATUS_LABEL, INCIDENT_STATUS_VARIANT, SESSION_LABEL } from '~/lib/admin/raceday/labels';
+import { stewardContext } from '~/lib/admin/raceday/queries';
+import { INCIDENT_STATUSES, VERDICTS, type DecisionRow, type Verdict } from '~/lib/db/types';
+import { RESULT_AFFECTING_VERDICTS } from '~/lib/domain/decisions';
+import { formatDateTime } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { incidentConflict, voterNames } from '~/lib/server/stewarding';
+import { intParam, roundLabel } from '~/lib/view';
+
+const staff = Astro.locals.staff;
+const allowed = hasRole(staff, 'steward', 'admin');
+const isSteward = hasRole(staff, 'steward');
+const incidentId = intParam(Astro.params.id);
+const here = `/admin/stewards/${incidentId ?? ''}`;
+
+// ------------------------------------------------------------------ Actions (Post/Redirect/Get)
+const r = {
+  status: Astro.getActionResult(actions.admin.incidentUpdate),
+  save: Astro.getActionResult(actions.admin.decisionSave),
+  vote: Astro.getActionResult(actions.admin.decisionVote),
+  publish: Astro.getActionResult(actions.admin.decisionPublish),
+  discard: Astro.getActionResult(actions.admin.decisionDiscard),
+  revoke: Astro.getActionResult(actions.admin.decisionRevoke),
+};
+if (allowed && incidentId != null) {
+  if (r.status?.data) return Astro.redirect(here + flashQuery('status'), 303);
+  if (r.save?.data) return Astro.redirect(here + flashQuery('saved', { ref: r.save.data.ref }), 303);
+  if (r.vote?.data) return Astro.redirect(here + flashQuery('voted'), 303);
+  if (r.publish?.data) {
+    const d = r.publish.data;
+    return Astro.redirect(here + (d.published ? flashQuery('published', { ref: d.ref, effect: d.effect }) : flashQuery('pending')), 303);
+  }
+  if (r.discard?.data) return Astro.redirect(here + flashQuery('discarded'), 303);
+  if (r.revoke?.data) return Astro.redirect(here + flashQuery('revoked', { ref: r.revoke.data.ref, effect: r.revoke.data.effect }), 303);
+}
+const failed = Object.values(r).find((x) => x?.error);
+
+// ------------------------------------------------------------------ Daten
+const store = getServiceStore();
+const [incident] = allowed && incidentId != null ? await store.select('incidents', { eq: { id: incidentId } }) : [];
+const ctx = incident ? await stewardContext(store, incident.round_id, [...incident.involved_driver_ids, ...(incident.reporter_driver_id ? [incident.reporter_driver_id] : [])]) : null;
+const decisions: DecisionRow[] = incident
+  ? (await store.select('decisions', { eq: { incident_id: incident.id } })).sort((a, b) => a.public_ref.localeCompare(b.public_ref))
+  : [];
+if (!allowed) Astro.response.status = 403;
+else if (!incident || !ctx) Astro.response.status = 404;
+
+const conflicted = incident && staff ? incidentConflict(staff, incident) : false;
+const canDecide = isSteward && !conflicted;
+const driverLabel = (id: number) => {
+  const d = ctx?.drivers.get(id);
+  if (!d) return `Fahrer #${id}`;
+  return d.anonymized ? `Ehemaliger Fahrer #${d.id}` : d.gamertag;
+};
+const label = ctx ? roundLabel(ctx.round, ctx.track, 'de') : 'Vorfall';
+const session = ctx?.sessions.find((s) => s.id === incident?.session_id);
+const late =
+  incident && ctx?.round.protest_deadline ? new Date(incident.submitted_at) > new Date(ctx.round.protest_deadline) : false;
+const voters = new Map<number, string[]>();
+for (const d of decisions) voters.set(d.id, await voterNames(store, d.decided_by, staff));
+const roundFinal = ctx?.round.status === 'final' || ctx?.round.status === 'corrected';
+const flash = flashText(Astro.url.searchParams);
+
+// Formularwerte nach einem Fehler wiederherstellen
+let formValues: DecisionFormValues = { incidentId: incident?.id ?? null, driverId: incident?.involved_driver_ids.find((id) => id !== incident?.reporter_driver_id) ?? null, sessionId: incident?.session_id ?? null };
+if (r.save?.error && Astro.request.method === 'POST') {
+  try {
+    const fd = await Astro.request.formData();
+    const num = (k: string) => (fd.get(k) ? Number(fd.get(k)) : null);
+    const verdict = String(fd.get('verdict') ?? '');
+    formValues = {
+      incidentId: incident?.id ?? null,
+      driverId: num('driverId'),
+      sessionId: num('sessionId'),
+      verdict: (VERDICTS as readonly string[]).includes(verdict) ? (verdict as Verdict) : undefined,
+      timeSeconds: num('timeSeconds'),
+      positions: num('positions'),
+      penaltyPoints: num('penaltyPoints'),
+      reasoningDe: String(fd.get('reasoningDe') ?? ''),
+      reasoningEn: String(fd.get('reasoningEn') ?? ''),
+      ruleRef: String(fd.get('ruleRef') ?? ''),
+      clipUrl: String(fd.get('clipUrl') ?? ''),
+    };
+  } catch {
+    // Körper nicht mehr lesbar – dann leeres Formular
+  }
+}
+const actionUrls = {
+  vote: actions.admin.decisionVote,
+  publish: actions.admin.decisionPublish,
+  discard: actions.admin.decisionDiscard,
+  revoke: actions.admin.decisionRevoke,
+};
+---
+
+<AdminLayout
+  title={incident ? `Vorfall #${incident.id}` : 'Vorfall'}
+  breadcrumbs={[{ label: 'Stewards', href: '/admin/stewards' }, { label: incident ? `Vorfall #${incident.id}` : 'Vorfall' }]}
+>
+  {
+    !allowed ? (
+      <Forbidden roles="Stewards und Admins" />
+    ) : !incident || !ctx ? (
+      <p class="alert alert-danger" role="alert">
+        Diesen Vorfall gibt es nicht. <a href="/admin/stewards" class="underline">Zum Eingang</a>
+      </p>
+    ) : (
+      <>
+        {flash && !failed && (
+          <p class="alert alert-success mb-6" role="status">
+            {flash}
+          </p>
+        )}
+        <RaceActionMessage result={failed} />
+
+        <div class="mb-6 flex flex-wrap items-center gap-2">
+          <Badge variant={INCIDENT_STATUS_VARIANT[incident.status]}>{INCIDENT_STATUS_LABEL[incident.status]}</Badge>
+          <Badge variant="muted">{incident.source === 'steward' ? 'Eigene Untersuchung' : 'Meldung'}</Badge>
+          <RoundStatusBadge status={ctx.round.status} lang="de" />
+          {late && <Badge variant="danger">nach Fristende eingegangen</Badge>}
+          {conflicted && <Badge variant="danger">befangen</Badge>}
+        </div>
+
+        {conflicted && (
+          <p class="alert alert-warning mb-6">
+            Du bist an diesem Vorfall beteiligt (Fahrer oder meldende Person). Du kannst alles sehen, aber nicht entscheiden – das
+            übernimmt ein anderer Steward.
+          </p>
+        )}
+        {!isSteward && (
+          <p class="alert mb-6">Als Admin kannst du den Vorfall ansehen. Entscheiden können nur Stewards.</p>
+        )}
+
+        <section aria-labelledby="inc-facts" class="card mb-8 p-4">
+          <h2 id="inc-facts" class="mb-3 text-xl uppercase">
+            Angaben
+          </h2>
+          <dl class="facts">
+            <div>
+              <dt class="micro">Rennen</dt>
+              <dd>
+                {hasRole(staff, 'admin') ? (
+                  <a href={`/admin/runden/${ctx.round.id}`} class="underline hover:text-teal">
+                    {label}
+                  </a>
+                ) : (
+                  label
+                )}
+                {session && ` · ${SESSION_LABEL[session.type]}`}
+              </dd>
+            </div>
+            <div>
+              <dt class="micro">Runde / Kurve</dt>
+              <dd>
+                {incident.lap != null ? `Runde ${incident.lap}` : 'Runde unbekannt'}
+                {incident.corner && ` · ${incident.corner}`}
+              </dd>
+            </div>
+            <div>
+              <dt class="micro">Beteiligte</dt>
+              <dd>{incident.involved_driver_ids.map(driverLabel).join(', ') || '–'}</dd>
+            </div>
+            <div>
+              <dt class="micro">Gemeldet von</dt>
+              <dd>
+                {incident.source === 'steward'
+                  ? 'Stewards (eigene Untersuchung)'
+                  : incident.reporter_driver_id != null
+                    ? driverLabel(incident.reporter_driver_id)
+                    : 'unbekannt'}
+                {incident.reporter_contact && <span class="text-muted"> · Kontakt (Discord): {incident.reporter_contact}</span>}
+              </dd>
+            </div>
+            <div>
+              <dt class="micro">Eingang</dt>
+              <dd>
+                {formatDateTime(incident.submitted_at, 'de')} Uhr
+                {ctx.round.protest_deadline && (
+                  <span class="text-muted"> · Frist bis {formatDateTime(ctx.round.protest_deadline, 'de')} Uhr</span>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt class="micro">Clip</dt>
+              <dd>
+                {incident.clip_url ? (
+                  <a href={incident.clip_url} target="_blank" rel="noopener noreferrer nofollow" class="inline-flex items-center gap-1 underline hover:text-teal">
+                    Clip öffnen
+                    <ExternalLink size={14} aria-hidden="true" />
+                    <span class="sr-only">(öffnet in neuem Tab)</span>
+                  </a>
+                ) : (
+                  'kein Clip'
+                )}
+                {incident.clip_timestamp && <span class="text-muted"> · ab {incident.clip_timestamp}</span>}
+                {incident.clip_url && <p class="break-all text-sm text-muted">{incident.clip_url}</p>}
+              </dd>
+            </div>
+          </dl>
+          <h3 class="micro mt-4">Beschreibung</h3>
+          <p class="description mt-1">{incident.description}</p>
+        </section>
+
+        {canDecide && (
+          <section aria-labelledby="inc-status" class="mb-8">
+            <h2 id="inc-status" class="mb-3 text-xl uppercase">
+              Status
+            </h2>
+            <form method="POST" action={actions.admin.incidentUpdate} class="flex flex-wrap items-end gap-3">
+              <input type="hidden" name="incidentId" value={incident.id} />
+              <div class="field">
+                <label for="inc-status-select" class="label">
+                  Status des Vorfalls
+                </label>
+                <select id="inc-status-select" name="status" class="select min-w-48">
+                  {INCIDENT_STATUSES.map((s) => (
+                    <option value={s} selected={s === incident.status}>
+                      {INCIDENT_STATUS_LABEL[s]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button type="submit" class="btn btn-secondary">
+                Status speichern
+              </button>
+            </form>
+            <p class="field-hint mt-2">
+              „abgelehnt“ z. B. bei unbegründeter Meldung, „verspätet“ bei Eingang nach der Protestfrist. Beim Veröffentlichen einer
+              Entscheidung wird der Vorfall automatisch „entschieden“.
+            </p>
+          </section>
+        )}
+
+        <section aria-labelledby="inc-decisions" class="mb-8">
+          <h2 id="inc-decisions" class="mb-3 text-xl uppercase">
+            Entscheidungen ({decisions.length})
+          </h2>
+          {ctx.season.two_steward_rule && (
+            <p class="field-hint mb-3">Vier-Augen-Prinzip aktiv: Veröffentlichen erst mit zwei verschiedenen Stewards.</p>
+          )}
+          {decisions.length === 0 ? (
+            <p class="text-muted">Noch keine Entscheidung zu diesem Vorfall.</p>
+          ) : (
+            <div class="grid gap-3">
+              {decisions.map((d) => (
+                <DecisionCard
+                  decision={d}
+                  driverLabel={driverLabel(d.driver_id)}
+                  sessionLabel={ctx.sessions.find((s) => s.id === d.session_id) ? SESSION_LABEL[ctx.sessions.find((s) => s.id === d.session_id)!.type] : null}
+                  voters={voters.get(d.id) ?? []}
+                  twoStewardRule={ctx.season.two_steward_rule}
+                  canDecide={canDecide && d.driver_id !== staff?.driverId}
+                  hasVoted={staff != null && d.decided_by.includes(staff.userId)}
+                  actions={actionUrls}
+                  editHref={`/admin/stewards/entscheidung/${d.id}`}
+                  resultAffecting={RESULT_AFFECTING_VERDICTS.includes(d.verdict)}
+                  roundFinal={roundFinal}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section aria-labelledby="inc-new" class="mb-8">
+          <h2 id="inc-new" class="mb-3 text-xl uppercase">
+            Neue Entscheidung
+          </h2>
+          {canDecide ? (
+            <DecisionForm
+              action={actions.admin.decisionSave}
+              idPrefix="new"
+              roundId={ctx.round.id}
+              values={formValues}
+              sessions={ctx.sessions}
+              driverOptions={ctx.driverOptions}
+              catalog={ctx.catalog}
+              penaltyPointsEnabled={ctx.season.penalty_points_enabled}
+              submitLabel="Als Entwurf speichern"
+            />
+          ) : (
+            <p class="text-muted">{isSteward ? 'Wegen Befangenheit nicht möglich.' : 'Nur Stewards können Entscheidungen anlegen.'}</p>
+          )}
+          <p class="field-hint mt-3">
+            Die Referenz (z. B. S2-R04-02) wird automatisch vergeben. Speichern zählt als deine Stimme; inhaltliche Änderungen am Entwurf
+            setzen die übrigen Stimmen zurück.
+          </p>
+        </section>
+      </>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .facts {
+    display: grid;
+    gap: 0.75rem 1.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  }
+  .facts dd {
+    margin-top: 0.125rem;
+  }
+  .description {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+  }
+</style>
