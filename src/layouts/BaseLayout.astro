@@ -9,7 +9,7 @@ import Header from '~/components/layout/Header.astro';
 import SeoHead from '~/components/layout/SeoHead.astro';
 import SiteScripts from '~/components/layout/SiteScripts.astro';
 import { pageTitle, SITE } from '~/config/site';
-import { TZ_SCRIPT } from '~/lib/tz-inline.mjs';
+import { LOCALTIME_SCRIPT, TZ_SCRIPT } from '~/lib/tz-inline.mjs';
 import { alternates as routeAlternates, useT, type Alternates, type Lang } from '~/i18n';
 import { env, isDemoMode } from '~/lib/server/env';
 import { loadPublicSettings } from '~/lib/server/league';
@@ -95,6 +95,7 @@ const robotsNoindex = noindex || demo || env.noindex;
       <slot />
     </main>
     <Footer lang={lang} settings={settings} />
+    <script is:inline set:html={LOCALTIME_SCRIPT} />
     {demo && <p class="demo-note" role="note">{t('meta.demoNotice')}</p>}
     <SiteScripts lang={lang} gaId={settings.ga_measurement_id} />
   </body>

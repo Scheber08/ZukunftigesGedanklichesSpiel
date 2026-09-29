@@ -148,32 +148,7 @@ const consentTexts = {
     });
   }
 
-  // Ortszeit des Besuchers ergänzen, wenn sie von Europe/Berlin abweicht (Plan §4.3)
-  const visitorTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const berlinOffset = (d: Date) => new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Berlin' })).getTime();
-  const visitorOffset = (d: Date) => new Date(d.toLocaleString('en-US', { timeZone: visitorTz })).getTime();
-  document.querySelectorAll<HTMLTimeElement>('time[data-localtime]').forEach((el) => {
-    const d = new Date(el.dateTime);
-    if (Number.isNaN(d.getTime()) || berlinOffset(d) === visitorOffset(d)) return;
-    const lang = el.dataset.lang === 'en' ? 'en-GB' : 'de-DE';
-    const onlyTime = el.dataset.localtime === 'time';
-    const local = new Intl.DateTimeFormat(lang, {
-      ...(onlyTime ? {} : { weekday: 'short', day: '2-digit', month: '2-digit' }),
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZoneName: 'short',
-    }).format(d);
-    // Platz ist per data-tz-diff (public/scripts/tz.js) schon reserviert – nur noch Text setzen
-    let hint = el.nextElementSibling as HTMLElement | null;
-    if (!hint?.hasAttribute('data-localtime-hint')) {
-      hint = document.createElement('span');
-      hint.className = 'localtime-hint';
-      el.after(hint);
-    }
-    hint.textContent = el.dataset.lang === 'en' ? ` (your time: ${local})` : ` (deine Zeit: ${local})`;
-    hint.removeAttribute('aria-hidden');
-    hint.classList.add('is-set');
-  });
+  // Ortszeit des Besuchers: setzt ein Inline-Skript am Ende von <body> (LOCALTIME_SCRIPT) vor dem ersten Zeichnen
 
   // „Link kopieren“
   document.querySelectorAll<HTMLButtonElement>('[data-share]').forEach((btn) => {

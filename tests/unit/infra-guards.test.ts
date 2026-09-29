@@ -134,9 +134,9 @@ describe('CSP und Client-Code', () => {
     const offenders: string[] = [];
     for (const f of astro) {
       const src = read(f);
-      // Einzige Ausnahme: das Zeitzonen-Skript im <head>, per SHA-256-Hash in der CSP freigegeben
+      // Ausnahmen: Zeitzonen- und Ortszeit-Skript (tz-inline.mjs), per SHA-256-Hash in der CSP freigegeben
       for (const tag of src.match(/<script\b[^>]*>/g) ?? []) {
-        if (/\bis:inline\b/.test(tag) && !/\bset:html=\{TZ_SCRIPT\}/.test(tag)) offenders.push(`${rel(f)}: is:inline`);
+        if (/\bis:inline\b/.test(tag) && !/\bset:html=\{(TZ_SCRIPT|LOCALTIME_SCRIPT)\}/.test(tag)) offenders.push(`${rel(f)}: is:inline`);
       }
       // HTML-Attribut mit String-Wert, z. B. onclick="…" (Svelte-Handler onclick={…} sind kein Inline-Skript)
       const handler = /<[a-zA-Z][^>]*\son[a-z]+\s*=\s*["']/.exec(src);
