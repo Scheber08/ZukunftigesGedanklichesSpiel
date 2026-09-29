@@ -1,0 +1,74 @@
+---
+/** Felder eines Punkteschemas (Plan §5 „Punkteschemata“, §6.1). */
+import Field from '~/components/admin/ui/Field.astro';
+import { fieldAria } from '~/lib/admin/league/page';
+
+interface Props {
+  prefix: string;
+  values: {
+    name: string;
+    race_points: string;
+    sprint_points: string;
+    fastest_lap_bonus: string;
+    fastest_lap_max_pos: string;
+    pole_bonus: string;
+  };
+  err: (name: string) => string[] | undefined;
+}
+const { prefix, values: v, err } = Astro.props;
+const fid = (n: string) => `${prefix}-${n}`;
+const aria = (n: string, hint = false) => fieldAria(fid(n), hint, err(n));
+---
+
+<div class="grid gap-4 sm:grid-cols-2">
+  <Field id={fid('name')} label="Name" required error={err('name')} class="sm:col-span-2">
+    <input id={fid('name')} name="name" class="input" value={v.name} maxlength="60" required {...aria('name')} />
+  </Field>
+  <Field
+    id={fid('race_points')}
+    label="Punkte Rennen (P1, P2, …)"
+    required
+    hint="Kommagetrennt, z. B. 25, 18, 15, 12, 10, 8, 6, 4, 2, 1. Plätze danach bekommen 0."
+    error={err('race_points')}
+    class="sm:col-span-2"
+  >
+    <input id={fid('race_points')} name="race_points" class="input font-mono" value={v.race_points} required {...aria('race_points', true)} />
+  </Field>
+  <Field
+    id={fid('sprint_points')}
+    label="Punkte Sprint (P1, P2, …)"
+    hint="Leer lassen, wenn es keine Sprints gibt."
+    error={err('sprint_points')}
+    class="sm:col-span-2"
+  >
+    <input id={fid('sprint_points')} name="sprint_points" class="input font-mono" value={v.sprint_points} {...aria('sprint_points', true)} />
+  </Field>
+  <Field id={fid('fastest_lap_bonus')} label="Bonus schnellste Runde" required hint="0 = kein Bonus. Nur im Hauptrennen." error={err('fastest_lap_bonus')}>
+    <input
+      id={fid('fastest_lap_bonus')}
+      name="fastest_lap_bonus"
+      type="number"
+      min="0"
+      max="50"
+      class="input"
+      value={v.fastest_lap_bonus}
+      required
+      {...aria('fastest_lap_bonus', true)}
+    />
+  </Field>
+  <Field id={fid('fastest_lap_max_pos')} label="… nur bis Platz" hint="Leer = für alle gewerteten Fahrer (z. B. 10 = nur Top 10)." error={err('fastest_lap_max_pos')}>
+    <input
+      id={fid('fastest_lap_max_pos')}
+      name="fastest_lap_max_pos"
+      type="number"
+      min="1"
+      max="99"
+      class="input"
+      value={v.fastest_lap_max_pos}
+      {...aria('fastest_lap_max_pos', true)}
+    />
+  </Field>
+  <Field id={fid('pole_bonus')} label="Pole-Bonus" required hint="Punkte für die Pole im Qualifying (0 = keiner)." error={err('pole_bonus')}>
+    <input id={fid('pole_bonus')} name="pole_bonus" type="number" min="0" max="50" class="input" value={v.pole_bonus} required {...aria('pole_bonus', true)} />
+  </Field>
+</div>

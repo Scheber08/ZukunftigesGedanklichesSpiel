@@ -1,0 +1,51 @@
+---
+/** Seitennavigation (1-basiert) mit Erhalt der übrigen Query-Parameter. */
+interface Props {
+  page: number;
+  pages: number;
+  /** Parametername für die Seite */
+  param?: string;
+}
+const { page, pages, param = 'seite' } = Astro.props;
+const href = (p: number) => {
+  const u = new URL(Astro.url);
+  u.searchParams.delete('ok');
+  u.searchParams.delete('n');
+  if (p <= 1) u.searchParams.delete(param);
+  else u.searchParams.set(param, String(p));
+  return u.pathname + u.search;
+};
+const shown = [...new Set([1, page - 1, page, page + 1, pages])].filter((p) => p >= 1 && p <= pages).sort((a, b) => a - b);
+---
+
+{
+  pages > 1 && (
+    <nav aria-label="Seiten" class="mt-4 flex flex-wrap items-center gap-2">
+      {page > 1 ? (
+        <a class="btn btn-ghost" href={href(page - 1)} rel="prev">
+          ← Zurück
+        </a>
+      ) : null}
+      {shown.map((p, i) => (
+        <>
+          {i > 0 && p - shown[i - 1]! > 1 && <span class="text-muted" aria-hidden="true">…</span>}
+          <a class="btn btn-ghost btn-icon" href={href(p)} aria-current={p === page ? 'page' : undefined} aria-label={`Seite ${p}`}>
+            {p}
+          </a>
+        </>
+      ))}
+      {page < pages ? (
+        <a class="btn btn-ghost" href={href(page + 1)} rel="next">
+          Weiter →
+        </a>
+      ) : null}
+    </nav>
+  )
+}
+
+<style>
+  a[aria-current='page'] {
+    background: var(--color-surface-2);
+    box-shadow: inset 0 -2px 0 var(--color-teal);
+  }
+</style>

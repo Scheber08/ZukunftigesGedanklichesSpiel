@@ -1,0 +1,60 @@
+---
+/**
+ * Meldungen oben auf einer Admin-Seite: Erfolg (`?ok=…` nach Post/Redirect/Get),
+ * Fehler der zuletzt abgeschickten Action und optionale Hinweise.
+ */
+import type { ActionOutcome } from '~/lib/admin/league/page';
+import { flashMessage } from '~/lib/admin/league/page';
+
+interface Props {
+  outcome?: ActionOutcome;
+  /** Zusätzliche Warnungen (z. B. eingefrorene Saison) */
+  warnings?: string[];
+}
+const { outcome, warnings = [] } = Astro.props;
+const flash = outcome?.error ? null : flashMessage(Astro.url);
+const error = outcome?.error;
+const fieldMessages = error ? Object.values(error.fields).flat() : [];
+const missing = Astro.url.searchParams.has('fehlt');
+---
+
+{
+  flash && (
+    <p class="alert alert-success mb-6" role="status">
+      <span class="font-semibold">Erledigt: </span>
+      {flash}
+    </p>
+  )
+}
+{
+  error && (
+    <div class="alert alert-danger mb-6" role="alert">
+      <p>
+        <span class="font-semibold">Nicht gespeichert: </span>
+        {error.message}
+      </p>
+      {fieldMessages.length > 0 && (
+        <ul class="mt-2 list-disc pl-5 text-sm text-muted">
+          {fieldMessages.map((m) => (
+            <li>{m}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+{
+  missing && (
+    <p class="alert alert-warning mb-6" role="status">
+      Der Eintrag wurde nicht gefunden – vielleicht wurde er gelöscht.
+    </p>
+  )
+}
+{
+  warnings.map((w) => (
+    <p class="alert alert-warning mb-6">
+      <span class="font-semibold">Hinweis: </span>
+      {w}
+    </p>
+  ))
+}

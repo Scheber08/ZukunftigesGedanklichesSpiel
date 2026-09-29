@@ -1,0 +1,34 @@
+---
+/** Saison-Auswahl als Segment-Links (?saison=<id>), ohne JavaScript. */
+import type { SeasonRow } from '~/lib/db/types';
+
+interface Props {
+  seasons: SeasonRow[];
+  currentId: number | null | undefined;
+  /** Basis-URL ohne Query, z. B. /admin/kalender */
+  base: string;
+  label?: string;
+}
+const { seasons, currentId, base, label = 'Saison wählen' } = Astro.props;
+const sorted = [...seasons].sort((a, b) => b.number - a.number);
+---
+
+{
+  sorted.length > 0 && (
+    <nav aria-label={label} class="mb-6 overflow-x-auto">
+      <div class="segmented">
+        {sorted.map((s) => (
+          <a
+            href={`${base}?saison=${s.id}`}
+            aria-current={s.id === currentId ? 'page' : undefined}
+            class="inline-flex min-h-[44px] items-center px-4"
+          >
+            {s.name}
+            {s.status === 'active' && <span class="sr-only"> (aktiv)</span>}
+            {s.status === 'finished' && <span class="ml-1 text-xs text-muted">· abgeschlossen</span>}
+          </a>
+        ))}
+      </div>
+    </nav>
+  )
+}

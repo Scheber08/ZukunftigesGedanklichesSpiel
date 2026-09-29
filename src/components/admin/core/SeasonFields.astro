@@ -1,0 +1,125 @@
+---
+/**
+ * Stammdaten-Felder einer Saison (Anlegen und Bearbeiten, Plan §5 „Saisons“, §6.1).
+ */
+import Field from '~/components/admin/ui/Field.astro';
+import { fieldAria } from '~/lib/admin/league/page';
+import type { PointsSchemeRow, RulesVersionRow, SeasonStatus } from '~/lib/db/types';
+
+interface Values {
+  number: string;
+  name: string;
+  slug: string;
+  game_version: string;
+  status: SeasonStatus | string;
+  points_scheme_id: string;
+  reserve_points_for_constructors: boolean;
+  protest_window_hours: string;
+  two_steward_rule: boolean;
+  penalty_points_enabled: boolean;
+  rules_version_id: string;
+  starts_on: string;
+  ends_on: string;
+}
+
+interface Props {
+  prefix: string;
+  values: Values;
+  err: (name: string) => string[] | undefined;
+  schemes: PointsSchemeRow[];
+  rulesVersions: RulesVersionRow[];
+  /** Statusauswahl anzeigen (nicht beim Klonen) */
+  withStatus?: boolean;
+}
+const { prefix, values: v, err, schemes, rulesVersions, withStatus = true } = Astro.props;
+const fid = (n: string) => `${prefix}-${n}`;
+const aria = (n: string, hint = false) => fieldAria(fid(n), hint, err(n));
+const RULES_STATUS: Record<string, string> = { draft: 'Entwurf', published: 'veröffentlicht', archived: 'archiviert' };
+---
+
+<div class="grid gap-4 sm:grid-cols-2">
+  <Field id={fid('number')} label="Saisonnummer" required error={err('number')}>
+    <input id={fid('number')} name="number" type="number" min="1" max="999" class="input" value={v.number} required {...aria('number')} />
+  </Field>
+  <Field id={fid('name')} label="Name" required hint="z. B. „Saison 3“" error={err('name')}>
+    <input id={fid('name')} name="name" class="input" value={v.name} maxlength="80" required {...aria('name', true)} />
+  </Field>
+  <Field id={fid('slug')} label="Slug (URL)" hint="Leer = Saisonnummer. Erscheint in /saison/<slug>/wertung." error={err('slug')}>
+    <input id={fid('slug')} name="slug" class="input" value={v.slug} maxlength="40" pattern="[a-z0-9]+(-[a-z0-9]+)*" {...aria('slug', true)} />
+  </Field>
+  <Field id={fid('game_version')} label="Spielversion" required hint="z. B. „F1 25 · 2026 Season Pack“" error={err('game_version')}>
+    <input id={fid('game_version')} name="game_version" class="input" value={v.game_version} maxlength="80" required {...aria('game_version', true)} />
+  </Field>
+  <Field id={fid('points_scheme_id')} label="Punkteschema" required error={err('points_scheme_id')}>
+    <select id={fid('points_scheme_id')} name="points_scheme_id" class="select" required {...aria('points_scheme_id')}>
+      {
+        schemes.map((s) => (
+          <option value={s.id} selected={String(s.id) === v.points_scheme_id}>
+            {s.name}
+          </option>
+        ))
+      }
+    </select>
+  </Field>
+  <Field id={fid('rules_version_id')} label="Regelwerk-Version" error={err('rules_version_id')}>
+    <select id={fid('rules_version_id')} name="rules_version_id" class="select" {...aria('rules_version_id')}>
+      <option value="">– keine –</option>
+      {
+        rulesVersions.map((r) => (
+          <option value={r.id} selected={String(r.id) === v.rules_version_id}>
+            Version {r.version} ({RULES_STATUS[r.status] ?? r.status})
+          </option>
+        ))
+      }
+    </select>
+  </Field>
+  <Field id={fid('protest_window_hours')} label="Protestfrist (Stunden)" required hint="Standard 48 h ab „vorläufig“." error={err('protest_window_hours')}>
+    <input
+      id={fid('protest_window_hours')}
+      name="protest_window_hours"
+      type="number"
+      min="1"
+      max="336"
+      class="input"
+      value={v.protest_window_hours}
+      required
+      {...aria('protest_window_hours', true)}
+    />
+  </Field>
+  {
+    withStatus && (
+      <Field id={fid('status')} label="Status" required hint="„Abgeschlossen“ nur über „Saison abschließen“." error={err('status')}>
+        <select id={fid('status')} name="status" class="select" {...aria('status', true)}>
+          <option value="planned" selected={v.status === 'planned'}>
+            Geplant
+          </option>
+          <option value="active" selected={v.status === 'active'}>
+            Aktiv
+          </option>
+        </select>
+      </Field>
+    )
+  }
+  <Field id={fid('starts_on')} label="Start" hint="Optional, für Archiv und Checkliste." error={err('starts_on')}>
+    <input id={fid('starts_on')} name="starts_on" type="date" class="input" value={v.starts_on} {...aria('starts_on', true)} />
+  </Field>
+  <Field id={fid('ends_on')} label="Ende" hint="Optional; beim Abschließen automatisch gesetzt." error={err('ends_on')}>
+    <input id={fid('ends_on')} name="ends_on" type="date" class="input" value={v.ends_on} {...aria('ends_on', true)} />
+  </Field>
+</div>
+
+<fieldset class="mt-4 grid gap-2">
+  <legend class="label mb-1">Regeln der Saison</legend>
+  <label class="checkbox" for={fid('reserve')}>
+    <input id={fid('reserve')} type="checkbox" name="reserve_points_for_constructors" value="true" checked={v.reserve_points_for_constructors} />
+    <span>Punkte von Reservefahrern zählen für die Konstrukteurswertung</span>
+  </label>
+  <label class="checkbox" for={fid('two')}>
+    <input id={fid('two')} type="checkbox" name="two_steward_rule" value="true" checked={v.two_steward_rule} />
+    <span>Vier-Augen-Prinzip: Entscheidungen brauchen eine zweite Steward-Stimme</span>
+  </label>
+  <label class="checkbox" for={fid('pp')}>
+    <input id={fid('pp')} type="checkbox" name="penalty_points_enabled" value="true" checked={v.penalty_points_enabled} />
+    <span>Strafpunkte-System aktiv <span class="text-muted">(vorbereitet, Entscheidung steht noch aus)</span></span>
+  </label>
+</fieldset>

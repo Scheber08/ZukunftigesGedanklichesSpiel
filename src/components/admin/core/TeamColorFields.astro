@@ -1,0 +1,154 @@
+---
+/**
+ * Teamfarbe + Textfarbe mit Farbwähler und Hex-Feld (Plan §5 „Teams“), Vorschau des
+ * 4-px-Streifens und Kontrast-Hinweis (WCAG). Das Hex-Feld ist der eigentliche Wert;
+ * der Farbwähler wird per Skript synchronisiert (ohne JS bleibt das Hex-Feld nutzbar).
+ */
+import { contrastReport, formatRatio } from '~/lib/admin/league/color';
+import { normalizeHex } from '~/lib/admin/league/forms';
+
+interface Props {
+  color: string;
+  textColor: string;
+  shortName?: string;
+  errors?: { color?: string[]; text?: string[] };
+  idPrefix?: string;
+}
+const { color, textColor, shortName = 'ABC', errors = {}, idPrefix = 'team' } = Astro.props;
+const c = normalizeHex(color) ?? '#888888';
+const tc = normalizeHex(textColor) ?? '#000000';
+const report = contrastReport(c, tc);
+const ids = { color: `${idPrefix}-color`, text: `${idPrefix}-text-color` };
+---
+
+<div class="grid gap-4 sm:grid-cols-2" data-team-colors>
+  <div class="field">
+    <label class="label" for={ids.color}>Teamfarbe <span class="req" aria-hidden="true">*</span></label>
+    <div class="flex items-center gap-2">
+      <input type="color" value={c} class="color-picker" aria-label="Farbwähler Teamfarbe" data-picker-for={ids.color} />
+      <input
+        id={ids.color}
+        name="color_hex"
+        class="input font-mono"
+        value={color}
+        required
+        pattern="#?[0-9A-Fa-f]{6}|#?[0-9A-Fa-f]{3}"
+        maxlength="7"
+        autocomplete="off"
+        spellcheck="false"
+        aria-describedby={`${ids.color}-hint`}
+        aria-invalid={errors.color?.length ? 'true' : undefined}
+        data-hex="color"
+      />
+    </div>
+    <p class="field-hint" id={`${ids.color}-hint`}>Hex-Wert, z. B. #FF8000. Erscheint nur als schmaler Streifen.</p>
+    {errors.color?.map((e) => <p class="field-error" role="alert">{e}</p>)}
+  </div>
+  <div class="field">
+    <label class="label" for={ids.text}>Textfarbe auf Teamfarbe</label>
+    <div class="flex items-center gap-2">
+      <input type="color" value={tc} class="color-picker" aria-label="Farbwähler Textfarbe" data-picker-for={ids.text} />
+      <input
+        id={ids.text}
+        name="text_color_hex"
+        class="input font-mono"
+        value={textColor}
+        required
+        pattern="#?[0-9A-Fa-f]{6}|#?[0-9A-Fa-f]{3}"
+        maxlength="7"
+        autocomplete="off"
+        spellcheck="false"
+        aria-describedby={`${ids.text}-hint`}
+        aria-invalid={errors.text?.length ? 'true' : undefined}
+        data-hex="text"
+      />
+    </div>
+    <p class="field-hint" id={`${ids.text}-hint`}>Für Grafiken/Overlays (Phase 2). Meist Schwarz oder Weiß.</p>
+    {errors.text?.map((e) => <p class="field-error" role="alert">{e}</p>)}
+  </div>
+
+  <div class="sm:col-span-2 flex flex-wrap items-center gap-4 rounded-lg border border-border bg-bg p-3" aria-live="polite">
+    <span class="inline-flex items-center gap-2">
+      <span class="team-stripe" style={`--team-color: ${c}`} data-preview="stripe"></span>
+      <span class="font-semibold uppercase">Streifen-Vorschau</span>
+    </span>
+    <span class="preview-chip" style={`background:${c};color:${tc}`} data-preview="chip">{shortName}</span>
+    <span class="text-sm" data-preview="report">
+      {
+        report ? (
+          <>
+            Text: {formatRatio(report.text)} {report.textOk ? '✓ lesbar' : `✗ zu wenig Kontrast (Vorschlag: ${report.suggestion})`} · Streifen auf
+            Dunkel: {formatRatio(report.stripe)} {report.stripeOk ? '✓ sichtbar' : '✗ kaum sichtbar'}
+          </>
+        ) : (
+          'Farbwerte prüfen'
+        )
+      }
+    </span>
+  </div>
+</div>
+
+<style>
+  .color-picker {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    padding: 2px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface-2);
+    cursor: pointer;
+  }
+  .preview-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.75rem;
+    padding: 0 0.6rem;
+    border-radius: 6px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+</style>
+
+<script>
+  import { contrastReport, formatRatio } from '~/lib/admin/league/color';
+  import { normalizeHex } from '~/lib/admin/league/forms';
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-team-colors]')) {
+    const color = root.querySelector<HTMLInputElement>('[data-hex="color"]');
+    const text = root.querySelector<HTMLInputElement>('[data-hex="text"]');
+    const stripe = root.querySelector<HTMLElement>('[data-preview="stripe"]');
+    const chip = root.querySelector<HTMLElement>('[data-preview="chip"]');
+    const out = root.querySelector<HTMLElement>('[data-preview="report"]');
+    if (!color || !text) continue;
+
+    const update = () => {
+      const c = normalizeHex(color.value);
+      const t = normalizeHex(text.value);
+      if (c && stripe) stripe.style.setProperty('--team-color', c);
+      if (c && chip) chip.style.background = c;
+      if (t && chip) chip.style.color = t;
+      const r = c && t ? contrastReport(c, t) : null;
+      if (out) {
+        out.textContent = r
+          ? `Text: ${formatRatio(r.text)} ${r.textOk ? '✓ lesbar' : `✗ zu wenig Kontrast (Vorschlag: ${r.suggestion})`} · Streifen auf Dunkel: ${formatRatio(r.stripe)} ${r.stripeOk ? '✓ sichtbar' : '✗ kaum sichtbar'}`
+          : 'Farbwerte prüfen (Format #RRGGBB)';
+      }
+    };
+
+    for (const picker of root.querySelectorAll<HTMLInputElement>('[data-picker-for]')) {
+      const target = root.querySelector<HTMLInputElement>(`#${picker.dataset.pickerFor}`);
+      if (!target) continue;
+      picker.addEventListener('input', () => {
+        target.value = picker.value.toUpperCase();
+        update();
+      });
+      target.addEventListener('input', () => {
+        const hex = normalizeHex(target.value);
+        if (hex) picker.value = hex.toLowerCase();
+        update();
+      });
+    }
+  }
+</script>

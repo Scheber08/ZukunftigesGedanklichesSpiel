@@ -1,0 +1,276 @@
+---
+/**
+ * Saison bearbeiten (Plan §5 „Saisons“): Stammdaten, Lobby-Einstellungen, Saison
+ * abschließen (Champions → Hall of Fame, einfrieren) bzw. wieder öffnen, Checkliste
+ * Saisonwechsel (Plan §11.2).
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import Badge from '~/components/ui/Badge.astro';
+import ConfirmField from '~/components/admin/core/ConfirmField.astro';
+import LobbyEditor from '~/components/admin/core/LobbyEditor.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import Section from '~/components/admin/core/Section.astro';
+import SeasonFields from '~/components/admin/core/SeasonFields.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { url } from '~/i18n';
+import { SEASON_STATUS_BADGE, SEASON_STATUS_LABELS } from '~/lib/admin/league/labels';
+import { lobbyStats } from '~/lib/admin/league/lobby';
+import { leagueFromStore } from '~/lib/admin/league/ops';
+import { actionOutcome, formValues } from '~/lib/admin/league/page';
+import { FROZEN_MESSAGE, isSeasonFrozen, openRoundsBeforeFinish, seasonChangeChecklist } from '~/lib/admin/league/season';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { readPublicSettings } from '~/lib/server/settings';
+import { intParam } from '~/lib/view';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+const A = actions.admin;
+const outcome = await actionOutcome(Astro, [A.seasonSave, A.seasonLobbySave, A.seasonFinish, A.seasonReopen, A.seasonDelete]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const seasonId = intParam(Astro.params.id);
+const store = getServiceStore();
+const season = seasonId ? (await store.select('seasons', { eq: { id: seasonId } }))[0] : undefined;
+if (!season) return Astro.redirect('/admin/saisons?fehlt=1');
+
+const [seasons, schemes, rulesVersions, rounds, seats, drivers, numbers, awards, publicSettings, seasonTeams] = await Promise.all([
+  store.select('seasons'),
+  store.select('points_schemes', { order: { column: 'name' } }),
+  store.select('rules_versions'),
+  store.select('rounds'),
+  store.select('seats'),
+  store.select('drivers'),
+  store.select('driver_numbers'),
+  store.select('awards', { eq: { season_id: season.id } }),
+  readPublicSettings(store),
+  store.select('season_teams', { eq: { season_id: season.id } }),
+]);
+const rulesSorted = [...rulesVersions].sort((a, b) => b.version.localeCompare(a.version, 'de', { numeric: true }));
+const frozen = isSeasonFrozen(season);
+const seasonRounds = rounds.filter((r) => r.season_id === season.id).sort((a, b) => a.number - b.number);
+const openRounds = openRoundsBeforeFinish(seasonRounds);
+
+// Vorschau der Champions aus der aktuellen Wertung
+const league = await leagueFromStore(store);
+const driverTop = league.driverStandings(season.id).slice(0, 3);
+const teamTop = league.teamStandings(season.id).filter((t) => t.points > 0 || t.starts > 0).slice(0, 3);
+const champion = awards.find((a) => a.type === 'champion');
+const constructors = awards.find((a) => a.type === 'constructors');
+
+const edit = formValues(outcome, A.seasonSave);
+const values = {
+  number: edit.str('number', season.number),
+  name: edit.str('name', season.name),
+  slug: edit.str('slug', season.slug),
+  game_version: edit.str('game_version', season.game_version),
+  status: edit.str('status', season.status),
+  points_scheme_id: edit.str('points_scheme_id', season.points_scheme_id),
+  reserve_points_for_constructors: edit.bool('reserve_points_for_constructors', season.reserve_points_for_constructors),
+  protest_window_hours: edit.str('protest_window_hours', season.protest_window_hours),
+  two_steward_rule: edit.bool('two_steward_rule', season.two_steward_rule),
+  penalty_points_enabled: edit.bool('penalty_points_enabled', season.penalty_points_enabled),
+  rules_version_id: edit.str('rules_version_id', season.rules_version_id ?? ''),
+  starts_on: edit.str('starts_on', season.starts_on ?? ''),
+  ends_on: edit.str('ends_on', season.ends_on ?? ''),
+};
+
+const lobbyMode = Astro.url.searchParams.get('lobby') === 'json' || (outcome.action === A.seasonLobbySave && outcome.posted?.get('mode') === 'json') ? 'json' : 'form';
+const lobbyErrors = outcome.action === A.seasonLobbySave ? { lobby: outcome.error?.fields.lobby, json: outcome.error?.fields.json } : {};
+const postedJson = outcome.action === A.seasonLobbySave && outcome.posted?.get('mode') === 'json' ? String(outcome.posted.get('json') ?? '') : null;
+const stats = lobbyStats(season.lobby_settings);
+
+const finishForm = formValues(outcome, A.seasonFinish);
+const checklist = seasonChangeChecklist({
+  season,
+  seasons,
+  rounds,
+  rulesVersions,
+  seats,
+  drivers,
+  numbers,
+  championAwarded: champion != null,
+  registration: publicSettings.registration,
+  now: new Date(),
+});
+const canDelete = season.status === 'planned' && seasonRounds.length === 0;
+const stateLabel = { done: 'Erledigt', open: 'Offen', manual: 'Manuell prüfen' } as const;
+const stateIcon = { done: '✓', open: '○', manual: '•' } as const;
+---
+
+<AdminLayout title={season.name} breadcrumbs={[{ label: 'Saisons', href: '/admin/saisons' }, { label: season.name }]}>
+  <div slot="actions" class="flex flex-wrap gap-2">
+    <a class="btn btn-ghost" href={`/admin/kalender?saison=${season.id}`}>Kalender</a>
+    <a class="btn btn-ghost" href={`/admin/teams/aufstellung?saison=${season.id}`}>Aufstellung</a>
+    {season.status !== 'planned' && <a class="btn btn-ghost" href={url('de', 'seasonStandings', { season: season.slug })}>Wertung</a>}
+  </div>
+
+  <Notice outcome={outcome} warnings={frozen ? [FROZEN_MESSAGE] : []} />
+
+  <p class="mb-6 flex flex-wrap items-center gap-2 text-sm text-muted">
+    <Badge variant={SEASON_STATUS_BADGE[season.status]}>{SEASON_STATUS_LABELS[season.status]}</Badge>
+    <span>{seasonRounds.length} Runden · {seasonTeams.length} Teams · {seats.filter((s) => s.season_id === season.id && s.to_round == null).length} besetzte Cockpits</span>
+  </p>
+
+  <Section title="Stammdaten" id="stammdaten">
+    <form method="POST" action={A.seasonSave}>
+      <input type="hidden" name="id" value={season.id} />
+      <fieldset disabled={frozen} class="grid gap-4">
+        <legend class="sr-only">Stammdaten der Saison</legend>
+        <SeasonFields prefix="season" values={values} err={edit.err} schemes={schemes} rulesVersions={rulesSorted} withStatus={!frozen} />
+        <div>
+          <button type="submit" class="btn btn-primary">Speichern</button>
+        </div>
+      </fieldset>
+    </form>
+  </Section>
+
+  <Section
+    title="Lobby-Einstellungen"
+    id="lobby"
+    description={`${stats.groups} Gruppen, ${stats.items} Einträge${stats.missingEn > 0 ? ` · ${stats.missingEn} Angaben ohne Englisch` : ''}. Erscheint auf /liga/lobby.`}
+  >
+    <LobbyEditor seasonId={season.id} lobby={season.lobby_settings ?? {}} mode={lobbyMode} disabled={frozen} errors={lobbyErrors} postedJson={postedJson} />
+  </Section>
+
+  {
+    season.status === 'finished' ? (
+      <Section title="Abgeschlossen" id="abschluss" description="Die Saison ist eingefroren und nur noch lesbar. Champions stehen in der Hall of Fame.">
+        <dl class="mb-6 grid gap-4 sm:grid-cols-2">
+          <div class="card p-4">
+            <dt class="micro">Fahrer-Champion</dt>
+            <dd class="mt-1 text-lg font-semibold">{champion?.driver_id != null ? league.driverName(champion.driver_id) : '– (kein Eintrag)'}</dd>
+          </div>
+          <div class="card p-4">
+            <dt class="micro">Konstrukteurs-Champion</dt>
+            <dd class="mt-1 text-lg font-semibold">{constructors?.team_id != null ? (league.team(constructors.team_id)?.name ?? '–') : '– (kein Eintrag)'}</dd>
+          </div>
+        </dl>
+        <form method="POST" action={A.seasonReopen} class="grid gap-3 border-t border-border pt-4">
+          <input type="hidden" name="season_id" value={season.id} />
+          <p class="text-sm text-muted">
+            Wieder öffnen hebt das Einfrieren auf (z. B. für eine nachträgliche Korrektur). Danach die Saison erneut abschließen –
+            die Champions werden dabei neu aus der Wertung übernommen.
+          </p>
+          <ConfirmField id="reopen-confirm" label="Ja, die Saison wieder öffnen." />
+          <div>
+            <button type="submit" class="btn btn-danger">Saison wieder öffnen</button>
+          </div>
+        </form>
+      </Section>
+    ) : (
+      <Section
+        title="Saison abschließen"
+        id="abschluss"
+        description="Übernimmt Fahrer- und Konstrukteurs-Champion aus der aktuellen Wertung in die Hall of Fame und friert die Saison ein."
+      >
+        <div class="mb-4 grid gap-4 sm:grid-cols-2">
+          <div>
+            <p class="micro mb-2">Fahrerwertung (Top 3)</p>
+            {driverTop.length === 0 ? (
+              <p class="text-muted">Noch keine gewerteten Ergebnisse.</p>
+            ) : (
+              <ol class="grid gap-1">
+                {driverTop.map((d) => (
+                  <li>
+                    <span class="tabular font-semibold">P{d.position}</span> {league.driverName(d.driverId)}{' '}
+                    <span class="text-muted">· {d.points} Pkt.</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+          <div>
+            <p class="micro mb-2">Konstrukteurswertung (Top 3)</p>
+            {teamTop.length === 0 ? (
+              <p class="text-muted">Noch keine gewerteten Ergebnisse.</p>
+            ) : (
+              <ol class="grid gap-1">
+                {teamTop.map((t) => (
+                  <li>
+                    <span class="tabular font-semibold">P{t.position}</span> {league.team(t.teamId)?.name}{' '}
+                    <span class="text-muted">· {t.points} Pkt.</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        </div>
+        {openRounds.length > 0 && (
+          <p class="alert alert-warning mb-4">
+            Noch nicht final oder abgesagt: {openRounds.map((n) => `R${n}`).join(', ')}. Normalerweise erst alle Runden final setzen.
+          </p>
+        )}
+        <form method="POST" action={A.seasonFinish} class="grid gap-3">
+          <input type="hidden" name="season_id" value={season.id} />
+          <ConfirmField id="finish-confirm" label="Ja, Saison abschließen und einfrieren." />
+          {openRounds.length > 0 && (
+            <label class="checkbox text-sm" for="finish-force">
+              <input id="finish-force" type="checkbox" name="force" value="true" checked={finishForm.bool('force', false)} />
+              <span>Trotzdem abschließen (offene Runden bleiben, wie sie sind)</span>
+            </label>
+          )}
+          {finishForm.err('force')?.map((e) => (
+            <p class="field-error" role="alert">
+              {e}
+            </p>
+          ))}
+          <div>
+            <button type="submit" class="btn btn-primary" disabled={driverTop.length === 0}>
+              Saison abschließen
+            </button>
+          </div>
+        </form>
+      </Section>
+    )
+  }
+
+  <Section title="Checkliste Saisonwechsel" id="checkliste" description="Plan §11.2 – was nach dem Saisonende zu tun ist. Häkchen setzt das System, soweit es den Stand erkennen kann.">
+    <ol class="grid gap-3">
+      {
+        checklist.map((item) => (
+          <li class="flex gap-3 border-b border-border pb-3 last:border-0">
+            <span
+              class:list={[
+                'mt-0.5 inline-flex h-7 w-7 flex-none items-center justify-center rounded-full border text-sm font-bold',
+                item.state === 'done' ? 'border-green text-green' : item.state === 'open' ? 'border-warning text-warning' : 'border-border text-muted',
+              ]}
+              aria-hidden="true"
+            >
+              {stateIcon[item.state]}
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="font-semibold">
+                {item.step}. {item.title} <span class="sr-only">– {stateLabel[item.state]}</span>
+                <span class="ml-2 text-xs font-normal text-muted" aria-hidden="true">
+                  {stateLabel[item.state]}
+                </span>
+              </p>
+              <p class="text-sm text-muted">{item.detail}</p>
+              {item.href && (
+                <a class="mt-1 inline-flex min-h-[44px] items-center text-sm underline" href={item.href}>
+                  {item.linkLabel}
+                </a>
+              )}
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+  </Section>
+
+  {
+    canDelete && (
+      <Section title="Saison löschen" id="loeschen" description="Nur möglich, solange die Saison geplant ist und keine Runden hat.">
+        <form method="POST" action={A.seasonDelete} class="grid gap-3">
+          <input type="hidden" name="season_id" value={season.id} />
+          <ConfirmField id="delete-confirm" label={`Ja, ${season.name} endgültig löschen (inkl. Teams und Cockpits der Saison).`} />
+          <div>
+            <button type="submit" class="btn btn-danger">Saison löschen</button>
+          </div>
+        </form>
+      </Section>
+    )
+  }
+</AdminLayout>

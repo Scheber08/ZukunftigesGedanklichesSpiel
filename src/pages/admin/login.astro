@@ -1,0 +1,83 @@
+---
+/**
+ * Staff-Login (Plan §5): Discord-OAuth. Im Demo-Modus zusätzlich Demo-Zugänge je Rolle.
+ */
+export const prerender = false;
+
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import BrandIcon from '~/components/ui/BrandIcon.astro';
+import Logo from '~/components/ui/Logo.astro';
+import { loginErrorMessage, safeNext } from '~/lib/admin/league/auth';
+import { STAFF_ROLE_LABELS } from '~/lib/admin/league/labels';
+import { STAFF_ROLES } from '~/lib/db/types';
+import { isDemoMode } from '~/lib/server/env';
+
+const next = safeNext(Astro.url.searchParams.get('next'));
+// Bereits angemeldet → direkt weiter
+if (Astro.locals.staff) return Astro.redirect(next, 302);
+
+const error = loginErrorMessage(Astro.url.searchParams.get('error'));
+const loggedOut = Astro.url.searchParams.has('abgemeldet');
+const demo = isDemoMode();
+const discordHref = `/admin/auth/login?next=${encodeURIComponent(next)}`;
+const demoText: Record<(typeof STAFF_ROLES)[number], string> = {
+  admin: 'Alle Module: Saisons, Kalender, Fahrer, Renntag, Einstellungen',
+  steward: 'Vorfälle prüfen und Entscheidungen treffen',
+  redakteur: 'News, FAQ und Seiten-Inhalte pflegen',
+};
+---
+
+<AdminLayout title="Anmelden">
+  <div class="mx-auto max-w-md">
+    <div class="card p-6 sm:p-8">
+      <div class="mb-6 flex items-center gap-3">
+        <Logo size={40} variant="gradient" />
+        <p class="text-sm text-muted">Admin-Bereich der Liga – nur für Staff mit Liga-Rolle auf Discord.</p>
+      </div>
+
+      {loggedOut && !error && <p class="alert alert-success mb-4" role="status">Du bist abgemeldet.</p>}
+      {
+        error && (
+          <p class="alert alert-danger mb-4" role="alert">
+            {error}
+          </p>
+        )
+      }
+
+      <a href={discordHref} class="btn btn-primary w-full" data-discord-login>
+        <BrandIcon name="discord" size={20} />
+        Mit Discord anmelden
+      </a>
+      <p class="mt-3 text-sm text-muted">
+        Wir fragen bei Discord nur deinen Benutzer ab („identify“). Welche Module du siehst, richtet sich nach deiner Rolle
+        (Admin, Steward, Redaktion) auf dem Liga-Server und wird alle 15 Minuten neu geprüft.
+      </p>
+
+      {
+        demo && (
+          <div class="mt-8 border-t border-border pt-6">
+            <h2 class="text-lg uppercase">Demo-Zugang</h2>
+            <p class="mt-1 mb-4 text-sm text-muted">
+              Der Demo-Modus läuft mit Beispieldaten im Speicher. Wähle eine Rolle – Änderungen gehen beim Neustart des Servers verloren.
+            </p>
+            <ul class="grid gap-3">
+              {STAFF_ROLES.map((role) => (
+                <li>
+                  <form method="POST" action="/admin/auth/demo">
+                    <input type="hidden" name="role" value={role} />
+                    <input type="hidden" name="next" value={next} />
+                    <button type="submit" class="btn btn-secondary w-full justify-between">
+                      <span>Als Demo-{STAFF_ROLE_LABELS[role]}</span>
+                      <span class="sr-only">anmelden</span>
+                    </button>
+                  </form>
+                  <p class="mt-1 text-xs text-muted">{demoText[role]}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      }
+    </div>
+  </div>
+</AdminLayout>

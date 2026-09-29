@@ -1,0 +1,93 @@
+---
+/**
+ * Punkteschema bearbeiten oder löschen (nur wenn keine Saison es nutzt).
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import ConfirmField from '~/components/admin/core/ConfirmField.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import SchemeFields from '~/components/admin/core/SchemeFields.astro';
+import Section from '~/components/admin/core/Section.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { actionOutcome, formValues } from '~/lib/admin/league/page';
+import { POINTS_TEMPLATES } from '~/lib/domain/points';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { intParam } from '~/lib/view';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+const outcome = await actionOutcome(Astro, [actions.admin.schemeSave, actions.admin.schemeDelete]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const store = getServiceStore();
+const schemeId = intParam(Astro.params.id);
+const scheme = schemeId ? (await store.select('points_schemes', { eq: { id: schemeId } }))[0] : undefined;
+if (!scheme) return Astro.redirect('/admin/punkteschemata?fehlt=1');
+const used = await store.select('seasons', { eq: { points_scheme_id: scheme.id } });
+
+type TemplateKey = keyof typeof POINTS_TEMPLATES;
+const templateKey = Astro.url.searchParams.get('vorlage') as TemplateKey | null;
+const template = templateKey && templateKey in POINTS_TEMPLATES ? POINTS_TEMPLATES[templateKey] : null;
+const f = formValues(outcome, actions.admin.schemeSave);
+const src = template ?? scheme;
+const values = {
+  name: f.str('name', scheme.name),
+  race_points: f.str('race_points', src.race_points.join(', ')),
+  sprint_points: f.str('sprint_points', src.sprint_points.join(', ')),
+  fastest_lap_bonus: f.str('fastest_lap_bonus', src.fastest_lap_bonus),
+  fastest_lap_max_pos: f.str('fastest_lap_max_pos', src.fastest_lap_max_pos ?? ''),
+  pole_bonus: f.str('pole_bonus', src.pole_bonus),
+};
+const usedActive = used.filter((s) => s.status !== 'planned');
+---
+
+<AdminLayout title={scheme.name} breadcrumbs={[{ label: 'Punkteschemata', href: '/admin/punkteschemata' }, { label: scheme.name }]}>
+  <Notice
+    outcome={outcome}
+    warnings={usedActive.length
+      ? [
+          `Wird von ${usedActive.map((s) => s.name).join(', ')} genutzt. Änderungen gelten erst, wenn ein Ergebnis (neu) veröffentlicht wird – bereits gespeicherte Punkte bleiben unverändert.`,
+        ]
+      : []}
+  />
+
+  <Section title="Schema bearbeiten" id="bearbeiten">
+    <p class="micro mb-2">Werte aus Vorlage übernehmen</p>
+    <ul class="mb-4 flex flex-wrap gap-2">
+      {
+        (Object.keys(POINTS_TEMPLATES) as TemplateKey[]).map((k) => (
+          <li>
+            <a class="btn btn-ghost" href={`/admin/punkteschemata/${scheme.id}?vorlage=${k}#bearbeiten`}>
+              {POINTS_TEMPLATES[k].name}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+    {template && <p class="alert alert-success mb-4" role="status">Werte aus „{template.name}“ eingesetzt – erst nach dem Speichern wirksam.</p>}
+    <form method="POST" action={actions.admin.schemeSave} class="grid gap-4">
+      <input type="hidden" name="id" value={scheme.id} />
+      <SchemeFields prefix="scheme" values={values} err={f.err} />
+      <div>
+        <button type="submit" class="btn btn-primary">Speichern</button>
+      </div>
+    </form>
+  </Section>
+
+  <Section title="Löschen" id="loeschen">
+    {
+      used.length > 0 ? (
+        <p class="text-muted">Kann nicht gelöscht werden – genutzt von: {used.map((s) => s.name).join(', ')}.</p>
+      ) : (
+        <form method="POST" action={actions.admin.schemeDelete} class="grid gap-3">
+          <input type="hidden" name="id" value={scheme.id} />
+          <ConfirmField id="scheme-delete-confirm" label={`Ja, „${scheme.name}“ löschen.`} />
+          <div>
+            <button type="submit" class="btn btn-danger">Schema löschen</button>
+          </div>
+        </form>
+      )
+    }
+  </Section>
+</AdminLayout>

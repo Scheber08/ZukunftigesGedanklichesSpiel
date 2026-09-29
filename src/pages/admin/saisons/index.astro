@@ -1,0 +1,217 @@
+---
+/**
+ * Saisons (Plan §5): Übersicht, neue Saison anlegen oder aus der Vorsaison klonen.
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import Badge from '~/components/ui/Badge.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import Section from '~/components/admin/core/Section.astro';
+import SeasonFields from '~/components/admin/core/SeasonFields.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { SEASON_STATUS_BADGE, SEASON_STATUS_LABELS } from '~/lib/admin/league/labels';
+import { actionOutcome, fieldAria, formValues } from '~/lib/admin/league/page';
+import { nextSeasonNumber } from '~/lib/admin/league/season';
+import { formatDate } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+const outcome = await actionOutcome(Astro, [actions.admin.seasonSave, actions.admin.seasonClone]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const store = getServiceStore();
+const [seasons, schemes, rulesVersions, rounds, seats, seasonTeams] = await Promise.all([
+  store.select('seasons', { order: { column: 'number', desc: true } }),
+  store.select('points_schemes', { order: { column: 'name' } }),
+  store.select('rules_versions'),
+  store.select('rounds'),
+  store.select('seats'),
+  store.select('season_teams'),
+]);
+const rulesSorted = [...rulesVersions].sort((a, b) => b.version.localeCompare(a.version, 'de', { numeric: true }));
+const newestRules = rulesSorted.find((r) => r.status === 'published') ?? rulesSorted[0];
+const latest = seasons[0];
+const next = nextSeasonNumber(seasons);
+const schemeName = (id: number) => schemes.find((s) => s.id === id)?.name ?? '–';
+
+const create = formValues(outcome, actions.admin.seasonSave);
+const createValues = {
+  number: create.str('number', next),
+  name: create.str('name', `Saison ${next}`),
+  slug: create.str('slug', ''),
+  game_version: create.str('game_version', latest?.game_version ?? 'F1 25'),
+  status: create.str('status', 'planned'),
+  points_scheme_id: create.str('points_scheme_id', latest?.points_scheme_id ?? schemes[0]?.id ?? ''),
+  reserve_points_for_constructors: create.bool('reserve_points_for_constructors', latest?.reserve_points_for_constructors ?? true),
+  protest_window_hours: create.str('protest_window_hours', latest?.protest_window_hours ?? 48),
+  two_steward_rule: create.bool('two_steward_rule', latest?.two_steward_rule ?? false),
+  penalty_points_enabled: create.bool('penalty_points_enabled', false),
+  rules_version_id: create.str('rules_version_id', newestRules?.id ?? ''),
+  starts_on: create.str('starts_on', ''),
+  ends_on: create.str('ends_on', ''),
+};
+
+const clone = formValues(outcome, actions.admin.seasonClone);
+const cloneSource = clone.str('source_id', latest?.id ?? '');
+const openCreate = create.active || seasons.length === 0;
+---
+
+<AdminLayout title="Saisons" breadcrumbs={[{ label: 'Saisons' }]}>
+  <Notice outcome={outcome} />
+
+  <Section title="Alle Saisons" id="liste">
+    {
+      seasons.length === 0 ? (
+        <p class="text-muted">Noch keine Saison angelegt.</p>
+      ) : (
+        <div class="table-wrap">
+          <table class="timing-table">
+            <caption class="sr-only">Saisons, neueste zuerst</caption>
+            <thead>
+              <tr>
+                <th scope="col" class="num">Nr.</th>
+                <th scope="col">Saison</th>
+                <th scope="col">Status</th>
+                <th scope="col">Spielversion</th>
+                <th scope="col">Punkteschema</th>
+                <th scope="col" class="num">Runden</th>
+                <th scope="col" class="num">Teams</th>
+                <th scope="col" class="num">Cockpits</th>
+                <th scope="col">Zeitraum</th>
+              </tr>
+            </thead>
+            <tbody>
+              {seasons.map((s) => {
+                const r = rounds.filter((x) => x.season_id === s.id);
+                return (
+                  <tr>
+                    <td class="num">{s.number}</td>
+                    <th scope="row">
+                      <a href={`/admin/saisons/${s.id}`} class="font-semibold underline">
+                        {s.name}
+                      </a>
+                    </th>
+                    <td>
+                      <Badge variant={SEASON_STATUS_BADGE[s.status]}>{SEASON_STATUS_LABELS[s.status]}</Badge>
+                    </td>
+                    <td class="muted">{s.game_version}</td>
+                    <td class="muted">{schemeName(s.points_scheme_id)}</td>
+                    <td class="num">
+                      {r.filter((x) => x.status === 'final' || x.status === 'corrected').length}/{r.filter((x) => x.status !== 'cancelled').length}
+                    </td>
+                    <td class="num">{seasonTeams.filter((x) => x.season_id === s.id).length}</td>
+                    <td class="num">{seats.filter((x) => x.season_id === s.id && x.to_round == null).length}</td>
+                    <td class="muted">
+                      {s.starts_on ? formatDate(`${s.starts_on}T12:00:00Z`, 'de') : '–'} – {s.ends_on ? formatDate(`${s.ends_on}T12:00:00Z`, 'de') : '–'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+  </Section>
+
+  {
+    latest && (
+      <Section
+        title="Aus Vorsaison klonen"
+        id="klonen"
+        description="Übernimmt Punkteschema, Reservepunkte, Protestfrist, Vier-Augen-Prinzip, Strafpunkte-Schalter, Lobby-Einstellungen und die Teams mit Reihenfolge. Optional auch die Cockpits (Stand am Saisonende, ohne inaktive/gesperrte Fahrer)."
+      >
+        <form method="POST" action={actions.admin.seasonClone} class="grid gap-4">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <Field id="clone-source" label="Vorlage (Vorsaison)" required error={clone.err('source_id')}>
+              <select id="clone-source" name="source_id" class="select" required {...fieldAria('clone-source', false, clone.err('source_id'))}>
+                {seasons.map((s) => (
+                  <option value={s.id} selected={String(s.id) === cloneSource}>
+                    {s.name} ({SEASON_STATUS_LABELS[s.status]})
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field id="clone-number" label="Neue Saisonnummer" required error={clone.err('number')}>
+              <input
+                id="clone-number"
+                name="number"
+                type="number"
+                min="1"
+                max="999"
+                class="input"
+                value={clone.str('number', next)}
+                required
+                {...fieldAria('clone-number', false, clone.err('number'))}
+              />
+            </Field>
+            <Field id="clone-name" label="Name" required error={clone.err('name')}>
+              <input
+                id="clone-name"
+                name="name"
+                class="input"
+                value={clone.str('name', `Saison ${next}`)}
+                maxlength="80"
+                required
+                {...fieldAria('clone-name', false, clone.err('name'))}
+              />
+            </Field>
+            <Field id="clone-slug" label="Slug (URL)" hint="Leer = Saisonnummer." error={clone.err('slug')}>
+              <input id="clone-slug" name="slug" class="input" value={clone.str('slug', '')} maxlength="40" {...fieldAria('clone-slug', true, clone.err('slug'))} />
+            </Field>
+            <Field id="clone-game" label="Spielversion" required error={clone.err('game_version')}>
+              <input
+                id="clone-game"
+                name="game_version"
+                class="input"
+                value={clone.str('game_version', latest.game_version)}
+                maxlength="80"
+                required
+                {...fieldAria('clone-game', false, clone.err('game_version'))}
+              />
+            </Field>
+            <Field id="clone-rules" label="Regelwerk-Version" hint="Leer = wie die Vorsaison. Neue Version vorher unter „Regelwerk“ veröffentlichen." error={clone.err('rules_version_id')}>
+              <select id="clone-rules" name="rules_version_id" class="select" {...fieldAria('clone-rules', true, clone.err('rules_version_id'))}>
+                <option value="">Wie die Vorsaison</option>
+                {rulesSorted.map((r) => (
+                  <option value={r.id} selected={String(r.id) === clone.str('rules_version_id', '')}>
+                    Version {r.version}
+                    {r.status === 'published' ? '' : r.status === 'draft' ? ' (Entwurf)' : ' (archiviert)'}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field id="clone-start" label="Start" error={clone.err('starts_on')}>
+              <input id="clone-start" name="starts_on" type="date" class="input" value={clone.str('starts_on', '')} {...fieldAria('clone-start', false, clone.err('starts_on'))} />
+            </Field>
+            <Field id="clone-end" label="Ende" error={clone.err('ends_on')}>
+              <input id="clone-end" name="ends_on" type="date" class="input" value={clone.str('ends_on', '')} {...fieldAria('clone-end', false, clone.err('ends_on'))} />
+            </Field>
+          </div>
+          <label class="checkbox" for="clone-seats">
+            <input id="clone-seats" type="checkbox" name="copy_seats" value="true" checked={clone.bool('copy_seats', true)} />
+            <span>Cockpits übernehmen (alle Fahrer starten ab Runde 1 im selben Cockpit)</span>
+          </label>
+          <div>
+            <button type="submit" class="btn btn-primary">Saison klonen</button>
+          </div>
+        </form>
+      </Section>
+    )
+  }
+
+  <Section title="Neue Saison anlegen" id="neu" description="Leere Saison ohne Teams – für die erste Saison oder einen Neustart.">
+    <details open={openCreate}>
+      <summary class="btn btn-ghost mb-4 cursor-pointer">Formular anzeigen</summary>
+      <form method="POST" action={actions.admin.seasonSave} class="grid gap-4">
+        <SeasonFields prefix="new-season" values={createValues} err={create.err} schemes={schemes} rulesVersions={rulesSorted} />
+        <div>
+          <button type="submit" class="btn btn-primary">Saison anlegen</button>
+        </div>
+      </form>
+    </details>
+  </Section>
+</AdminLayout>

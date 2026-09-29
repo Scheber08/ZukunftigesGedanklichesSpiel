@@ -1,0 +1,31 @@
+---
+/** Länderauswahl (ISO 3166-1 Alpha-2) mit deutschen Namen, sortiert; leer = keine Angabe. */
+import { countries } from 'country-flag-icons';
+import { countryName } from '~/lib/view';
+
+interface Props {
+  id: string;
+  name: string;
+  value: string | null | undefined;
+  emptyLabel?: string;
+  required?: boolean;
+  describedby?: string;
+}
+const { id, name, value, emptyLabel = '– keine Angabe –', required = false, describedby } = Astro.props;
+const current = value?.toUpperCase() ?? '';
+const options = (countries as string[])
+  .filter((c) => /^[A-Z]{2}$/.test(c))
+  .map((code) => ({ code, label: countryName(code, 'de') }))
+  .sort((a, b) => a.label.localeCompare(b.label, 'de'));
+---
+
+<select id={id} name={name} class="select" required={required} aria-describedby={describedby}>
+  {!required && <option value="">{emptyLabel}</option>}
+  {
+    options.map((o) => (
+      <option value={o.code} selected={o.code === current}>
+        {o.label} ({o.code})
+      </option>
+    ))
+  }
+</select>

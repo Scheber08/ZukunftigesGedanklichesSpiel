@@ -1,0 +1,104 @@
+---
+/**
+ * Punkteschemata (Plan §5): Übersicht, neues Schema anlegen, Vorlagen übernehmen.
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import Notice from '~/components/admin/core/Notice.astro';
+import SchemeFields from '~/components/admin/core/SchemeFields.astro';
+import Section from '~/components/admin/core/Section.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { uniqueName } from '~/lib/admin/league/forms';
+import { actionOutcome, formValues } from '~/lib/admin/league/page';
+import { POINTS_TEMPLATES } from '~/lib/domain/points';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+const outcome = await actionOutcome(Astro, [actions.admin.schemeSave]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const store = getServiceStore();
+const [schemes, seasons] = await Promise.all([store.select('points_schemes', { order: { column: 'name' } }), store.select('seasons')]);
+
+type TemplateKey = keyof typeof POINTS_TEMPLATES;
+const templateKey = Astro.url.searchParams.get('vorlage') as TemplateKey | null;
+const template = templateKey && templateKey in POINTS_TEMPLATES ? POINTS_TEMPLATES[templateKey] : null;
+const f = formValues(outcome, actions.admin.schemeSave);
+const values = {
+  name: f.str('name', template ? uniqueName(template.name, schemes.map((s) => s.name)) : ''),
+  race_points: f.str('race_points', template ? template.race_points.join(', ') : ''),
+  sprint_points: f.str('sprint_points', template ? template.sprint_points.join(', ') : ''),
+  fastest_lap_bonus: f.str('fastest_lap_bonus', template?.fastest_lap_bonus ?? 0),
+  fastest_lap_max_pos: f.str('fastest_lap_max_pos', template?.fastest_lap_max_pos ?? ''),
+  pole_bonus: f.str('pole_bonus', template?.pole_bonus ?? 0),
+};
+const bonusText = (s: { fastest_lap_bonus: number; fastest_lap_max_pos: number | null }) =>
+  s.fastest_lap_bonus > 0 ? `+${s.fastest_lap_bonus}${s.fastest_lap_max_pos ? ` (nur Top ${s.fastest_lap_max_pos})` : ''}` : '–';
+---
+
+<AdminLayout title="Punkteschemata" breadcrumbs={[{ label: 'Punkteschemata' }]}>
+  <Notice outcome={outcome} />
+
+  <Section title="Schemata" id="liste" description="Jede Saison nutzt genau ein Schema. Punkte werden beim Veröffentlichen eines Ergebnisses berechnet.">
+    <div class="table-wrap">
+      <table class="timing-table">
+        <caption class="sr-only">Punkteschemata</caption>
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Rennen</th>
+            <th scope="col">Sprint</th>
+            <th scope="col">Schnellste Runde</th>
+            <th scope="col" class="num">Pole</th>
+            <th scope="col">Saisons</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            schemes.map((s) => {
+              const used = seasons.filter((x) => x.points_scheme_id === s.id);
+              return (
+                <tr>
+                  <th scope="row">
+                    <a class="font-semibold underline" href={`/admin/punkteschemata/${s.id}`}>
+                      {s.name}
+                    </a>
+                  </th>
+                  <td class="muted font-mono text-sm">{s.race_points.join(' · ')}</td>
+                  <td class="muted font-mono text-sm">{s.sprint_points.length ? s.sprint_points.join(' · ') : '–'}</td>
+                  <td>{bonusText(s)}</td>
+                  <td class="num">{s.pole_bonus > 0 ? `+${s.pole_bonus}` : '–'}</td>
+                  <td class="muted">{used.length ? used.map((x) => x.name).join(', ') : 'unbenutzt'}</td>
+                </tr>
+              );
+            })
+          }
+        </tbody>
+      </table>
+    </div>
+  </Section>
+
+  <Section title="Neues Schema" id="neu" description="Starte mit einer Vorlage oder trage die Punkte selbst ein.">
+    <p class="micro mb-2">Vorlage übernehmen</p>
+    <ul class="mb-6 flex flex-wrap gap-2">
+      {
+        (Object.keys(POINTS_TEMPLATES) as TemplateKey[]).map((k) => (
+          <li>
+            <a class="btn btn-secondary" href={`/admin/punkteschemata?vorlage=${k}#neu`} aria-current={k === templateKey ? 'true' : undefined}>
+              {POINTS_TEMPLATES[k].name}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+    {template && <p class="alert alert-success mb-4" role="status">Vorlage „{template.name}“ eingesetzt – prüfen und speichern.</p>}
+    <form method="POST" action={actions.admin.schemeSave} class="grid gap-4">
+      <SchemeFields prefix="new-scheme" values={values} err={f.err} />
+      <div>
+        <button type="submit" class="btn btn-primary">Schema anlegen</button>
+      </div>
+    </form>
+  </Section>
+</AdminLayout>

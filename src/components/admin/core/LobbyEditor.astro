@@ -1,0 +1,194 @@
+---
+/**
+ * Lobby-Einstellungen einer Saison bearbeiten (Plan §2.1, §5 „Saisons“):
+ * einfache Formular-Oberfläche (Gruppen → Einträge, DE/EN) oder JSON mit Prüfung.
+ * Ohne JavaScript: je Gruppe gibt es freie Zeilen für neue Einträge und eine leere Gruppe.
+ */
+import { actions } from 'astro:actions';
+import type { LobbySettings } from '~/lib/db/types';
+
+interface Props {
+  seasonId: number;
+  lobby: LobbySettings;
+  mode: 'form' | 'json';
+  disabled?: boolean;
+  /** Fehler aus der letzten Speicherung */
+  errors?: { lobby?: string[]; json?: string[] };
+  /** Nach einem JSON-Fehler: der eingegebene Text */
+  postedJson?: string | null;
+}
+const { seasonId, lobby, mode, disabled = false, errors = {}, postedJson } = Astro.props;
+const groups = lobby.groups ?? [];
+const EXTRA_ITEMS = 2;
+const json = postedJson ?? JSON.stringify(lobby, null, 2);
+const base = `/admin/saisons/${seasonId}`;
+---
+
+<div class="mb-4 segmented" role="group" aria-label="Eingabeart">
+  <a href={`${base}?lobby=form#lobby`} aria-current={mode === 'form' ? 'page' : undefined} class="inline-flex min-h-[44px] items-center px-4">
+    Formular
+  </a>
+  <a href={`${base}?lobby=json#lobby`} aria-current={mode === 'json' ? 'page' : undefined} class="inline-flex min-h-[44px] items-center px-4">
+    JSON
+  </a>
+</div>
+
+{
+  mode === 'json' ? (
+    <form method="POST" action={actions.admin.seasonLobbySave} class="grid gap-3">
+      <input type="hidden" name="season_id" value={seasonId} />
+      <input type="hidden" name="mode" value="json" />
+      <fieldset disabled={disabled} class="grid gap-3">
+        <label for="lobby-json" class="label">
+          Lobby-Einstellungen als JSON
+        </label>
+        <textarea
+          id="lobby-json"
+          name="json"
+          class="textarea font-mono text-sm"
+          rows="22"
+          spellcheck="false"
+          aria-describedby="lobby-json-hint"
+          aria-invalid={errors.json?.length ? 'true' : undefined}
+        >{json}</textarea>
+        <p id="lobby-json-hint" class="field-hint">
+          Aufbau: {'{'} "groups": [{'{'} "key", "title_de", "title_en", "items": [{'{'} "label_de", "value_de", "label_en", "value_en" {'}'}] {'}'}],
+          "join_steps_de": [...], "join_steps_en": [...] {'}'}. Beim Speichern wird alles geprüft.
+        </p>
+        {errors.json?.map((e) => (
+          <p class="field-error" role="alert">
+            {e}
+          </p>
+        ))}
+        <div>
+          <button type="submit" class="btn btn-primary">
+            JSON prüfen & speichern
+          </button>
+        </div>
+      </fieldset>
+    </form>
+  ) : (
+    <form method="POST" action={actions.admin.seasonLobbySave} class="grid gap-4">
+      <input type="hidden" name="season_id" value={seasonId} />
+      <input type="hidden" name="mode" value="form" />
+      {errors.lobby?.map((e) => (
+        <p class="alert alert-danger" role="alert">
+          {e}
+        </p>
+      ))}
+      <fieldset disabled={disabled} class="grid gap-4">
+        <legend class="sr-only">Gruppen und Einträge</legend>
+        {[...groups, null].map((g, gi) => {
+          const items = [...(g?.items ?? []), ...Array.from({ length: g ? EXTRA_ITEMS : 3 }, () => null)];
+          const p = `g${gi}`;
+          return (
+            <details class="rounded-lg border border-border bg-surface-2/40 p-3" open={gi === 0 || g == null}>
+              <summary class="cursor-pointer py-2 font-semibold">
+                {g ? `${g.title_de}${g.title_en ? ` / ${g.title_en}` : ''} · ${g.items.length} Einträge` : 'Neue Gruppe hinzufügen'}
+                {g && !g.title_en && <span class="ml-2 text-sm text-warning">(EN fehlt)</span>}
+              </summary>
+              <div class="mt-3 grid gap-3 sm:grid-cols-3">
+                <div class="field">
+                  <label class="label" for={`${p}-title_de`}>
+                    Gruppe (DE)
+                  </label>
+                  <input id={`${p}-title_de`} name={`${p}.title_de`} class="input" value={g?.title_de ?? ''} maxlength="80" />
+                </div>
+                <div class="field">
+                  <label class="label" for={`${p}-title_en`}>
+                    Gruppe (EN)
+                  </label>
+                  <input id={`${p}-title_en`} name={`${p}.title_en`} class="input" value={g?.title_en ?? ''} maxlength="80" />
+                </div>
+                <div class="field">
+                  <label class="label" for={`${p}-key`}>
+                    Schlüssel
+                  </label>
+                  <input
+                    id={`${p}-key`}
+                    name={`${p}.key`}
+                    class="input font-mono"
+                    value={g?.key ?? ''}
+                    maxlength="40"
+                    aria-describedby={`${p}-key-hint`}
+                  />
+                  <p class="field-hint" id={`${p}-key-hint`}>
+                    Leer = aus dem Titel.
+                  </p>
+                </div>
+              </div>
+              <ol class="mt-4 grid gap-3">
+                {items.map((it, ii) => {
+                  const q = `${p}.i${ii}`;
+                  const qid = `${p}-i${ii}`;
+                  return (
+                    <li class="grid gap-2 border-t border-border pt-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <div class="field">
+                        <label class="label" for={`${qid}-label_de`}>
+                          {it ? `Eintrag ${ii + 1}` : 'Neuer Eintrag'} – Bezeichnung (DE)
+                        </label>
+                        <input id={`${qid}-label_de`} name={`${q}.label_de`} class="input" value={it?.label_de ?? ''} maxlength="120" />
+                      </div>
+                      <div class="field">
+                        <label class="label" for={`${qid}-value_de`}>
+                          Wert (DE)
+                        </label>
+                        <input id={`${qid}-value_de`} name={`${q}.value_de`} class="input" value={it?.value_de ?? ''} maxlength="400" />
+                      </div>
+                      <div class="field">
+                        <label class="label" for={`${qid}-label_en`}>
+                          Label (EN)
+                        </label>
+                        <input id={`${qid}-label_en`} name={`${q}.label_en`} class="input" value={it?.label_en ?? ''} maxlength="120" />
+                      </div>
+                      <div class="field">
+                        <label class="label" for={`${qid}-value_en`}>
+                          Value (EN)
+                        </label>
+                        <input id={`${qid}-value_en`} name={`${q}.value_en`} class="input" value={it?.value_en ?? ''} maxlength="400" />
+                      </div>
+                      {it && (
+                        <label class="checkbox text-sm sm:col-span-2 lg:col-span-4" for={`${qid}-remove`}>
+                          <input id={`${qid}-remove`} type="checkbox" name={`${q}.remove`} value="true" />
+                          <span>Eintrag entfernen</span>
+                        </label>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+              {g && (
+                <label class="checkbox mt-3 text-sm" for={`${p}-remove`}>
+                  <input id={`${p}-remove`} type="checkbox" name={`${p}.remove`} value="true" />
+                  <span>Ganze Gruppe „{g.title_de}“ entfernen</span>
+                </label>
+              )}
+            </details>
+          );
+        })}
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="field">
+            <label class="label" for="lobby-steps-de">
+              So trittst du bei (DE)
+            </label>
+            <textarea id="lobby-steps-de" name="join_steps_de" class="textarea" rows="5" aria-describedby="lobby-steps-hint">{(lobby.join_steps_de ?? []).join('\n')}</textarea>
+          </div>
+          <div class="field">
+            <label class="label" for="lobby-steps-en">
+              How to join (EN)
+            </label>
+            <textarea id="lobby-steps-en" name="join_steps_en" class="textarea" rows="5" aria-describedby="lobby-steps-hint">{(lobby.join_steps_en ?? []).join('\n')}</textarea>
+          </div>
+          <p id="lobby-steps-hint" class="field-hint sm:col-span-2">
+            Ein Schritt pro Zeile. Leere Zeilen und komplett leere Einträge werden ignoriert.
+          </p>
+        </div>
+        <div>
+          <button type="submit" class="btn btn-primary">
+            Lobby-Einstellungen speichern
+          </button>
+        </div>
+      </fieldset>
+    </form>
+  )
+}

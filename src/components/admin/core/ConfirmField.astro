@@ -1,0 +1,17 @@
+---
+/**
+ * Bestätigungs-Häkchen für Löschen & Co. (ohne JavaScript): Der Browser verlangt das
+ * Häkchen (`required`), die Action prüft es zusätzlich serverseitig (`confirm`).
+ */
+interface Props {
+  id: string;
+  label?: string;
+  name?: string;
+}
+const { id, label = 'Ja, ich bin mir sicher.', name = 'confirm' } = Astro.props;
+---
+
+<label class="checkbox text-sm" for={id}>
+  <input type="checkbox" id={id} name={name} value="true" required />
+  <span>{label}</span>
+</label>
