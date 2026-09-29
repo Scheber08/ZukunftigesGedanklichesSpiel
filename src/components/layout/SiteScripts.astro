@@ -34,6 +34,8 @@ const consentTexts = {
 {gaId && <script type="application/json" id="consent-config" set:html={safeJson({ gaId, ...consentTexts })} />}
 
 <script>
+  import cookieConsentCss from 'vanilla-cookieconsent/dist/cookieconsent.css?url';
+
   type ConsentConfig = {
     gaId: string;
     lang: 'de' | 'en';
@@ -88,7 +90,12 @@ const consentTexts = {
   const configEl = document.getElementById('consent-config');
   if (configEl?.textContent) {
     const cfg = JSON.parse(configEl.textContent) as ConsentConfig;
-    Promise.all([import('vanilla-cookieconsent'), import('vanilla-cookieconsent/dist/cookieconsent.css')]).then(([cc]) => {
+    // Banner-CSS erst bei Bedarf laden – nicht render-blockierend auf jeder Seite (Plan §10)
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = cookieConsentCss;
+    document.head.appendChild(css);
+    import('vanilla-cookieconsent').then((cc) => {
       cc.run({
         guiOptions: {
           consentModal: { layout: 'box', position: 'bottom left', equalWeightButtons: true, flipButtons: false },

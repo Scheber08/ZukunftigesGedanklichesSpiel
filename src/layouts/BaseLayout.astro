@@ -9,6 +9,7 @@ import Header from '~/components/layout/Header.astro';
 import SeoHead from '~/components/layout/SeoHead.astro';
 import SiteScripts from '~/components/layout/SiteScripts.astro';
 import { pageTitle, SITE } from '~/config/site';
+import { TZ_SCRIPT } from '~/lib/tz-inline.mjs';
 import { alternates as routeAlternates, useT, type Alternates, type Lang } from '~/i18n';
 import { env, isDemoMode } from '~/lib/server/env';
 import { loadPublicSettings } from '~/lib/server/league';
@@ -61,7 +62,7 @@ const robotsNoindex = noindex || demo || env.noindex;
     <meta name="color-scheme" content="dark" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="generator" content={Astro.generator} />
-    <script is:inline src="/scripts/tz.js"></script>
+    <script is:inline set:html={TZ_SCRIPT} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

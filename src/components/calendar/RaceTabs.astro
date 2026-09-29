@@ -15,7 +15,15 @@ interface Props {
   class?: string;
 }
 const { tabs, defaultId, label, class: className } = Astro.props;
+// Vor dem Skript (aber mit JS, data-js aus dem <head>): schon im Tab-Modus rendern, damit
+// beim Aktivieren nichts springt (CLS). Die Regel gilt nur bis das Skript übernimmt.
+const safeId = defaultId.replace(/[^A-Za-z0-9_-]/g, '');
+const preJs = `html[data-js]:not([data-race-tabs-ready]) [data-race-tabs] [data-tab-panel]:not(#${safeId}){display:none}` +
+  `html[data-js]:not([data-race-tabs-ready]) [data-race-tabs] .race-tablist[hidden]{display:flex}` +
+  `html[data-js]:not([data-race-tabs-ready]) [data-race-tabs] .race-panels{display:block;margin-top:1.5rem}`;
 ---
+
+<style set:html={preJs}></style>
 
 <div class:list={['race-tabs', className]} data-race-tabs data-default={defaultId}>
   <div class="tabs race-tablist" data-tablist aria-label={label} hidden>
@@ -134,6 +142,8 @@ const { tabs, defaultId, label, class: className } = Astro.props;
     const initial = fromHash >= 0 ? fromHash : Math.max(0, indexOf(root.dataset.default));
     select(initial);
     if (fromHash >= 0) list.scrollIntoView({ block: 'start' });
+
+    document.documentElement.setAttribute('data-race-tabs-ready', '');
 
     window.addEventListener('hashchange', () => {
       const i = indexOf(decodeURIComponent(location.hash.slice(1)));

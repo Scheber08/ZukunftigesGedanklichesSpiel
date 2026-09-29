@@ -18,7 +18,15 @@ interface Props {
   class?: string;
 }
 const { label, tabs, class: className } = Astro.props;
+// Vor dem Skript (aber mit JS, data-js aus dem <head>): nur das erste Panel zeigen, damit beim
+// Aktivieren nichts springt (CLS). Die Regel gilt nur bis das Skript übernimmt.
+const firstId = (tabs[0]?.id ?? '').replace(/[^A-Za-z0-9_-]/g, '');
+const preJs = firstId
+  ? `html[data-js]:not([data-standings-tabs-ready]) [data-tab-panel]:not(#${firstId}){display:none}`
+  : '';
 ---
+
+{preJs && <style set:html={preJs}></style>}
 
 <nav aria-label={label} class={className}>
   <div class="tabs standings-tabs" data-standings-tabs data-label={label}>
@@ -119,6 +127,7 @@ const { label, tabs, class: className } = Astro.props;
 
     const initial = indexFromHash();
     select(initial >= 0 ? initial : 0);
+    document.documentElement.setAttribute('data-standings-tabs-ready', '');
   }
 
   document.querySelectorAll<HTMLElement>('[data-standings-tabs]').forEach(enhance);

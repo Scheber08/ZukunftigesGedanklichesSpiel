@@ -1,11 +1,11 @@
 ---
 /**
- * Countdown-Karte für eine kommende Runde (Plan §3.5): Svelte-Countdown plus Start in
+ * Countdown-Karte für eine kommende Runde (Plan §3.5): Countdown plus Start in
  * Liga-Zeit (Besucherzeit ergänzt das Seitenskript), Format, Status, Rennseite und ICS.
  */
 import CalendarPlus from '@lucide/astro/icons/calendar-plus';
 import ChevronRight from '@lucide/astro/icons/chevron-right';
-import Countdown from '~/components/sport/Countdown.svelte';
+import Countdown from '~/components/sport/Countdown.astro';
 import Badge from '~/components/ui/Badge.astro';
 import Flag from '~/components/ui/Flag.astro';
 import LocalTime from '~/components/ui/LocalTime.astro';
@@ -46,8 +46,7 @@ const subline = [countryName(track?.country_code, lang), round.format === 'sprin
   <h2 id={headingId} class="sr-only">{heading}</h2>
   <div class="relative">
     <Countdown
-      client:load
-      targets={[{ startUtc: round.start_utc, label, href: raceHref, dateText: subline }]}
+            targets={[{ startUtc: round.start_utc, label, href: raceHref, dateText: subline }]}
       previousStartUtc={previous?.start_utc ?? null}
       linkTarget={linkTarget}
       labels={{

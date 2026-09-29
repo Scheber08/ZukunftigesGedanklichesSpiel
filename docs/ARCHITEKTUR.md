@@ -60,7 +60,7 @@ Formulare, Admin, APIs: `export const prerender = false;` in der Seiten-Datei. I
 
 ### Sicherheit
 
-- CSP ist aktiv: **keine `is:inline`-Skripte mit Inline-Code**, keine Inline-Event-Handler (`onclick=`). Client-Code in `<script>`-Blöcken (werden gebündelt) oder Svelte-Islands. Einzige Ausnahme: winzige, render-blockierende Dateien unter `public/scripts/` (z. B. `tz.js` gegen Layout-Verschiebung), eingebunden als `<script is:inline src="/scripts/…">`. Externe Skripte nur Turnstile und (nach Einwilligung) GA.
+- CSP ist aktiv: **keine `is:inline`-Skripte mit Inline-Code**, keine Inline-Event-Handler (`onclick=`). Client-Code in `<script>`-Blöcken (werden gebündelt) oder Svelte-Islands. Einzige Ausnahme: das Zeitzonen-Skript im `<head>` (`src/lib/tz-inline.mjs`, gegen Layout-Verschiebung), dessen SHA-256-Hash `astro.config.mjs` automatisch in die CSP schreibt. Externe Skripte nur Turnstile und (nach Einwilligung) GA.
 - Weiterleitungen: Beim Umbenennen von Fahrer-, Team-, Saison- oder News-Slugs `recordSlugChange()` aufrufen; alte URLs leiten per 301 um (Worker, `src/worker.ts`).
 - Öffentliche Daten: `getPublicStore()` liest `drivers`, `decisions` und `incidents` über die Views `drivers_public`, `decisions_public`, `incidents_public` (nur öffentliche Spalten/Zeilen).
 - Secrets nur serverseitig (`src/lib/server/env.ts`). Schreibzugriffe nur über Actions/Endpunkte mit Rollenprüfung (`staffFrom(context, 'admin')`).

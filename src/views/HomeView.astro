@@ -7,7 +7,7 @@ import CalendarPlus from '@lucide/astro/icons/calendar-plus';
 import Timer from '@lucide/astro/icons/timer';
 import Users from '@lucide/astro/icons/users';
 import NewsCard from '~/components/content/NewsCard.astro';
-import Countdown from '~/components/sport/Countdown.svelte';
+import Countdown from '~/components/sport/Countdown.astro';
 import DriverStandingsTable from '~/components/sport/DriverStandingsTable.astro';
 import TeamStandingsTable from '~/components/sport/TeamStandingsTable.astro';
 import Badge from '~/components/ui/Badge.astro';
@@ -118,8 +118,7 @@ const jsonLd = {
         </div>
         <div class="card relative bg-surface-1/80 p-5 backdrop-blur-sm md:p-6">
           <Countdown
-            client:load
-            targets={countdownTargets}
+                        targets={countdownTargets}
             previousStartUtc={previous?.start_utc ?? null}
             labels={{
               days: t('countdown.days'),

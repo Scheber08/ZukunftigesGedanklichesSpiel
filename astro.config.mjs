@@ -3,12 +3,17 @@ import { defineConfig, envField, fontProviders } from 'astro/config';
 import cloudflare from '@astrojs/cloudflare';
 import svelte from '@astrojs/svelte';
 import tailwindcss from '@tailwindcss/vite';
+import { createHash } from 'node:crypto';
+import { TZ_SCRIPT } from './src/lib/tz-inline.mjs';
 
 /**
  * Öffentliche Basis-URL der Liga. Solange die Domain nicht feststeht (Phase 0),
  * greift ein Platzhalter auf der reservierten TLD `.example`.
  */
 const SITE_URL = process.env.PUBLIC_SITE_URL || 'https://liga.example';
+
+/** CSP-Hash für das einzige Inline-Skript (Zeitzonen-Markierung im <head>). */
+const TZ_SCRIPT_HASH = `sha256-${createHash('sha256').update(TZ_SCRIPT).digest('base64')}`;
 
 /** Supabase-Herkunft für direkte Uploads über signierte URLs (Plan §7.5). */
 const SUPABASE_ORIGIN = (() => {
@@ -118,6 +123,7 @@ export default defineConfig({
       ],
       scriptDirective: {
         resources: ["'self'", 'https://www.googletagmanager.com', 'https://challenges.cloudflare.com'],
+        hashes: [/** @type {`sha256-${string}`} */ (TZ_SCRIPT_HASH)],
       },
       // Teamfarben kommen als CSS-Variable im style-Attribut aus der DB.
       styleDirective: {

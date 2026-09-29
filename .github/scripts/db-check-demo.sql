@@ -57,7 +57,9 @@ select
      join public.rounds r on r.id = s.round_id where r.status in ('provisional', 'final', 'corrected')) as results_visible,
   (select count(*) from public.drivers)                                                        as drivers_total,
   (select count(*) from public.drivers where not show_links and (twitch_url is not null or youtube_url is not null)) as drivers_hidden_links,
-  (select count(*) from public.slug_redirects)                                                 as redirects_total;
+  (select count(*) from public.slug_redirects)                                                 as redirects_total,
+  (select count(*) from public.incidents i where exists (
+     select 1 from public.decisions d where d.incident_id = i.id and d.status = 'published')) as incidents_public;
 grant select on expected to anon, service_role;
 
 -- ------------------------------------------------------------------ Sicht als anon (Besucher, statischer Build)
@@ -79,10 +81,20 @@ begin
   select count(*) into n from public.audit_log;          if n <> 0 then raise exception 'anon sieht das Audit-Log'; end if;
   select count(*) into n from public.round_absences;     if n <> 0 then raise exception 'anon sieht Abmeldungen'; end if;
 
-  -- nur Veröffentlichtes
+  -- Urteile nur über die View decisions_public (Migration 20260930150000): Tabelle gesperrt,
+  -- View nur veröffentlicht und ohne decided_by (Staff-IDs bleiben privat)
   select count(*) into n from public.decisions;
+  if n <> 0 then raise exception 'anon liest die Tabelle decisions direkt (% Zeilen) – nur decisions_public ist öffentlich', n; end if;
+  select count(*) into n from public.decisions_public;
   if n <> e.decisions_published then raise exception 'anon sieht % Urteile, erwartet %', n, e.decisions_published; end if;
   if e.decisions_hidden = 0 then raise exception 'Demo-Daten ohne Urteils-Entwurf – RLS-Test wäre wertlos'; end if;
+  select count(*) into n from public.decisions_public where cardinality(decided_by) > 0;
+  if n <> 0 then raise exception 'decisions_public verrät, wer entschieden hat (% Zeilen)', n; end if;
+
+  -- Beteiligte von Vorfällen nur mit veröffentlichtem Urteil, ohne private Felder
+  select count(*) into n from public.incidents_public;
+  if n <> e.incidents_public then raise exception 'incidents_public zeigt % Vorfälle, erwartet %', n, e.incidents_public; end if;
+  if e.incidents_public = 0 then raise exception 'Demo-Daten ohne entschiedenen Vorfall – View-Test wäre wertlos'; end if;
 
   select count(*) into n from public.news;
   if n <> e.news_visible then raise exception 'anon sieht % News, erwartet %', n, e.news_visible; end if;
