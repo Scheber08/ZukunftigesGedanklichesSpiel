@@ -16,6 +16,7 @@ import SelectField from '~/components/forms/SelectField.astro';
 import SubmitButton from '~/components/forms/SubmitButton.astro';
 import TrackEvent from '~/components/forms/TrackEvent.astro';
 import Turnstile from '~/components/forms/Turnstile.astro';
+import { procedureHref } from '~/components/stewards/rules';
 import LocalTime from '~/components/ui/LocalTime.astro';
 import PageHeader from '~/components/ui/PageHeader.astro';
 import SectionTitle from '~/components/ui/SectionTitle.astro';
@@ -23,7 +24,7 @@ import { alternates, url, useT, type Lang } from '~/i18n';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { collectErrors } from '~/lib/forms/errors';
 import { LIMITS } from '~/lib/forms/schemas';
-import { loadOpenRounds, loadRoundGrid, loadRoundSessions, type GridDriver } from '~/lib/forms/server';
+import { loadCurrentRulesSections, loadOpenRounds, loadRoundGrid, loadRoundSessions, type GridDriver } from '~/lib/forms/server';
 import { positiveInt, posted, postedAll, postedForm } from '~/lib/forms/values';
 import { getPublicStore } from '~/lib/server/db';
 import { breadcrumbJsonLd, roundLabel } from '~/lib/view';
@@ -36,7 +37,12 @@ const t = useT(lang);
 Astro.response.headers.set('Cache-Control', 'private, no-store');
 
 const store = getPublicStore();
-const openRounds = await loadOpenRounds(store);
+const [openRounds, rulesSections] = await Promise.all([
+  loadOpenRounds(store),
+  loadCurrentRulesSections(store).catch(() => []),
+]);
+// Verfahren im gültigen Regelwerk; fehlt der Abschnitt, führt der Link ohne Sprungmarke aufs Regelwerk
+const procedureUrl = procedureHref(lang, rulesSections);
 const reportUrl = url(lang, 'stewardsReport');
 
 const result = Astro.getActionResult(actions.reportIncident);
@@ -150,10 +156,10 @@ const labels = {
               </details>
             )}
             <div class="mt-4 flex flex-wrap gap-3">
-              <a href={url(lang, 'contact')} class="btn btn-secondary btn-sm">
+              <a href={url(lang, 'contact')} class="btn btn-secondary btn-sm min-h-11">
                 {t('stewards.report.closed.contact')}
               </a>
-              <a href={url(lang, 'stewards')} class="btn btn-ghost btn-sm border border-border">
+              <a href={url(lang, 'stewards')} class="btn btn-ghost btn-sm min-h-11 border border-border">
                 {t('stewards.report.closed.register')}
               </a>
             </div>
@@ -385,7 +391,7 @@ const labels = {
       </div>
       <div class="card p-5 text-sm">
         <p class="text-muted">{t('stewards.procedure.evidence.text')}</p>
-        <a href={`${url(lang, 'rules')}#p7`} class="mt-2 inline-flex min-h-11 items-center font-semibold text-green hover:text-teal">
+        <a href={procedureUrl} class="mt-2 inline-flex min-h-11 items-center font-semibold text-green hover:text-teal">
           {t('stewards.procedure.rulesLink')} →
         </a>
       </div>

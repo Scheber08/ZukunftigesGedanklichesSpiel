@@ -37,7 +37,7 @@ if (!decision || !item) {
   throw new Error(`Entscheidung ${ref} nicht gefunden`);
 }
 
-const { round, track, season, sessionType, driver, team, number, reasoning, rule } = item;
+const { round, track, season, sessionType, driver, team, number, reasoning, rule, clipUrl } = item;
 const driverName = league.driverName(decision.driver_id, lang);
 const label = roundLabel(round, track, lang);
 const verdictText = t(`stewards.verdict.${decision.verdict}`);
@@ -167,8 +167,8 @@ const jsonLd = breadcrumbJsonLd(site, [
           <dt>{t('stewards.field.clip')}</dt>
           <dd>
             {
-              decision.clip_url ? (
-                <a href={decision.clip_url} class="inline-flex items-center gap-1.5 underline hover:text-teal" target="_blank" rel="noopener noreferrer">
+              clipUrl ? (
+                <a href={clipUrl} class="inline-flex items-center gap-1.5 underline hover:text-teal" target="_blank" rel="noopener noreferrer">
                   <Video size={16} aria-hidden="true" />
                   {t('stewards.clip')}
                   <span class="sr-only"> {t('a11y.externalLink')}</span>
@@ -191,11 +191,11 @@ const jsonLd = breadcrumbJsonLd(site, [
         }
       </dl>
       <div class="no-print mt-5 grid gap-2">
-        <a href={raceHref} class="btn btn-secondary btn-sm">
+        <a href={raceHref} class="btn btn-secondary btn-sm min-h-11">
           <Flag size={16} aria-hidden="true" />
           {t('stewards.decision.toRace')}
         </a>
-        <a href={registerHref} class="btn btn-ghost btn-sm border border-border">
+        <a href={registerHref} class="btn btn-ghost btn-sm min-h-11 border border-border">
           <ArrowLeft size={16} aria-hidden="true" />
           {t('stewards.decision.backToRegister')}
         </a>
@@ -263,7 +263,10 @@ const jsonLd = breadcrumbJsonLd(site, [
             <ul class="grid gap-3">
               {sameRound.map((i) => (
                 <li class="card flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-                  <a href={url(lang, 'decision', { ref: i.decision.public_ref })} class="tabular font-semibold underline hover:text-teal">
+                  <a
+                    href={url(lang, 'decision', { ref: i.decision.public_ref })}
+                    class="tabular inline-flex min-h-11 items-center font-semibold underline hover:text-teal"
+                  >
                     {i.decision.public_ref}
                   </a>
                   <VerdictBadge verdict={i.decision.verdict} lang={lang} />

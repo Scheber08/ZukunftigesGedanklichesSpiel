@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findSection, sectionForRef, type SectionLike } from '~/components/stewards/rules';
+import { findSection, procedureHref, procedureSection, sectionForRef, type SectionLike } from '~/components/stewards/rules';
 import { plainExcerpt } from '~/components/stewards/utils';
 
 const sections: SectionLike[] = [
@@ -35,6 +35,19 @@ describe('Regel-Referenzen', () => {
     expect(findSection(sections, /frist/i, 'p7-2', 3)?.anchor).toBe('p7-2');
     expect(findSection(sections, /vorf(?:ä|ae)lle/i, 'p7', null)?.anchor).toBe('p7');
     expect(findSection(sections, /track/i, 'x', 3)).toBeUndefined();
+  });
+});
+
+describe('Link zum Verfahren (Vorfall melden)', () => {
+  it('findet den Hauptabschnitt „Vorfälle & Proteste“ über den Titel', () => {
+    expect(procedureSection(sections)?.anchor).toBe('p7');
+    const renamed = sections.map((s) => (s.id === 3 ? { ...s, number: '§6', anchor: 'p6' } : s));
+    expect(procedureHref('de', renamed)).toBe('/liga/regelwerk#p6');
+  });
+
+  it('führt ohne passenden Abschnitt aufs Regelwerk ohne Sprungmarke', () => {
+    expect(procedureHref('de', [])).toBe('/liga/regelwerk');
+    expect(procedureHref('en', sections)).toBe('/en/league/rules#p7');
   });
 });
 

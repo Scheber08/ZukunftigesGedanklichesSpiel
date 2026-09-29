@@ -22,7 +22,6 @@ import { EMBED_GREEN, EMBED_TEAL, EMBED_WARNING, notify, siteUrl } from '~/lib/s
 import { readPublicSettings } from '~/lib/server/settings';
 import { guardPublicForm, HONEYPOT_FIELD, TIMESTAMP_FIELD, TURNSTILE_FIELD, type SpamCheckResult } from '~/lib/server/spam';
 import { roundLabel } from '~/lib/view';
-import { toActionError } from './_helpers';
 
 /** Spam-Felder, die jedes öffentliche Formular zusätzlich sendet. */
 const spamFields = {
@@ -73,6 +72,16 @@ function fail(code: 'BAD_REQUEST' | 'CONFLICT' | 'FORBIDDEN', message: string): 
   throw new ActionError({ code, message });
 }
 
+/**
+ * Unerwartete Fehler (Datenbank, Netzwerk) nur protokollieren – nach außen geht bei diesen
+ * öffentlichen Endpunkten ausschließlich der Code „server“, keine internen Meldungen.
+ */
+function publicError(err: unknown): never {
+  if (err instanceof ActionError) throw err;
+  console.error('Öffentliches Formular fehlgeschlagen', err);
+  throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: 'server' });
+}
+
 // ---------------------------------------------------------------------------- Vorfall melden
 
 const reportIncident = defineAction({
@@ -80,8 +89,8 @@ const reportIncident = defineAction({
   input: incidentSchema.extend(spamFields),
   handler: async (input, context) => {
     const store = getServiceStore();
-    const ipHash = await guard(store, context, input, LIMITS.incident);
     try {
+      const ipHash = await guard(store, context, input, LIMITS.incident);
       // Frist serverseitig erneut prüfen (Plan §4.6)
       const [round] = await store.select('rounds', { eq: { id: input.round_id }, limit: 1 });
       if (!round) fail('BAD_REQUEST', 'round_invalid');
@@ -140,7 +149,7 @@ const reportIncident = defineAction({
 
       return { id: incident.id, roundId: round.id, roundNumber: round.number, trackId: round.track_id };
     } catch (err) {
-      toActionError(err);
+      publicError(err);
     }
   },
 });
@@ -152,11 +161,12 @@ const registerDriver = defineAction({
   input: registrationSchema.extend(spamFields),
   handler: async (input, context) => {
     const store = getServiceStore();
-    const settings = await readPublicSettings(store);
-    if (settings.registration.state === 'closed') fail('FORBIDDEN', 'registration_closed');
-
-    const ipHash = await guard(store, context, input, LIMITS.registration);
     try {
+      const settings = await readPublicSettings(store);
+      if (settings.registration.state === 'closed') fail('FORBIDDEN', 'registration_closed');
+
+      const ipHash = await guard(store, context, input, LIMITS.registration);
+
       // Duplikate: gleicher Gamertag/EA-ID oder gleicher Discord-Name (Plan §4.9)
       const [registrations, drivers, driverPrivate] = await Promise.all([
         store.select('registrations'),
@@ -200,7 +210,7 @@ const registerDriver = defineAction({
 
       return { id: registration.id, gamertag: registration.gamertag, waitlist: settings.registration.state === 'waitlist' };
     } catch (err) {
-      toActionError(err);
+      publicError(err);
     }
   },
 });
@@ -212,8 +222,8 @@ const sendContact = defineAction({
   input: contactSchema.extend(spamFields),
   handler: async (input, context) => {
     const store = getServiceStore();
-    const ipHash = await guard(store, context, input, LIMITS.contact);
     try {
+      const ipHash = await guard(store, context, input, LIMITS.contact);
       const message = await insertOne(store, 'contact_messages', {
         name: input.name,
         email: input.email,
@@ -229,7 +239,7 @@ const sendContact = defineAction({
 
       return { id: message.id };
     } catch (err) {
-      toActionError(err);
+      publicError(err);
     }
   },
 });

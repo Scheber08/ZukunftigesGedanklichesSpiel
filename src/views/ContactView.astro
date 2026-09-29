@@ -63,7 +63,7 @@ const labels = {
               {t('forms.contact.success.title')}
             </h2>
             <p class="mt-2">{t('forms.contact.success.text')}</p>
-            <a href={url(lang, 'contact')} class="btn btn-secondary btn-sm mt-4">
+            <a href={url(lang, 'contact')} class="btn btn-secondary btn-sm min-h-11 mt-4">
               {t('forms.contact.success.another')}
             </a>
           </div>
@@ -163,7 +163,7 @@ const labels = {
         settings.discord_invite.url && (
           <div class="card p-5">
             <p class="text-sm text-muted">{t('forms.contact.discordHint')}</p>
-            <a href={settings.discord_invite.url} class="btn btn-secondary btn-sm mt-3" target="_blank" rel="noopener" data-track="discord_click">
+            <a href={settings.discord_invite.url} class="btn btn-secondary btn-sm min-h-11 mt-3" target="_blank" rel="noopener" data-track="discord_click">
               <BrandIcon name="discord" size={18} />
               {t('common.joinDiscord')}
             </a>

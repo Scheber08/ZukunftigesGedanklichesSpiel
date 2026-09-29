@@ -2,6 +2,7 @@
  * Sicht auf eine veröffentlichte Entscheidung mit allem Kontext für Register und Detailseite.
  */
 import type { DecisionRow, DriverRow, RoundRow, SeasonRow, SessionType, TeamRow, TrackRow } from '~/lib/db/types';
+import { isHttpUrl } from '~/lib/domain/text';
 import { localized, type Lang, type League, type Localized } from '~/lib/league/league';
 import { decisionRuleLink, type RuleLink } from './rules';
 
@@ -19,6 +20,8 @@ export interface DecisionItem {
   reasoning: Localized;
   /** Link zur Regel (Fassung der Saison); null ohne Regel-Referenz */
   rule: RuleLink | null;
+  /** Clip-Link, nur http(s) – alles andere wird nicht verlinkt */
+  clipUrl: string | null;
 }
 
 export function decisionItem(league: League, decision: DecisionRow, lang: Lang): DecisionItem | null {
@@ -39,6 +42,7 @@ export function decisionItem(league: League, decision: DecisionRow, lang: Lang):
     number: entry?.race_number ?? league.numberAt(decision.driver_id, new Date(round.start_utc)),
     reasoning: localized(decision, 'reasoning', lang),
     rule: decisionRuleLink(league, lang, season, decision.rule_ref),
+    clipUrl: decision.clip_url && isHttpUrl(decision.clip_url.trim()) ? decision.clip_url.trim() : null,
   };
 }
 

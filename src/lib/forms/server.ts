@@ -3,7 +3,7 @@
  * (keine ganze Liga laden, Plan §7.2). Nur serverseitig verwenden.
  */
 import type { Store } from '../db/store';
-import type { DriverRow, Id, RoundRow, SessionRow, SessionType, TrackRow } from '../db/types';
+import type { DriverRow, Id, RoundRow, RulesSectionRow, RulesVersionRow, SessionRow, SessionType, TrackRow } from '../db/types';
 import { mergeGrid, openProtestRounds } from './incident';
 
 export interface OpenRound {
@@ -67,13 +67,26 @@ export async function loadRoundGrid(store: Store, roundId: Id): Promise<GridDriv
     .sort((a, b) => a.gamertag.localeCompare(b.gamertag, 'de', { sensitivity: 'base' }));
 }
 
-/** Gültige Regelwerk-Version (für die Einwilligung): die der aktiven Saison, sonst die neueste veröffentlichte. */
-export async function currentRulesVersion(store: Store): Promise<string | null> {
+/** Gültige Regelwerk-Fassung: die der aktiven Saison, sonst die neueste veröffentlichte. */
+async function currentRulesVersionRow(store: Store): Promise<RulesVersionRow | undefined> {
   const [versions, active] = await Promise.all([
     store.select('rules_versions', { eq: { status: 'published' } }),
     store.select('seasons', { eq: { status: 'active' }, limit: 1 }),
   ]);
   const sorted = versions.sort((a, b) => (b.published_at ?? '').localeCompare(a.published_at ?? ''));
   const seasonVersion = active[0]?.rules_version_id;
-  return (sorted.find((v) => v.id === seasonVersion) ?? sorted[0])?.version ?? null;
+  return sorted.find((v) => v.id === seasonVersion) ?? sorted[0];
+}
+
+/** Gültige Regelwerk-Version (für die Einwilligung), z. B. „1.0“. */
+export async function currentRulesVersion(store: Store): Promise<string | null> {
+  return (await currentRulesVersionRow(store))?.version ?? null;
+}
+
+/** Abschnitte der gültigen Regelwerk-Fassung in Dokument-Reihenfolge (leer, wenn keine veröffentlicht ist). */
+export async function loadCurrentRulesSections(store: Store): Promise<RulesSectionRow[]> {
+  const version = await currentRulesVersionRow(store);
+  if (!version) return [];
+  const sections = await store.select('rules_sections', { eq: { version_id: version.id } });
+  return sections.sort((a, b) => a.sort - b.sort);
 }

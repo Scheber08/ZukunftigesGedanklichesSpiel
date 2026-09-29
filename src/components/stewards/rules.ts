@@ -74,12 +74,22 @@ export function catalogueLink(league: League, lang: Lang): RuleLink {
 
 export type ProcedureKey = 'deadline' | 'evidence' | 'conflict' | 'publication';
 
+/** Hauptabschnitt „Vorfälle & Proteste“ (§7) einer Fassung; Liste in Dokument-Reihenfolge. */
+export function procedureSection<T extends SectionLike>(sections: readonly T[]): T | undefined {
+  return findSection(sections, /vorf(?:ä|ae)lle|protest/i, 'p7', null);
+}
+
+/** Link zum Verfahren im gültigen Regelwerk (für Seiten ohne League, z. B. „Vorfall melden“). */
+export function procedureHref(lang: Lang, sections: readonly SectionLike[]): string {
+  return link(url(lang, 'rules'), procedureSection(sections)).href;
+}
+
 /** Verfahren (§7 „Vorfälle & Proteste“) und seine Unterabschnitte in der gültigen Fassung. */
 export function procedureLinks(league: League, lang: Lang): { root: RuleLink; items: Record<ProcedureKey, RuleLink> } {
   const version = league.rulesVersion;
   const sections = sectionsOf(league, version);
   const base = baseHref(league, lang, version);
-  const root = findSection(sections, /vorf(?:ä|ae)lle|protest/i, 'p7', null);
+  const root = procedureSection(sections);
   const child = (pattern: RegExp, fallback: string) => link(base, root ? findSection(sections, pattern, fallback, root.id) : undefined);
   return {
     root: link(base, root),

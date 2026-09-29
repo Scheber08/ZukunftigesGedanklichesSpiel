@@ -111,7 +111,7 @@
   "stewards.report.involved": "Drivers involved",
   "stewards.report.involvedHint": "Select every driver involved – including yourself if you were involved. At least one other driver must be selected.",
   "stewards.report.lap": "Lap",
-  "stewards.report.lapHint": "Optional for qualifying.",
+  "stewards.report.lapHint": "If you know it – usually not needed for qualifying.",
   "stewards.report.corner": "Corner or section of track",
   "stewards.report.cornerHint": "For example \"Turn 1\" or \"main straight\".",
   "stewards.report.description": "What happened?",

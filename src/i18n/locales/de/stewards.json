@@ -111,7 +111,7 @@
   "stewards.report.involved": "Beteiligte Fahrer",
   "stewards.report.involvedHint": "Wähle alle beteiligten Fahrer aus – auch dich selbst, wenn du beteiligt warst. Mindestens ein anderer Fahrer muss dabei sein.",
   "stewards.report.lap": "Rennrunde (Lap)",
-  "stewards.report.lapHint": "Im Qualifying optional.",
+  "stewards.report.lapHint": "Falls bekannt – im Qualifying meist nicht nötig.",
   "stewards.report.corner": "Kurve oder Streckenabschnitt",
   "stewards.report.cornerHint": "Zum Beispiel „Kurve 1“ oder „Start-Ziel-Gerade“.",
   "stewards.report.description": "Was ist passiert?",

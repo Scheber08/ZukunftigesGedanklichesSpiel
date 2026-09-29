@@ -22,7 +22,7 @@ interface Props {
 }
 const { lang, item, showSeason = true } = Astro.props;
 const t = useT(lang);
-const { decision: d, round, track, season, sessionType, driver, team, number, rule } = item;
+const { decision: d, round, track, season, sessionType, driver, team, number, rule, clipUrl } = item;
 const penalty = penaltyOf(d);
 const detailHref = url(lang, 'decision', { ref: d.public_ref });
 const raceHref = url(lang, 'race', { season: season.slug, round: round.number });
@@ -88,9 +88,9 @@ const headingId = `d-${d.public_ref.toLowerCase()}`;
       </a>
     </li>
     {
-      d.clip_url && (
+      clipUrl && (
         <li>
-          <a href={d.clip_url} class="link-action" target="_blank" rel="noopener noreferrer">
+          <a href={clipUrl} class="link-action" target="_blank" rel="noopener noreferrer">
             <Video size={16} aria-hidden="true" />
             {t('stewards.clip')}
             <span class="sr-only">
@@ -126,6 +126,9 @@ const headingId = `d-${d.public_ref.toLowerCase()}`;
     letter-spacing: 0.02em;
   }
   .ref a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
     text-decoration: none;
   }
   .ref a:hover {
