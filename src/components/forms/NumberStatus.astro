@@ -79,6 +79,7 @@ const t = useT(lang);
       }
     };
     input.addEventListener('input', () => {
+      input.setCustomValidity('');
       clearTimeout(timer);
       timer = setTimeout(check, 400);
     });
