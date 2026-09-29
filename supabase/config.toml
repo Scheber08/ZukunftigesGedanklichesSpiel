@@ -69,11 +69,13 @@ file_size_limit = "2MiB"
 enabled = true
 # Astro-Dev-Server
 site_url = "http://localhost:4321"
-# Rückkehr nach dem Discord-Login in den Admin-Bereich (Dev-Server und E2E-Server)
+# Rückkehr nach dem Discord-Login in den Admin-Bereich (Dev-Server und E2E-Server).
+# Der Callback hängt ?next=… an – deshalb zusätzlich die Varianten mit ** (Platzhalter).
 additional_redirect_urls = [
   "http://localhost:4321/admin/auth/callback",
-  "http://127.0.0.1:4321/admin/auth/callback",
-  "http://localhost:4322/admin/auth/callback",
+  "http://localhost:4321/admin/auth/callback**",
+  "http://127.0.0.1:4321/admin/auth/callback**",
+  "http://localhost:4322/admin/auth/callback**",
 ]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
