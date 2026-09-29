@@ -1,0 +1,128 @@
+---
+/**
+ * Kategorie-Filter der News-Übersicht (Plan §4.7). Ohne JavaScript bleibt der Filter
+ * ausgeblendet und alle Artikel sind sichtbar; mit JS filtert ein kleines Skript die
+ * Liste `[data-news-list]` und merkt sich die Auswahl im URL-Parameter.
+ */
+import { useT, type Lang } from '~/i18n';
+import { NEWS_CATEGORIES, type NewsCategory } from '~/lib/db/types';
+
+interface Props {
+  lang: Lang;
+  counts: Record<NewsCategory, number>;
+  total: number;
+}
+const { lang, counts, total } = Astro.props;
+const t = useT(lang);
+const param = lang === 'de' ? 'kategorie' : 'category';
+---
+
+<div
+  class="news-filter no-print mb-8"
+  data-news-filter
+  data-param={param}
+  data-result-one={t('content.news.filter.resultOne')}
+  data-result-many={t('content.news.filter.resultMany', { n: '{n}' })}
+  hidden
+>
+  <p id="news-filter-label" class="micro mb-3">{t('content.news.filter.label')}</p>
+  <div class="flex flex-wrap gap-2" role="group" aria-labelledby="news-filter-label">
+    <button type="button" class="chip" data-filter="all" aria-pressed="true">
+      {t('content.news.filter.all')} <span class="chip-count" aria-hidden="true">{total}</span>
+    </button>
+    {
+      NEWS_CATEGORIES.map((c) => (
+        <button type="button" class="chip" data-filter={c} aria-pressed="false">
+          {t(`news.category.${c}`)} <span class="chip-count" aria-hidden="true">{counts[c]}</span>
+        </button>
+      ))
+    }
+  </div>
+  <p class="sr-only" role="status" data-news-status></p>
+</div>
+
+<style>
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.375rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-surface-1);
+    color: var(--color-muted);
+    font-size: var(--fs-small);
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      color 150ms ease-out,
+      border-color 150ms ease-out;
+  }
+  .chip:hover {
+    color: var(--color-fg);
+    border-color: #3a3a42;
+  }
+  .chip[aria-pressed='true'] {
+    color: var(--color-fg);
+    border-color: var(--color-teal);
+    background: var(--color-surface-2);
+    box-shadow: inset 0 0 0 1px rgb(52 196 208 / 0.35);
+  }
+  .chip-count {
+    min-width: 1.5rem;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    background: var(--color-surface-2);
+    font-size: var(--fs-micro);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+  .chip[aria-pressed='true'] .chip-count {
+    background: var(--g-accent);
+    color: #000;
+  }
+</style>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-news-filter]');
+  const list = document.querySelector<HTMLElement>('[data-news-list]');
+  if (root && list) {
+    const items = [...list.querySelectorAll<HTMLElement>('[data-category]')];
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>('button[data-filter]')];
+    const status = root.querySelector<HTMLElement>('[data-news-status]');
+    const empty = document.querySelector<HTMLElement>('[data-news-empty]');
+    const param = root.dataset.param ?? 'category';
+
+    const apply = (category: string, updateUrl: boolean) => {
+      let visible = 0;
+      for (const item of items) {
+        const show = category === 'all' || item.dataset.category === category;
+        item.hidden = !show;
+        if (show) visible++;
+      }
+      for (const b of buttons) b.setAttribute('aria-pressed', String(b.dataset.filter === category));
+      if (empty) empty.hidden = visible > 0;
+      if (status) {
+        status.textContent =
+          visible === 1 ? (root.dataset.resultOne ?? '') : (root.dataset.resultMany ?? '{n}').replace('{n}', String(visible));
+      }
+      if (updateUrl) {
+        const u = new URL(window.location.href);
+        if (category === 'all') u.searchParams.delete(param);
+        else u.searchParams.set(param, category);
+        history.replaceState(history.state, '', u);
+      }
+    };
+
+    for (const b of buttons) b.addEventListener('click', () => apply(b.dataset.filter ?? 'all', true));
+    document.querySelector('[data-news-reset]')?.addEventListener('click', () => {
+      apply('all', true);
+      buttons[0]?.focus();
+    });
+
+    root.hidden = false;
+    const initial = new URL(window.location.href).searchParams.get(param);
+    if (initial && buttons.some((b) => b.dataset.filter === initial)) apply(initial, false);
+  }
+</script>

@@ -1,0 +1,12 @@
+---
+import { newsStaticPaths } from '~/lib/content/paths';
+import NewsArticleView from '~/views/NewsArticleView.astro';
+
+export async function getStaticPaths() {
+  return newsStaticPaths('en');
+}
+
+const { slug } = Astro.params;
+---
+
+<NewsArticleView lang="en" slug={slug!} />

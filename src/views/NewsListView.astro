@@ -1,0 +1,91 @@
+---
+/**
+ * News-Übersicht (Plan §4.7): alle veröffentlichten Artikel, neueste zuerst,
+ * mit Kategorie-Filter (ohne JS alles sichtbar) und RSS-Feed.
+ */
+import Rss from '@lucide/astro/icons/rss';
+import NewsCard from '~/components/content/NewsCard.astro';
+import NewsFilter from '~/components/content/NewsFilter.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import { SITE } from '~/config/site';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { NEWS_CATEGORIES, type NewsCategory } from '~/lib/db/types';
+import { newsHref } from '~/lib/content/news';
+import { localized } from '~/lib/league/league';
+import { loadLeague } from '~/lib/server/league';
+import { breadcrumbJsonLd } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const news = league.news;
+
+const counts = Object.fromEntries(NEWS_CATEGORIES.map((c) => [c, news.filter((n) => n.category === c).length])) as Record<NewsCategory, number>;
+
+const site = Astro.site ?? new URL(Astro.url.origin);
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('content.news.title'), href: url(lang, 'news') },
+];
+const jsonLd = [
+  breadcrumbJsonLd(
+    site,
+    crumbs.map((c) => ({ name: c.label, href: c.href })),
+  ),
+  {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: `${t('content.news.title')} · ${SITE.name}`,
+    url: new URL(url(lang, 'news'), site).href,
+    inLanguage: lang === 'de' ? 'de-DE' : 'en-GB',
+    mainEntity: {
+      '@type': 'ItemList',
+      itemListElement: news.slice(0, 20).map((n, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        url: new URL(newsHref(lang, n), site).href,
+        name: localized(n, 'title', lang).text,
+      })),
+    },
+  },
+];
+---
+
+<BaseLayout lang={lang} title={t('content.news.title')} description={t('content.news.description')} alternates={alternates('news')} jsonLd={jsonLd}>
+  <PageHeader lang={lang} title={t('content.news.title')} lead={t('content.news.lead')} breadcrumbs={crumbs} updated={league.lastUpdated(news)}>
+    <a slot="actions" href={url(lang, 'newsRss')} class="btn btn-secondary btn-sm" type="application/rss+xml" title={t('content.news.rssHint')}>
+      <Rss size={16} aria-hidden="true" />
+      {t('content.news.rss')}
+    </a>
+  </PageHeader>
+
+  <div class="container-page section">
+    {
+      news.length === 0 ? (
+        <EmptyState title={t('content.news.empty.title')} text={t('content.news.empty.text')} />
+      ) : (
+        <>
+          <NewsFilter lang={lang} counts={counts} total={news.length} />
+          <ul class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" data-news-list>
+            {news.map((n) => (
+              <li data-category={n.category}>
+                <NewsCard lang={lang} news={n} headingLevel="h2" />
+              </li>
+            ))}
+          </ul>
+          <div class="card mt-2 px-6 py-10 text-center" data-news-empty hidden>
+            <p class="font-semibold">{t('content.news.filter.empty')}</p>
+            <button type="button" class="btn btn-secondary btn-sm mt-4" data-news-reset>
+              {t('content.news.filter.showAll')}
+            </button>
+          </div>
+        </>
+      )
+    }
+  </div>
+</BaseLayout>

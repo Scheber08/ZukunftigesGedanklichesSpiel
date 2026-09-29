@@ -1,0 +1,243 @@
+---
+/**
+ * News-Artikel (Plan §4.7): Titelbild, Datum, Autor (Gamertag), Kategorie, Text,
+ * optional verknüpftes Rennen mit automatisch eingebettetem Ergebnis-Kasten.
+ * Fehlt die EN-Fassung, erscheint die DE-Fassung mit Hinweis (und lang="de").
+ */
+import ArrowLeft from '@lucide/astro/icons/arrow-left';
+import NewsCard from '~/components/content/NewsCard.astro';
+import ResultsTable from '~/components/sport/ResultsTable.astro';
+import Badge from '~/components/ui/Badge.astro';
+import Flag from '~/components/ui/Flag.astro';
+import Markdown from '~/components/ui/Markdown.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import ShareButton from '~/components/ui/ShareButton.astro';
+import TranslationNotice from '~/components/ui/TranslationNotice.astro';
+import { url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import {
+  newsAlternates,
+  newsArticleJsonLd,
+  newsCoverAlt,
+  newsDate,
+  newsHref,
+  newsNeedsTranslation,
+  newsTeaser,
+  newsWasUpdated,
+} from '~/lib/content/news';
+import { formatDate } from '~/lib/domain/time';
+import { localized } from '~/lib/league/league';
+import { loadLeague } from '~/lib/server/league';
+import { breadcrumbJsonLd, roundLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  slug: string;
+}
+const { lang, slug } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const news = league.newsBySlug(slug, lang);
+if (!news) throw new Error(`News-Artikel nicht gefunden: ${slug}`);
+
+const title = localized(news, 'title', lang);
+const body = localized(news, 'body', lang);
+const excerpt = localized(news, 'excerpt', lang);
+const teaser = newsTeaser(news, lang, 200);
+const needsTranslation = newsNeedsTranslation(news, lang);
+const published = newsDate(news);
+const updated = newsWasUpdated(news) ? news.updated_at : null;
+const categoryLabel = t(`news.category.${news.category}`);
+const coverAlt = newsCoverAlt(news, lang);
+
+// Verknüpftes Rennen: Ergebnis-Kasten des Hauptrennens
+const round = news.round_id != null ? league.round(news.round_id) : undefined;
+const summary = round ? league.roundSummary(round.id) : undefined;
+const raceSession = round ? league.sessionOf(round.id, 'race') : undefined;
+const raceLabel = summary ? roundLabel(summary.round, summary.track, lang) : '';
+const raceHref = summary ? url(lang, 'race', { season: summary.season.slug, round: summary.round.number }) : '';
+const showResults = summary?.hasResults === true && raceSession != null && league.resultsOf(raceSession.id).length > 0;
+
+// Weitere News: gleiche Kategorie bevorzugt, dann die neuesten
+const others = league.news.filter((n) => n.id !== news.id);
+const more = [...others.filter((n) => n.category === news.category), ...others.filter((n) => n.category !== news.category)].slice(0, 3);
+
+const site = Astro.site ?? new URL(Astro.url.origin);
+const crumbs = [
+  { name: t('nav.home'), href: url(lang, 'home') },
+  { name: t('content.news.title'), href: url(lang, 'news') },
+  { name: title.text, href: newsHref(lang, news) },
+];
+const ogImage = news.cover_image ?? '/og-default.png';
+const jsonLd = [
+  newsArticleJsonLd({
+    news,
+    lang,
+    site,
+    title: title.text,
+    description: teaser.text,
+    categoryLabel,
+    imagePath: ogImage,
+    about: summary
+      ? {
+          '@type': 'SportsEvent',
+          name: raceLabel,
+          startDate: summary.round.start_utc,
+          url: new URL(raceHref, site).href,
+        }
+      : null,
+  }),
+  breadcrumbJsonLd(site, crumbs),
+];
+const fallbackLang = (fallback: boolean) => (fallback ? 'de' : undefined);
+---
+
+<BaseLayout
+  lang={lang}
+  title={title.text}
+  description={teaser.text || t('content.news.description')}
+  alternates={newsAlternates(news)}
+  ogType="article"
+  ogImage={ogImage}
+  ogImageAlt={news.cover_image ? coverAlt || title.text : undefined}
+  publishedTime={published}
+  modifiedTime={updated ?? undefined}
+  jsonLd={jsonLd}
+>
+  <article>
+    <header class="page-header">
+      <div class="container-page">
+        <nav aria-label={t('a11y.breadcrumb')} class="mb-4 text-sm text-muted">
+          <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <li><a href={crumbs[0]!.href} class="hover:text-fg">{crumbs[0]!.name}</a></li>
+            <li class="flex items-center gap-2">
+              <span aria-hidden="true">/</span>
+              <a href={crumbs[1]!.href} class="hover:text-fg">{crumbs[1]!.name}</a>
+            </li>
+            <li class="flex min-w-0 items-center gap-2">
+              <span aria-hidden="true">/</span>
+              <span aria-current="page" class="line-clamp-1" lang={fallbackLang(title.fallback)}>{title.text}</span>
+            </li>
+          </ol>
+        </nav>
+        <h1 class="max-w-4xl text-balance uppercase" lang={fallbackLang(title.fallback)}>{title.text}</h1>
+        <div class="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
+          <Badge variant="teal"><span class="sr-only">{t('content.news.category')}: </span>{categoryLabel}</Badge>
+          <time datetime={published}>{t('content.article.published', { date: formatDate(published, lang) })}</time>
+          {news.author_name && <span>{t('news.by', { name: news.author_name })}</span>}
+          {updated && <time datetime={updated}>{t('content.article.updated', { date: formatDate(updated, lang) })}</time>}
+        </div>
+      </div>
+    </header>
+
+    <div class="container-page section">
+      <div class="mx-auto max-w-3xl">
+        <TranslationNotice lang={lang} show={needsTranslation} />
+
+        {
+          news.cover_image && (
+            <figure class="mb-8">
+              <img
+                src={news.cover_image}
+                alt={coverAlt}
+                width="1600"
+                height="900"
+                fetchpriority="high"
+                decoding="async"
+                class="aspect-video w-full rounded-(--radius-card) border border-border object-cover"
+              />
+            </figure>
+          )
+        }
+
+        {
+          excerpt.text && (
+            <p class="lead mb-6 text-lg text-muted" lang={fallbackLang(excerpt.fallback)}>
+              {excerpt.text}
+            </p>
+          )
+        }
+
+        <Markdown source={body.text} lang={fallbackLang(body.fallback)} />
+
+        {
+          summary && (
+            <aside class="result-box card mt-10 overflow-hidden" aria-labelledby="result-box-title">
+              <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
+                <h2 id="result-box-title" class="flex items-center gap-2 text-xl uppercase">
+                  <Flag code={summary.track.country_code} lang={lang} decorative />
+                  {t('content.article.result.title', { round: raceLabel })}
+                </h2>
+                <RoundStatusBadge status={summary.round.status} lang={lang} />
+              </div>
+              {showResults && raceSession ? (
+                <div class="result-table">
+                  <ResultsTable
+                    lang={lang}
+                    league={league}
+                    sessionId={raceSession.id}
+                    compact
+                    limit={10}
+                    caption={t('content.article.result.caption', { round: raceLabel })}
+                  />
+                </div>
+              ) : (
+                <p class="px-5 py-4 text-sm text-muted">{t('content.article.result.pending')}</p>
+              )}
+              <p class="border-t border-border px-5 py-4">
+                <a href={raceHref} class="inline-flex min-h-11 items-center text-sm font-semibold text-green hover:text-teal">
+                  {showResults ? t('content.article.result.toRace') : t('content.article.result.toRacePage')} →
+                </a>
+              </p>
+            </aside>
+          )
+        }
+
+        <div class="no-print mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6">
+          <a href={url(lang, 'news')} class="btn btn-ghost btn-sm">
+            <ArrowLeft size={16} aria-hidden="true" />
+            {t('content.article.back')}
+          </a>
+          <ShareButton lang={lang} />
+        </div>
+      </div>
+    </div>
+  </article>
+
+  {
+    more.length > 0 && (
+      <section class="no-print border-t border-border" aria-labelledby="more-news">
+        <div class="container-page section">
+          <h2 id="more-news" class="section-title mb-6 uppercase">
+            {t('content.article.more')}
+          </h2>
+          <div class="grid gap-5 md:grid-cols-3">
+            {more.map((n) => (
+              <NewsCard lang={lang} news={n} />
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
+</BaseLayout>
+
+<style>
+  .result-table :global(.table-wrap) {
+    border: 0;
+    border-radius: 0;
+  }
+  .result-box {
+    position: relative;
+  }
+  .result-box::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 2px;
+    background: var(--g-accent);
+  }
+  .lead {
+    line-height: 1.6;
+  }
+</style>
