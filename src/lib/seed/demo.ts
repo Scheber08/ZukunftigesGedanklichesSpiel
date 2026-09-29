@@ -139,10 +139,6 @@ const ABSENCES: Record<number, Record<number, Array<[number, boolean, number]>>>
 const trackId = (slug: string) => BASE_TRACKS.find((t) => t.slug === slug)!.id;
 const track = (id: Id) => BASE_TRACKS.find((t) => t.id === id)!;
 
-function berlinDate(d: Date): string {
-  return utcToZonedLocal(d).slice(0, 10);
-}
-
 function addDays(date: string, days: number): string {
   const d = new Date(`${date}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -154,7 +150,13 @@ export function demoDataset(now: Date = new Date()): Dataset {
   const iso = (d: Date) => d.toISOString();
 
   // ------------------------------------------------------------------ Termine
-  const s2r4Date = berlinDate(new Date(now.getTime() - 24 * 3_600_000));
+  // Renntag-Situation: R5 ist vor ~3 h gestartet (Aufstellung steht, Ergebnis fehlt noch),
+  // R4 ist vorläufig mit offener Protestfrist, das nächste Rennen ist R6 in einer Woche.
+  const floorHour = (ms: number) => new Date(Math.floor(ms / 3_600_000) * 3_600_000);
+  const s2r5Local = utcToZonedLocal(floorHour(now.getTime() - 3 * 3_600_000));
+  const s2r4Local = utcToZonedLocal(floorHour(now.getTime() - 30 * 3_600_000));
+  const s2r4Date = s2r4Local.slice(0, 10);
+  const s2r5Date = s2r5Local.slice(0, 10);
   const s2Start = addDays(s2r4Date, -21);
   const s1Start = addDays(s2Start, -26 * 7);
 
@@ -198,7 +200,8 @@ export function demoDataset(now: Date = new Date()): Dataset {
   const rounds: Seed<RoundRow>[] = [];
   let roundId = 1;
   const mkRound = (seasonId: Id, number: number, slug: string, date: string, status: RoundRow['status'], format: RoundRow['format']) => {
-    const local = `${date}T20:00:00`;
+    // Datum (dann 20:00 Uhr) oder komplette Ortszeit
+    const local = date.length > 10 ? date : `${date}T20:00:00`;
     const start = zonedLocalToUtc(local);
     const provisionalAt = ['provisional', 'final', 'corrected'].includes(status) ? addHours(start, 2.5) : null;
     const round: Seed<RoundRow> = {
@@ -225,7 +228,8 @@ export function demoDataset(now: Date = new Date()): Dataset {
   S2_TRACKS.forEach((slug, i) => {
     const n = i + 1;
     const status: RoundRow['status'] = n <= 3 ? 'final' : n === 4 ? 'provisional' : n === 5 ? 'lineup_published' : 'scheduled';
-    mkRound(2, n, slug, addDays(s2Start, i * 7), status, S2_SPRINT_ROUNDS.has(n) ? 'sprint' : 'standard');
+    const when = n < 4 ? addDays(s2r4Date, (n - 4) * 7) : n === 4 ? s2r4Local : n === 5 ? s2r5Local : addDays(s2r5Date, (n - 5) * 7);
+    mkRound(2, n, slug, when, status, S2_SPRINT_ROUNDS.has(n) ? 'sprint' : 'standard');
   });
 
   const sessions: Seed<SessionRow>[] = [];

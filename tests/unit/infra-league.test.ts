@@ -39,16 +39,20 @@ describe('League – Saisons und Kalender', () => {
     expect(league.seasonBySlug('1')?.status).toBe('finished');
   });
 
-  it('findet das nächste Rennen in der Zukunft mit veröffentlichter Aufstellung', () => {
+  it('findet das nächste Rennen in der Zukunft (R5 ist im Demo gerade gefahren)', () => {
     const next = league.nextRound()!;
     expect(next).toBeDefined();
     expect(next.season_id).toBe(season.id);
-    expect(next.number).toBe(5);
-    expect(next.status).toBe('lineup_published');
+    expect(next.number).toBe(6);
+    expect(next.status).toBe('scheduled');
     expect(new Date(next.start_utc).getTime()).toBeGreaterThan(NOW.getTime());
-    expect(league.entriesOf(next.id)).toHaveLength(22);
+    // R5: gestartet, Aufstellung veröffentlicht, Ergebnis steht noch aus
+    const r5 = league.roundByNumber(season.id, 5)!;
+    expect(r5.status).toBe('lineup_published');
+    expect(new Date(r5.start_utc).getTime()).toBeLessThan(NOW.getTime());
+    expect(league.entriesOf(r5.id)).toHaveLength(22);
     const upcoming = league.upcomingRounds(3);
-    expect(upcoming.map((r) => r.number)).toEqual([5, 6, 7]);
+    expect(upcoming.map((r) => r.number)).toEqual([6, 7, 8]);
     // aufsteigend nach Startzeit
     expect([...upcoming].sort((a, b) => a.start_utc.localeCompare(b.start_utc))).toEqual(upcoming);
   });

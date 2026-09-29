@@ -69,13 +69,14 @@ describe('Kalender-Abo', () => {
 
   it('beschreibt Termine mit TZID, Dauer, SUMMARY, URL und SEQUENCE', () => {
     const ics = unfold(buildCalendarIcs(league, SITE_URL));
-    const r5 = league.roundByNumber(league.currentSeason!.id, 5)!;
-    const block = ics.slice(ics.indexOf(`UID:${roundUid(r5, SITE_URL)}`));
+    // R6 liegt in der Zukunft und startet regulär um 20:00 Uhr (R5 ist im Demo gerade gefahren)
+    const r6 = league.roundByNumber(league.currentSeason!.id, 6)!;
+    const block = ics.slice(ics.indexOf(`UID:${roundUid(r6, SITE_URL)}`));
     const event = block.slice(0, block.indexOf('END:VEVENT'));
-    expect(event).toContain(`SUMMARY:R5 · Montreal – ${SITE.name}`);
-    expect(event).toContain(`DTSTART;TZID=Europe/Berlin:${r5.local_start.replace(/[-:]/g, '').slice(0, 15)}`);
+    expect(event).toContain(`SUMMARY:R6 · Spielberg – ${SITE.name}`);
+    expect(event).toContain(`DTSTART;TZID=Europe/Berlin:${r6.local_start.replace(/[-:]/g, '').slice(0, 15)}`);
     expect(event).toMatch(/DTEND;TZID=Europe\/Berlin:\d{8}T223000/);
-    expect(event).toContain('URL:https://liga.example/rennen/2/5');
+    expect(event).toContain('URL:https://liga.example/rennen/2/6');
     expect(event).toContain(`SEQUENCE:${icsSequence(STAMP)}`);
     expect(event).toContain('STATUS:CONFIRMED');
   });

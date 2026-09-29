@@ -90,7 +90,7 @@ export type DemoRole = 'Admin' | 'Steward' | 'Redaktion';
 /** Demo-Login (nur im Demo-Modus) über die Knöpfe auf /admin/login. */
 export async function demoLogin(page: Page, role: DemoRole, next = '/admin'): Promise<void> {
   await page.goto(`/admin/login?next=${encodeURIComponent(next)}`);
-  await page.getByRole('button', { name: new RegExp(`Als Demo-${role}`) }).click();
+  await page.getByRole('button', { name: `Als Demo-${role} anmelden`, exact: true }).click();
   await expect(page).not.toHaveURL(/\/admin\/login/);
 }
 
