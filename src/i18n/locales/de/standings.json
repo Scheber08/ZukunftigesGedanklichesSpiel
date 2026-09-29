@@ -64,7 +64,7 @@
   "standingsPage.scheme.placeLong": "Platz {n}",
   "standingsPage.scheme.race": "Rennen",
   "standingsPage.scheme.sprint": "Sprint",
-  "standingsPage.scheme.rest": "Alle weiteren Plätze bekommen keine Punkte. Ausfälle (DNF, DNS, DSQ) bleiben ohne Punkte.",
+  "standingsPage.scheme.rest": "Alle weiteren Plätze bekommen keine Punkte, ebenso wer nicht gewertet wird (DNF, DNS, DSQ).",
   "standingsPage.scheme.sprintNote": "Sprint-Punkte gibt es nur an Sprint-Wochenenden.",
   "standingsPage.scheme.fastestLap": "Schnellste Runde",
   "standingsPage.scheme.fastestLapTop": "+{points} im Hauptrennen, wenn der Fahrer in den Top {max} ins Ziel kommt",

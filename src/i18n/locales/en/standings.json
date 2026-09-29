@@ -64,7 +64,7 @@
   "standingsPage.scheme.placeLong": "Position {n}",
   "standingsPage.scheme.race": "Race",
   "standingsPage.scheme.sprint": "Sprint",
-  "standingsPage.scheme.rest": "All other positions score no points. Retirements (DNF, DNS, DSQ) score no points either.",
+  "standingsPage.scheme.rest": "All other positions score no points, and neither do unclassified drivers (DNF, DNS, DSQ).",
   "standingsPage.scheme.sprintNote": "Sprint points are only awarded on sprint weekends.",
   "standingsPage.scheme.fastestLap": "Fastest lap",
   "standingsPage.scheme.fastestLapTop": "+{points} in the main race if the driver finishes in the top {max}",

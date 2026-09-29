@@ -91,7 +91,7 @@ const updated = lastRound ? (lastRound.final_at ?? lastRound.provisional_at) : n
   <PageHeader
     lang={lang}
     title={title}
-    eyebrow={isArchive ? t('standingsPage.eyebrow.archive') : t('standingsPage.eyebrow.current')}
+    eyebrow={finished ? t('standingsPage.eyebrow.archive') : t('standingsPage.eyebrow.current')}
     breadcrumbs={breadcrumbs}
     updated={updated}
   >
@@ -146,7 +146,7 @@ const updated = lastRound ? (lastRound.final_at ?? lastRound.provisional_at) : n
       season && (
         <div class="mt-6 flex flex-wrap items-center justify-between gap-4">
           <SeasonPicker lang={lang} league={league} activeSeasonId={season.id} selfHref={selfHref} />
-          {!isArchive && (
+          {!isArchive && season.status !== 'planned' && (
             <a href={url(lang, 'seasonStandings', { season: season.slug })} class="inline-flex min-h-11 items-center text-sm text-muted underline hover:text-teal">
               {t('standingsPage.permalink')}
             </a>
