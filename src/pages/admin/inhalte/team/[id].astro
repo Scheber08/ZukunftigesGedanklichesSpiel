@@ -1,0 +1,105 @@
+---
+/** Orga-Team-Eintrag anlegen (id = „neu“) oder bearbeiten. Rolle: Redaktion/Admin. */
+import { actions } from 'astro:actions';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import ContentNav from '~/components/admin/content/ContentNav.astro';
+import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import ImageUpload from '~/components/admin/content/ImageUpload.svelte';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { fieldErrors, pick, submittedValues } from '~/lib/admin/content/form';
+import { selectOne } from '~/lib/db/store';
+import type { SeasonRow, StaffMemberRow } from '~/lib/db/types';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { intParam } from '~/lib/view';
+
+export const prerender = false;
+
+const allowed = hasRole(Astro.locals.staff, 'redakteur');
+if (!allowed) Astro.response.status = 403;
+const isNew = Astro.params.id === 'neu';
+const memberId = isNew ? null : intParam(Astro.params.id);
+
+const result = Astro.getActionResult(actions.admin.staffMemberSave);
+if (result && !result.error) return Astro.redirect(`/admin/inhalte/team?ok=saved#item-${result.data.id}`, 303);
+const deleted = Astro.getActionResult(actions.admin.staffMemberDelete);
+if (deleted && !deleted.error) return Astro.redirect('/admin/inhalte/team?ok=deleted', 303);
+const submitted = await submittedValues(Astro.request, Boolean(result?.error));
+const errors = fieldErrors(result?.error);
+
+let member: StaffMemberRow | null = null;
+let seasons: SeasonRow[] = [];
+if (allowed) {
+  const store = getServiceStore();
+  if (memberId != null) member = await selectOne(store, 'staff_members', { id: memberId });
+  seasons = (await store.select('seasons')).sort((a, b) => a.number - b.number);
+}
+if (allowed && !isNew && !member) return new Response('Eintrag nicht gefunden', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+
+const current = seasons.find((s) => s.status === 'active') ?? seasons.at(-1);
+const v = {
+  gamertag: pick(submitted, 'gamertag', member?.gamertag),
+  role_de: pick(submitted, 'role_de', member?.role_de),
+  role_en: pick(submitted, 'role_en', member?.role_en),
+  since_season: pick(submitted, 'since_season', member ? member.since_season : (current?.number ?? null)),
+  avatar: pick(submitted, 'avatar', member?.avatar),
+};
+const err = (name: string) => errors[name]?.[0] ?? null;
+const seasonNumbers = seasons.map((s) => s.number);
+const maxSeason = Math.max(1, ...seasonNumbers) + 1;
+---
+
+<AdminLayout
+  title={isNew ? 'Person hinzufügen' : `${member?.gamertag ?? 'Orga-Team'} bearbeiten`}
+  breadcrumbs={[{ label: 'Seiten-Inhalte', href: '/admin/inhalte' }, { label: 'Orga-Team', href: '/admin/inhalte/team' }, { label: isNew ? 'Neu' : (member?.gamertag ?? '…') }]}
+>
+  {member && <DeleteForm slot="actions" action={actions.admin.staffMemberDelete} id={member.id} label={`${member.gamertag} (Orga-Team)`} />}
+  {
+    !allowed ? (
+      <NoAccess roles="Redaktion und Admins" />
+    ) : (
+      <>
+        <ContentNav current="team" />
+        <ActionMessage result={result} />
+        <form method="POST" action={actions.admin.staffMemberSave} class="card grid max-w-3xl gap-5 p-4 md:p-6">
+          {member && <input type="hidden" name="id" value={member.id} />}
+          <div class="grid gap-4 sm:grid-cols-2">
+            <Field id="gamertag" label="Gamertag" required hint="Keine Klarnamen." error={err('gamertag')}>
+              <input class="input" id="gamertag" name="gamertag" required maxlength="40" value={v.gamertag} aria-describedby={`gamertag-hint${err('gamertag') ? ' gamertag-error' : ''}`} aria-invalid={err('gamertag') ? 'true' : undefined} />
+            </Field>
+            <Field id="since_season" label="Dabei seit Saison" hint="Nummer der Saison, leer = keine Angabe." error={err('since_season')}>
+              <input class="input" type="number" inputmode="numeric" min="1" max={maxSeason} id="since_season" name="since_season" value={v.since_season} aria-describedby={`since_season-hint${err('since_season') ? ' since_season-error' : ''}`} />
+            </Field>
+            <Field id="role_de" label="Rolle (DE)" required hint="z. B. Ligaleitung, Stewards, Redaktion" error={err('role_de')}>
+              <input class="input" id="role_de" name="role_de" required maxlength="80" lang="de" value={v.role_de} aria-describedby={`role_de-hint${err('role_de') ? ' role_de-error' : ''}`} aria-invalid={err('role_de') ? 'true' : undefined} />
+            </Field>
+            <Field id="role_en" label="Rolle (EN)" hint="z. B. League director, Stewards, Editorial" error={err('role_en')}>
+              <input class="input" id="role_en" name="role_en" maxlength="80" lang="en" value={v.role_en} aria-describedby="role_en-hint" />
+            </Field>
+          </div>
+          <ImageUpload
+            client:load
+            id="avatar"
+            name="avatar"
+            label="Avatar (optional)"
+            kind="staff"
+            aspect="square"
+            value={v.avatar}
+            error={err('avatar')}
+            hint="Quadratisch wirkt am besten. Nur mit Einverständnis der Person; wird als WebP ohne EXIF gespeichert."
+          />
+          <div class="flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary">
+              {isNew ? 'Hinzufügen' : 'Speichern'}
+            </button>
+            <a href="/admin/inhalte/team" class="btn btn-ghost">
+              Abbrechen
+            </a>
+          </div>
+        </form>
+      </>
+    )
+  }
+</AdminLayout>

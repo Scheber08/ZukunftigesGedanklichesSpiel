@@ -1,0 +1,52 @@
+---
+/**
+ * Hoch/Runter-Knöpfe für sortierbare Listen (je ein kleines Formular, funktioniert ohne JS).
+ * `action` ist die Formular-Action, z. B. actions.admin.faqMove.
+ */
+import ArrowDown from '@lucide/astro/icons/arrow-down';
+import ArrowUp from '@lucide/astro/icons/arrow-up';
+
+interface Props {
+  action: string;
+  id: number;
+  /** Bezeichnung des Eintrags für Screenreader, z. B. „§3.2 Track Limits“ */
+  label: string;
+  first: boolean;
+  last: boolean;
+  /** Zusätzliche versteckte Felder (z. B. version_id) */
+  extra?: Record<string, string | number>;
+}
+const { action, id, label, first, last, extra = {} } = Astro.props;
+---
+
+<div class="move">
+  {
+    (['up', 'down'] as const).map((dir) => (
+      <form method="POST" action={action}>
+        <input type="hidden" name="id" value={id} />
+        <input type="hidden" name="direction" value={dir} />
+        {Object.entries(extra).map(([k, v]) => (
+          <input type="hidden" name={k} value={v} />
+        ))}
+        <button
+          type="submit"
+          class="btn btn-ghost btn-icon"
+          disabled={dir === 'up' ? first : last}
+          title={dir === 'up' ? 'Nach oben' : 'Nach unten'}
+        >
+          {dir === 'up' ? <ArrowUp size={18} aria-hidden="true" /> : <ArrowDown size={18} aria-hidden="true" />}
+          <span class="sr-only">
+            {label} {dir === 'up' ? 'nach oben' : 'nach unten'} verschieben
+          </span>
+        </button>
+      </form>
+    ))
+  }
+</div>
+
+<style>
+  .move {
+    display: inline-flex;
+    gap: 0.125rem;
+  }
+</style>

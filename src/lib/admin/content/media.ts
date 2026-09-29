@@ -65,7 +65,7 @@ export function fitWithin(width: number, height: number, max: number): { width: 
 }
 
 /** Prüfung einer Upload-Anfrage (Typ und Größe je Variante). Liefert eine Fehlermeldung oder null. */
-export function validateUploadRequest(input: { kind: unknown; contentType: unknown; sizes: unknown }): string | null {
+export function validateUploadRequest(input: { kind?: unknown; contentType?: unknown; sizes?: unknown }): string | null {
   if (!isMediaKind(input.kind)) return 'Unbekannter Upload-Bereich.';
   if (input.contentType !== UPLOAD_CONTENT_TYPE) return 'Nur WebP-Bilder sind erlaubt.';
   const sizes = input.sizes as Record<string, unknown> | null | undefined;

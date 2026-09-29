@@ -1,0 +1,25 @@
+---
+/** Unter-Navigation der Seiten-Inhalte (FAQ, Orga-Team, offene Rollen, Partner, Texte). */
+interface Props {
+  current: 'overview' | 'faq' | 'team' | 'rollen' | 'partner' | 'texte';
+}
+const { current } = Astro.props;
+const items = [
+  { key: 'overview', href: '/admin/inhalte', label: 'Übersicht' },
+  { key: 'faq', href: '/admin/inhalte/faq', label: 'FAQ' },
+  { key: 'team', href: '/admin/inhalte/team', label: 'Orga-Team' },
+  { key: 'rollen', href: '/admin/inhalte/rollen', label: 'Offene Rollen' },
+  { key: 'partner', href: '/admin/inhalte/partner', label: 'Partner' },
+  { key: 'texte', href: '/admin/inhalte/texte', label: 'Texte' },
+] as const;
+---
+
+<nav aria-label="Seiten-Inhalte" class="tabs mb-6">
+  {
+    items.map((i) => (
+      <a href={i.href} class="tab" aria-current={i.key === current ? 'page' : undefined}>
+        {i.label}
+      </a>
+    ))
+  }
+</nav>

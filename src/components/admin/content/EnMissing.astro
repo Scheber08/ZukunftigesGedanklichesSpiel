@@ -1,0 +1,19 @@
+---
+/** Kennzeichnung fehlender englischer Übersetzungen (Text + Farbe, nie nur Farbe). */
+interface Props {
+  /** Beschriftungen der fehlenden Felder, z. B. ['Titel', 'Text'] */
+  fields: string[];
+  /** Kurzform nur mit „EN fehlt“ (Liste im title/sr-only) */
+  compact?: boolean;
+}
+const { fields, compact = false } = Astro.props;
+const list = fields.join(', ');
+---
+
+{
+  fields.length > 0 && (
+    <span class="badge badge-warning" title={`Englisch fehlt: ${list}`}>
+      EN fehlt{compact ? <span class="sr-only">: {list}</span> : <span>: {list}</span>}
+    </span>
+  )
+}

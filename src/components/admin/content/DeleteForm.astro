@@ -1,0 +1,65 @@
+---
+/**
+ * Löschen mit Rückfrage ohne JavaScript: Der eigentliche Knopf steckt in einem
+ * aufklappbaren Bereich („Löschen …“ → „Ja, endgültig löschen“).
+ */
+import Trash from '@lucide/astro/icons/trash';
+
+interface Props {
+  action: string;
+  id: number;
+  /** Was gelöscht wird, z. B. „FAQ-Eintrag „Wie melde ich mich ab?““ */
+  label: string;
+  /** Zusatzhinweis, z. B. „Alle Unterabschnitte werden mitgelöscht.“ */
+  note?: string;
+  extra?: Record<string, string | number>;
+  /** Nur Symbol statt Text im Auslöser (für Tabellen) */
+  compact?: boolean;
+}
+const { action, id, label, note, extra = {}, compact = false } = Astro.props;
+---
+
+<details class="delete">
+  <summary class:list={['btn btn-ghost', compact ? 'btn-icon' : 'btn-sm']} title="Löschen">
+    <Trash size={18} aria-hidden="true" />
+    {compact ? <span class="sr-only">{label} löschen</span> : <span>Löschen</span>}
+  </summary>
+  <form method="POST" action={action} class="delete-panel card">
+    <input type="hidden" name="id" value={id} />
+    {Object.entries(extra).map(([k, v]) => <input type="hidden" name={k} value={v} />)}
+    <p class="text-sm">{label} wirklich löschen?</p>
+    {note && <p class="field-hint">{note}</p>}
+    <button type="submit" class="btn btn-danger btn-sm">Ja, endgültig löschen</button>
+  </form>
+</details>
+
+<style>
+  .delete {
+    position: relative;
+    display: inline-block;
+  }
+  .delete > summary {
+    list-style: none;
+    min-height: 44px;
+  }
+  .delete > summary::-webkit-details-marker {
+    display: none;
+  }
+  .delete[open] > summary {
+    color: var(--color-danger);
+  }
+  .delete-panel {
+    position: absolute;
+    right: 0;
+    z-index: 20;
+    display: grid;
+    gap: 0.5rem;
+    width: min(18rem, 80vw);
+    margin-top: 0.25rem;
+    padding: 0.875rem;
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.5);
+  }
+  .delete-panel .btn {
+    min-height: 44px;
+  }
+</style>

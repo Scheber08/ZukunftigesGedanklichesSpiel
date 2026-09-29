@@ -1,0 +1,95 @@
+---
+/** News-Artikel bearbeiten (Plan §5). Rolle: Redaktion oder Admin. */
+import { actions } from 'astro:actions';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import NewsForm from '~/components/admin/content/NewsForm.astro';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { fieldErrors, flashMessage, submittedValues } from '~/lib/admin/content/form';
+import { loadRoundGroups, newsWebhookConfigured, type RoundGroup } from '~/lib/admin/content/loaders';
+import { NEWS_STATE_LABELS, newsListState } from '~/lib/admin/content/news';
+import { selectOne } from '~/lib/db/store';
+import type { NewsRow } from '~/lib/db/types';
+import { formatDateTime } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { intParam } from '~/lib/view';
+
+export const prerender = false;
+
+const staff = Astro.locals.staff;
+const allowed = hasRole(staff, 'redakteur');
+if (!allowed) Astro.response.status = 403;
+
+const newsId = intParam(Astro.params.id);
+const result = Astro.getActionResult(actions.admin.newsSave);
+if (result && !result.error) {
+  const params = new URLSearchParams({ ok: 'saved' });
+  if (result.data.note) params.set('note', 'scheduled');
+  if (result.data.discord) params.set('discord', '1');
+  if (result.data.slugChanged) params.set('slug', 'changed');
+  return Astro.redirect(`/admin/news/${result.data.id}?${params}`, 303);
+}
+const deleted = Astro.getActionResult(actions.admin.newsDelete);
+if (deleted && !deleted.error) return Astro.redirect('/admin/news?ok=deleted', 303);
+
+const submitted = await submittedValues(Astro.request, Boolean(result?.error));
+const errors = fieldErrors(result?.error);
+
+let news: NewsRow | null = null;
+let roundGroups: RoundGroup[] = [];
+let webhook = false;
+let taken = { de: [] as string[], en: [] as string[] };
+if (allowed && newsId != null) {
+  const store = getServiceStore();
+  news = await selectOne(store, 'news', { id: newsId });
+  if (news) {
+    const [groups, hook, all] = await Promise.all([loadRoundGroups(store), newsWebhookConfigured(store), store.select('news')]);
+    roundGroups = groups;
+    webhook = hook;
+    const others = all.filter((n) => n.id !== newsId);
+    taken = { de: others.map((n) => n.slug_de), en: others.map((n) => n.slug_en) };
+  }
+}
+if (allowed && !news) return new Response('Artikel nicht gefunden', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+
+const flash = flashMessage(Astro.url, { saved: 'Gespeichert.', created: 'Artikel angelegt.' });
+const notes = [
+  Astro.url.searchParams.get('note') === 'scheduled' ? 'Der Zeitpunkt liegt in der Zukunft – der Artikel ist jetzt geplant und wird automatisch veröffentlicht.' : null,
+  Astro.url.searchParams.get('discord') === '1' ? 'In #news auf Discord gepostet.' : null,
+  Astro.url.searchParams.get('slug') === 'changed' ? 'Der Slug hat sich geändert – alte Links auf den Artikel funktionieren nicht mehr.' : null,
+].filter(Boolean);
+const state = news ? newsListState(news, new Date()) : null;
+---
+
+<AdminLayout title={news ? 'Artikel bearbeiten' : 'Artikel'} breadcrumbs={[{ label: 'News', href: '/admin/news' }, { label: news?.title_de ?? '…' }]} wide>
+  {news && <DeleteForm slot="actions" action={actions.admin.newsDelete} id={news.id} label={`Artikel „${news.title_de}“`} note={news.status === 'published' ? 'Der Artikel ist veröffentlicht und verschwindet nach dem nächsten Build von der Website.' : undefined} />}
+  {
+    !allowed ? (
+      <NoAccess roles="Redaktion und Admins" />
+    ) : (
+      news && (
+        <>
+          {flash && (
+            <p class="alert alert-success mb-4" role="status">
+              {flash}
+            </p>
+          )}
+          {notes.map((n) => (
+            <p class="alert alert-warning mb-4" role="status">
+              {n}
+            </p>
+          ))}
+          <ActionMessage result={result} />
+          <ActionMessage result={deleted} />
+          <p class="mb-6 text-sm text-muted">
+            Status: <strong class="text-fg">{state && NEWS_STATE_LABELS[state]}</strong>
+            {news.publish_at && <> · {formatDateTime(news.publish_at, 'de')}</>} · zuletzt geändert {formatDateTime(news.updated_at, 'de')}
+          </p>
+          <NewsForm news={news} submitted={submitted} errors={errors} roundGroups={roundGroups} staffName={staff?.name ?? ''} webhookConfigured={webhook} taken={taken} />
+        </>
+      )
+    )
+  }
+</AdminLayout>

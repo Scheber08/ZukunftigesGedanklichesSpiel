@@ -1,0 +1,247 @@
+---
+/**
+ * Regelwerk-Abschnitt anlegen/bearbeiten (Plan §4.8): §-Nummer, Anker (eindeutig je Version),
+ * Eltern-Abschnitt, Titel DE/EN, Text DE (Markdown mit Vorschau), EN optional.
+ * `sid` = „neu“ legt einen Abschnitt an (?parent=ID für Unterabschnitte). Rolle: Admin.
+ */
+import { actions } from 'astro:actions';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import EnMissing from '~/components/admin/content/EnMissing.astro';
+import MarkdownEditor from '~/components/admin/content/MarkdownEditor.svelte';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { fieldErrors, pick, submittedValues } from '~/lib/admin/content/form';
+import { flattenSections, parentOptions } from '~/lib/admin/content/rules';
+import { missingEn, RULES_SECTION_EN_FIELDS } from '~/lib/admin/content/translations';
+import { selectOne } from '~/lib/db/store';
+import type { RulesSectionRow, RulesVersionRow } from '~/lib/db/types';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { renderMarkdown } from '~/lib/util/markdown';
+import { intParam } from '~/lib/view';
+
+export const prerender = false;
+
+const allowed = hasRole(Astro.locals.staff, 'admin');
+if (!allowed) Astro.response.status = 403;
+const versionId = intParam(Astro.params.id);
+const isNew = Astro.params.sid === 'neu';
+const sectionId = isNew ? null : intParam(Astro.params.sid);
+const base = `/admin/regelwerk/${versionId}`;
+
+const result = Astro.getActionResult(actions.admin.rulesSectionSave);
+if (result && !result.error) return Astro.redirect(`${base}?ok=section#s-${result.data.id}`, 303);
+const submitted = await submittedValues(Astro.request, Boolean(result?.error));
+const errors = fieldErrors(result?.error);
+
+let version: RulesVersionRow | null = null;
+let sections: RulesSectionRow[] = [];
+let section: RulesSectionRow | undefined;
+if (allowed && versionId != null) {
+  const store = getServiceStore();
+  version = await selectOne(store, 'rules_versions', { id: versionId });
+  if (version) sections = await store.select('rules_sections', { eq: { version_id: versionId } });
+  section = sectionId != null ? sections.find((s) => s.id === sectionId) : undefined;
+}
+const found = version != null && (isNew || section != null);
+if (allowed && !found) return new Response('Abschnitt nicht gefunden', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+
+const draft = version?.status === 'draft';
+const parentParam = intParam(Astro.url.searchParams.get('parent') ?? undefined);
+const values = {
+  number: pick(submitted, 'number', section?.number),
+  anchor: pick(submitted, 'anchor', section?.anchor),
+  parent_id: pick(submitted, 'parent_id', section ? section.parent_id : parentParam),
+  title_de: pick(submitted, 'title_de', section?.title_de),
+  title_en: pick(submitted, 'title_en', section?.title_en),
+  body_de: pick(submitted, 'body_de', section?.body_de),
+  body_en: pick(submitted, 'body_en', section?.body_en),
+};
+const options = parentOptions(sections, section?.id ?? null);
+// Nummer vorschlagen: nächste freie Nummer unter dem gewählten Eltern-Abschnitt
+if (isNew && !submitted && values.number === '') {
+  const parent = sections.find((s) => String(s.id) === values.parent_id);
+  const siblings = sections.filter((s) => (parent ? s.parent_id === parent.id : s.parent_id == null));
+  const nums = siblings.map((s) => Number(/(\d+)$/.exec(s.number)?.[1] ?? 0));
+  const next = (nums.length ? Math.max(...nums) : 0) + 1;
+  values.number = parent ? `${parent.number}.${next}` : `§${next}`;
+}
+const flat = flattenSections(sections);
+const pos = section ? flat.findIndex((f) => f.section.id === section!.id) : -1;
+const prev = pos > 0 ? flat[pos - 1]!.section : null;
+const next = pos >= 0 && pos < flat.length - 1 ? flat[pos + 1]!.section : null;
+const missing = section ? missingEn(section, RULES_SECTION_EN_FIELDS) : [];
+const title = isNew ? 'Neuer Abschnitt' : `${section?.number ?? ''} ${section?.title_de ?? ''}`.trim();
+const err = (name: string) => errors[name]?.[0] ?? null;
+---
+
+<AdminLayout
+  title={title}
+  breadcrumbs={[
+    { label: 'Regelwerk', href: '/admin/regelwerk' },
+    { label: version ? `Version ${version.version}` : '…', href: base },
+    { label: isNew ? 'Neuer Abschnitt' : (section?.number ?? '…') },
+  ]}
+  wide
+>
+  {
+    !allowed ? (
+      <NoAccess roles="Admins" />
+    ) : (
+      version && (
+        <>
+          <ActionMessage result={result} />
+          <nav class="mb-4 flex flex-wrap gap-2 text-sm" aria-label="Abschnitte blättern">
+            <a href={base} class="btn btn-ghost btn-sm">
+              ← Alle Abschnitte
+            </a>
+            {prev && (
+              <a href={`${base}/abschnitt/${prev.id}`} class="btn btn-ghost btn-sm" rel="prev">
+                ‹ {prev.number}
+              </a>
+            )}
+            {next && (
+              <a href={`${base}/abschnitt/${next.id}`} class="btn btn-ghost btn-sm" rel="next">
+                {next.number} ›
+              </a>
+            )}
+            {missing.length > 0 && <EnMissing fields={missing} />}
+          </nav>
+
+          {!draft ? (
+            <div class="grid gap-6">
+              <p class="alert alert-warning">Version {version.version} ist nicht mehr änderbar. Lege auf der Versionsseite eine neue Version an.</p>
+              <div class="grid gap-6 lg:grid-cols-2">
+                <section class="card p-4 md:p-6" lang="de" aria-labelledby="h-de">
+                  <h2 id="h-de" class="mb-3 text-2xl">
+                    {section?.number} {section?.title_de}
+                  </h2>
+                  <div class="prose" set:html={renderMarkdown(section?.body_de)} />
+                </section>
+                <section class="card p-4 md:p-6" lang="en" aria-labelledby="h-en">
+                  <h2 id="h-en" class="mb-3 text-2xl">
+                    {section?.number} {section?.title_en ?? '(EN fehlt)'}
+                  </h2>
+                  <div class="prose" set:html={renderMarkdown(section?.body_en)} />
+                </section>
+              </div>
+            </div>
+          ) : (
+            <form method="POST" action={actions.admin.rulesSectionSave} class="grid gap-6" data-section-form>
+              <input type="hidden" name="version_id" value={version.id} />
+              {section && <input type="hidden" name="id" value={section.id} />}
+
+              <section class="card p-4 md:p-6" aria-labelledby="h-struct">
+                <h2 id="h-struct" class="mb-4 text-2xl">
+                  Struktur
+                </h2>
+                <div class="grid gap-4 md:grid-cols-3">
+                  <Field id="number" label="Nummer" required hint="z. B. §3 (Kapitel) oder §3.2" error={err('number')}>
+                    <input
+                      class="input"
+                      id="number"
+                      name="number"
+                      required
+                      maxlength="20"
+                      value={values.number}
+                      data-anchor-source
+                      aria-describedby={`number-hint${err('number') ? ' number-error' : ''}`}
+                      aria-invalid={err('number') ? 'true' : undefined}
+                    />
+                  </Field>
+                  <Field id="anchor" label="Anker" hint="Für Links wie /liga/regelwerk#p3-2 – eindeutig je Version, nach Veröffentlichung stabil halten." error={err('anchor')}>
+                    <input
+                      class="input"
+                      id="anchor"
+                      name="anchor"
+                      maxlength="63"
+                      pattern="[a-z][a-z0-9\-]*"
+                      spellcheck="false"
+                      autocomplete="off"
+                      value={values.anchor}
+                      data-anchor-target
+                      aria-describedby={`anchor-hint${err('anchor') ? ' anchor-error' : ''}`}
+                      aria-invalid={err('anchor') ? 'true' : undefined}
+                    />
+                  </Field>
+                  <Field id="parent_id" label="Eltern-Abschnitt" hint="Leer = Kapitel auf oberster Ebene." error={err('parent_id')}>
+                    <select class="select" id="parent_id" name="parent_id" aria-describedby={`parent_id-hint${err('parent_id') ? ' parent_id-error' : ''}`}>
+                      <option value="">– oberste Ebene (Kapitel) –</option>
+                      {options.map(({ section: o, depth }) => (
+                        <option value={o.id} selected={values.parent_id === String(o.id)}>
+                          {'– '.repeat(depth)}
+                          {o.number} {o.title_de}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              </section>
+
+              <section class="card p-4 md:p-6" aria-labelledby="h-text">
+                <h2 id="h-text" class="mb-4 text-2xl">
+                  Text
+                </h2>
+                <div class="grid gap-4 md:grid-cols-2">
+                  <Field id="title_de" label="Titel (DE)" required error={err('title_de')}>
+                    <input class="input" id="title_de" name="title_de" required maxlength="200" lang="de" value={values.title_de} aria-invalid={err('title_de') ? 'true' : undefined} aria-describedby={err('title_de') ? 'title_de-error' : undefined} />
+                  </Field>
+                  <Field id="title_en" label="Title (EN, optional)" error={err('title_en')}>
+                    <input class="input" id="title_en" name="title_en" maxlength="200" lang="en" value={values.title_en} />
+                  </Field>
+                </div>
+                <div class="mt-6 grid gap-8">
+                  <MarkdownEditor
+                    client:load
+                    id="body_de"
+                    name="body_de"
+                    label="Text (DE, verbindlich)"
+                    value={values.body_de}
+                    rows={14}
+                    lang="de"
+                    layout="side"
+                    hint="Leer lassen, wenn der Abschnitt nur Unterabschnitte gruppiert. Tabellen im Markdown-Format (| Spalte | … |) sind möglich."
+                    error={err('body_de')}
+                  />
+                  <MarkdownEditor client:load id="body_en" name="body_en" label="Text (EN, Übersetzung)" value={values.body_en} rows={12} lang="en" layout="side" error={err('body_en')} />
+                </div>
+              </section>
+
+              <div class="flex flex-wrap gap-2">
+                <button type="submit" class="btn btn-primary">
+                  {isNew ? 'Abschnitt anlegen' : 'Speichern'}
+                </button>
+                <a href={base} class="btn btn-ghost">
+                  Abbrechen
+                </a>
+              </div>
+            </form>
+          )}
+        </>
+      )
+    )
+  }
+</AdminLayout>
+
+<script>
+  import { anchorFromNumber, normalizeAnchor } from '~/lib/admin/content/rules';
+
+  const form = document.querySelector<HTMLFormElement>('[data-section-form]');
+  const number = form?.querySelector<HTMLInputElement>('[data-anchor-source]');
+  const anchor = form?.querySelector<HTMLInputElement>('[data-anchor-target]');
+  if (number && anchor) {
+    // Anker folgt der Nummer, solange er nicht von Hand geändert wurde
+    let auto = anchor.value === '' || anchor.value === anchorFromNumber(number.value);
+    number.addEventListener('input', () => {
+      if (auto) anchor.value = anchorFromNumber(number.value);
+    });
+    anchor.addEventListener('input', () => {
+      auto = anchor.value === '';
+    });
+    anchor.addEventListener('blur', () => {
+      if (anchor.value.trim() !== '') anchor.value = normalizeAnchor(anchor.value);
+    });
+    if (auto && anchor.value === '') anchor.value = anchorFromNumber(number.value);
+  }
+</script>

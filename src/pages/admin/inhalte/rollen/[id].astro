@@ -1,0 +1,122 @@
+---
+/** Offene Rolle anlegen (id = „neu“) oder bearbeiten. Rolle: Redaktion/Admin. */
+import { actions } from 'astro:actions';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import ContentNav from '~/components/admin/content/ContentNav.astro';
+import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import MarkdownEditor from '~/components/admin/content/MarkdownEditor.svelte';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { fieldErrors, pick, pickChecked, submittedValues } from '~/lib/admin/content/form';
+import { selectOne } from '~/lib/db/store';
+import type { OpenPositionRow } from '~/lib/db/types';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { intParam } from '~/lib/view';
+
+export const prerender = false;
+
+const allowed = hasRole(Astro.locals.staff, 'redakteur');
+if (!allowed) Astro.response.status = 403;
+const isNew = Astro.params.id === 'neu';
+const positionId = isNew ? null : intParam(Astro.params.id);
+
+const result = Astro.getActionResult(actions.admin.positionSave);
+if (result && !result.error) return Astro.redirect(`/admin/inhalte/rollen?ok=saved#item-${result.data.id}`, 303);
+const deleted = Astro.getActionResult(actions.admin.positionDelete);
+if (deleted && !deleted.error) return Astro.redirect('/admin/inhalte/rollen?ok=deleted', 303);
+const submitted = await submittedValues(Astro.request, Boolean(result?.error));
+const errors = fieldErrors(result?.error);
+
+let position: OpenPositionRow | null = null;
+if (allowed && positionId != null) position = await selectOne(getServiceStore(), 'open_positions', { id: positionId });
+if (allowed && !isNew && !position) return new Response('Rolle nicht gefunden', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+
+const v = {
+  title_de: pick(submitted, 'title_de', position?.title_de),
+  title_en: pick(submitted, 'title_en', position?.title_en),
+  description_de: pick(submitted, 'description_de', position?.description_de),
+  description_en: pick(submitted, 'description_en', position?.description_en),
+  effort: pick(submitted, 'effort', position?.effort),
+  active: pickChecked(submitted, 'active', position?.active ?? true),
+};
+const err = (name: string) => errors[name]?.[0] ?? null;
+---
+
+<AdminLayout
+  title={isNew ? 'Neue offene Rolle' : 'Offene Rolle bearbeiten'}
+  breadcrumbs={[{ label: 'Seiten-Inhalte', href: '/admin/inhalte' }, { label: 'Offene Rollen', href: '/admin/inhalte/rollen' }, { label: isNew ? 'Neu' : (position?.title_de ?? '…') }]}
+  wide
+>
+  {position && <DeleteForm slot="actions" action={actions.admin.positionDelete} id={position.id} label={`Rolle „${position.title_de}“`} />}
+  {
+    !allowed ? (
+      <NoAccess roles="Redaktion und Admins" />
+    ) : (
+      <>
+        <ContentNav current="rollen" />
+        <ActionMessage result={result} />
+        <form method="POST" action={actions.admin.positionSave} class="grid gap-6">
+          {position && <input type="hidden" name="id" value={position.id} />}
+          <div class="card grid gap-4 p-4 sm:grid-cols-2 md:p-5">
+            <Field id="effort" label="Zeitaufwand" hint="z. B. „ca. 2 h pro Renntag“ – erscheint in beiden Sprachen gleich." error={err('effort')}>
+              <input class="input" id="effort" name="effort" maxlength="120" value={v.effort} aria-describedby="effort-hint" />
+            </Field>
+            <label class="checkbox self-end">
+              <input type="checkbox" name="active" checked={v.active} />
+              <span>
+                Aktiv
+                <span class="block text-sm text-muted">Nur aktive Rollen sind auf der Website sichtbar.</span>
+              </span>
+            </label>
+          </div>
+          <div class="langs">
+            <fieldset class="card p-4 md:p-5" lang="de">
+              <legend class="micro px-1">Deutsch</legend>
+              <div class="grid gap-4">
+                <Field id="title_de" label="Titel" required hint="z. B. Steward (m/w/d)" error={err('title_de')}>
+                  <input class="input" id="title_de" name="title_de" required maxlength="120" value={v.title_de} aria-describedby={`title_de-hint${err('title_de') ? ' title_de-error' : ''}`} aria-invalid={err('title_de') ? 'true' : undefined} />
+                </Field>
+                <MarkdownEditor client:load id="description_de" name="description_de" label="Aufgaben und Beschreibung" value={v.description_de} rows={8} lang="de" required maxlength={4000} error={err('description_de')} />
+              </div>
+            </fieldset>
+            <fieldset class="card p-4 md:p-5" lang="en">
+              <legend class="micro px-1">English · optional</legend>
+              <div class="grid gap-4">
+                <Field id="title_en" label="Title" error={err('title_en')}>
+                  <input class="input" id="title_en" name="title_en" maxlength="120" value={v.title_en} />
+                </Field>
+                <MarkdownEditor client:load id="description_en" name="description_en" label="Description" value={v.description_en} rows={8} lang="en" maxlength={4000} error={err('description_en')} />
+              </div>
+            </fieldset>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary">
+              {isNew ? 'Rolle anlegen' : 'Speichern'}
+            </button>
+            <a href="/admin/inhalte/rollen" class="btn btn-ghost">
+              Abbrechen
+            </a>
+          </div>
+        </form>
+      </>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .langs {
+    display: grid;
+    gap: 1.5rem;
+  }
+  @media (min-width: 1024px) {
+    .langs {
+      grid-template-columns: 1fr 1fr;
+      align-items: start;
+    }
+  }
+  fieldset {
+    min-width: 0;
+  }
+</style>

@@ -1,0 +1,148 @@
+---
+/**
+ * Vorschau der fertigen News-Karte (wie NewsCard auf der Website) in DE und EN.
+ * Serverseitig mit den gespeicherten Werten gerendert, ein kleines Skript aktualisiert
+ * sie live aus dem Formular (Titel, Teaser, Kategorie, Bild, Datum).
+ */
+import { t } from '~/i18n';
+import { NEWS_CATEGORIES, type NewsCategory } from '~/lib/db/types';
+import { mediaVariantUrl } from '~/lib/admin/content/media';
+import { formatDate } from '~/lib/domain/time';
+
+interface Props {
+  /** ID des Formulars, aus dem gelesen wird */
+  form: string;
+  values: {
+    title_de: string;
+    title_en: string;
+    excerpt_de: string;
+    excerpt_en: string;
+    category: string;
+    cover_image: string;
+    cover_alt_de: string;
+    cover_alt_en: string;
+    publish_at: string | null;
+  };
+}
+const { form, values } = Astro.props;
+const labels = {
+  de: Object.fromEntries(NEWS_CATEGORIES.map((c) => [c, t('de', `news.category.${c}`)])),
+  en: Object.fromEntries(NEWS_CATEGORIES.map((c) => [c, t('en', `news.category.${c}`)])),
+};
+const category = (NEWS_CATEGORIES as readonly string[]).includes(values.category) ? (values.category as NewsCategory) : 'announcement';
+const date = values.publish_at ?? new Date().toISOString();
+const cover = mediaVariantUrl(values.cover_image || null, 800);
+const cards = (['de', 'en'] as const).map((lang) => {
+  const title = lang === 'en' && values.title_en.trim() ? values.title_en : values.title_de;
+  const excerpt = lang === 'en' && values.excerpt_en.trim() ? values.excerpt_en : values.excerpt_de;
+  const fallback = lang === 'en' && (!values.title_en.trim() || !values.excerpt_en.trim());
+  return { lang, title, excerpt, fallback, badge: labels[lang][category], date: formatDate(date, lang), alt: lang === 'en' ? values.cover_alt_en || values.cover_alt_de : values.cover_alt_de };
+});
+---
+
+<div class="news-preview" data-news-preview data-form={form} data-labels={JSON.stringify(labels)}>
+  <div class="segmented mb-3" role="group" aria-label="Sprache der Vorschau">
+    <button type="button" aria-pressed="true" data-preview-lang="de">DE</button>
+    <button type="button" aria-pressed="false" data-preview-lang="en">EN</button>
+  </div>
+  {
+    cards.map((c) => (
+      <div data-card={c.lang} hidden={c.lang === 'en'} lang={c.lang}>
+        <article class="card relative flex h-full flex-col overflow-hidden">
+          <img
+            src={cover ?? undefined}
+            alt={c.alt}
+            width="800"
+            height="450"
+            class="aspect-video w-full object-cover"
+            data-part="img"
+            hidden={!cover}
+          />
+          <div class="flex flex-1 flex-col gap-3 p-5">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="badge badge-teal" data-part="badge">
+                {c.badge}
+              </span>
+              <span class="text-xs text-muted" data-part="date">
+                {c.date}
+              </span>
+            </div>
+            <h3 class="text-xl leading-snug" data-part="title">
+              {c.title || 'Titel fehlt'}
+            </h3>
+            <p class="line-clamp-3 text-sm text-muted" data-part="excerpt">
+              {c.excerpt}
+            </p>
+          </div>
+        </article>
+        <p class="field-hint mt-2" data-part="fallback" hidden={!c.fallback}>
+          EN fehlt – die englische Seite zeigt die deutsche Fassung mit Hinweis „Not yet translated“.
+        </p>
+      </div>
+    ))
+  }
+</div>
+
+<style>
+  .news-preview :global(.segmented > button) {
+    min-height: 44px;
+  }
+</style>
+
+<script>
+  import { mediaVariantUrl } from '~/lib/admin/content/media';
+
+  const TZ = 'Europe/Berlin';
+
+  function formatDate(date: Date, lang: 'de' | 'en'): string {
+    return new Intl.DateTimeFormat(lang === 'de' ? 'de-DE' : 'en-GB', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+  }
+
+  /** datetime-local (Liga-Zeit) nur fürs Datum grob übernehmen */
+  function dateFromLocal(value: string): Date {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+    return m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)) : new Date();
+  }
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-news-preview]')) {
+    const form = document.getElementById(root.dataset.form ?? '') as HTMLFormElement | null;
+    if (!form) continue;
+    const labels = JSON.parse(root.dataset.labels ?? '{}') as Record<'de' | 'en', Record<string, string>>;
+    const field = (name: string) => (form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null)?.value ?? '';
+
+    const update = () => {
+      const cover = mediaVariantUrl(field('cover_image') || null, 800);
+      const publishAt = field('publish_at');
+      for (const lang of ['de', 'en'] as const) {
+        const card = root.querySelector<HTMLElement>(`[data-card="${lang}"]`);
+        if (!card) continue;
+        const part = <T extends HTMLElement>(name: string) => card.querySelector<T>(`[data-part="${name}"]`);
+        const titleEn = field('title_en').trim();
+        const excerptEn = field('excerpt_en').trim();
+        const title = lang === 'en' && titleEn ? titleEn : field('title_de');
+        const excerpt = lang === 'en' && excerptEn ? excerptEn : field('excerpt_de');
+        part('title')!.textContent = title.trim() || 'Titel fehlt';
+        part('excerpt')!.textContent = excerpt;
+        part('badge')!.textContent = labels[lang]?.[field('category')] ?? '';
+        part('date')!.textContent = formatDate(publishAt ? dateFromLocal(publishAt) : new Date(), lang);
+        const img = part<HTMLImageElement>('img')!;
+        img.hidden = !cover;
+        if (cover && img.getAttribute('src') !== cover) img.src = cover;
+        img.alt = (lang === 'en' ? field('cover_alt_en') || field('cover_alt_de') : field('cover_alt_de')) || '';
+        part('fallback')!.hidden = !(lang === 'en' && (!titleEn || !excerptEn));
+      }
+    };
+
+    form.addEventListener('input', update);
+    form.addEventListener('change', update);
+
+    const buttons = root.querySelectorAll<HTMLButtonElement>('[data-preview-lang]');
+    for (const btn of buttons) {
+      btn.addEventListener('click', () => {
+        const lang = btn.dataset.previewLang;
+        for (const b of buttons) b.setAttribute('aria-pressed', String(b === btn));
+        for (const card of root.querySelectorAll<HTMLElement>('[data-card]')) card.hidden = card.dataset.card !== lang;
+      });
+    }
+  }
+</script>

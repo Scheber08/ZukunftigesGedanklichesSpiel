@@ -1,0 +1,118 @@
+---
+/** Orga-Team (Plan §4.8 „Über uns“): Karten mit Gamertag, Rolle, seit Saison, Avatar. Rolle: Redaktion/Admin. */
+import { actions } from 'astro:actions';
+import Plus from '@lucide/astro/icons/plus';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import ContentNav from '~/components/admin/content/ContentNav.astro';
+import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import EnMissing from '~/components/admin/content/EnMissing.astro';
+import MoveButtons from '~/components/admin/content/MoveButtons.astro';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { flashMessage } from '~/lib/admin/content/form';
+import { mediaVariantUrl } from '~/lib/admin/content/media';
+import { bySort } from '~/lib/admin/content/order';
+import { missingEn, STAFF_EN_FIELDS } from '~/lib/admin/content/translations';
+import type { StaffMemberRow } from '~/lib/db/types';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+
+export const prerender = false;
+
+const allowed = hasRole(Astro.locals.staff, 'redakteur');
+if (!allowed) Astro.response.status = 403;
+
+const moved = Astro.getActionResult(actions.admin.staffMemberMove);
+if (moved && !moved.error) return Astro.redirect('/admin/inhalte/team?ok=moved', 303);
+const deleted = Astro.getActionResult(actions.admin.staffMemberDelete);
+if (deleted && !deleted.error) return Astro.redirect('/admin/inhalte/team?ok=deleted', 303);
+
+let members: StaffMemberRow[] = [];
+if (allowed) members = bySort(await getServiceStore().select('staff_members'));
+const flash = flashMessage(Astro.url, { saved: 'Eintrag gespeichert.', moved: 'Reihenfolge geändert.', deleted: 'Eintrag gelöscht.' });
+---
+
+<AdminLayout title="Orga-Team" breadcrumbs={[{ label: 'Seiten-Inhalte', href: '/admin/inhalte' }, { label: 'Orga-Team' }]}>
+  {
+    allowed && (
+      <a slot="actions" href="/admin/inhalte/team/neu" class="btn btn-primary">
+        <Plus size={18} aria-hidden="true" /> Person hinzufügen
+      </a>
+    )
+  }
+  {
+    !allowed ? (
+      <NoAccess roles="Redaktion und Admins" />
+    ) : (
+      <>
+        <ContentNav current="team" />
+        {flash && (
+          <p class="alert alert-success mb-6" role="status">
+            {flash}
+          </p>
+        )}
+        <ActionMessage result={moved} />
+        <ActionMessage result={deleted} />
+        <p class="mb-6 text-sm text-muted">Erscheint auf „Über uns“ als Karten in dieser Reihenfolge. Nur Gamertags, keine Klarnamen.</p>
+        {members.length === 0 ? (
+          <p class="card p-6 text-muted">Noch niemand eingetragen.</p>
+        ) : (
+          <ul role="list" class="card divide-y divide-border">
+            {members.map((m, i) => (
+              <li class="row" id={`item-${m.id}`}>
+                {m.avatar ? (
+                  <img src={mediaVariantUrl(m.avatar, 800)} alt="" width="48" height="48" class="avatar" loading="lazy" />
+                ) : (
+                  <span class="avatar placeholder" aria-hidden="true">
+                    {m.gamertag.slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+                <div class="min-w-0 flex-1">
+                  <a href={`/admin/inhalte/team/${m.id}`} class="font-semibold hover:text-teal">
+                    {m.gamertag}
+                  </a>
+                  <span class="block text-sm text-muted">
+                    {m.role_de}
+                    {m.role_en && <span lang="en"> · {m.role_en}</span>}
+                    {m.since_season != null && <> · seit Saison {m.since_season}</>}
+                  </span>
+                  <EnMissing fields={missingEn(m, STAFF_EN_FIELDS)} compact />
+                </div>
+                <div class="flex items-center">
+                  <MoveButtons action={actions.admin.staffMemberMove} id={m.id} label={m.gamertag} first={i === 0} last={i === members.length - 1} />
+                  <DeleteForm action={actions.admin.staffMemberDelete} id={m.id} label={`${m.gamertag} (Orga-Team)`} compact />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 1rem;
+  }
+  .avatar {
+    width: 48px;
+    height: 48px;
+    flex: none;
+    border-radius: 999px;
+    object-fit: cover;
+    background: var(--color-surface-2);
+  }
+  .placeholder {
+    display: grid;
+    place-items: center;
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--color-muted);
+    border: 1px solid var(--color-border);
+  }
+</style>

@@ -1,0 +1,52 @@
+---
+/** Neuer News-Artikel (Plan §5). Rolle: Redaktion oder Admin. */
+import { actions } from 'astro:actions';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import NewsForm from '~/components/admin/content/NewsForm.astro';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { fieldErrors, submittedValues } from '~/lib/admin/content/form';
+import { loadRoundGroups, newsWebhookConfigured, type RoundGroup } from '~/lib/admin/content/loaders';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+
+export const prerender = false;
+
+const staff = Astro.locals.staff;
+const allowed = hasRole(staff, 'redakteur');
+if (!allowed) Astro.response.status = 403;
+
+const result = Astro.getActionResult(actions.admin.newsSave);
+if (result && !result.error) {
+  const params = new URLSearchParams({ ok: 'created' });
+  if (result.data.note) params.set('note', 'scheduled');
+  if (result.data.discord) params.set('discord', '1');
+  return Astro.redirect(`/admin/news/${result.data.id}?${params}`, 303);
+}
+const submitted = await submittedValues(Astro.request, Boolean(result?.error));
+const errors = fieldErrors(result?.error);
+
+let roundGroups: RoundGroup[] = [];
+let webhook = false;
+let taken = { de: [] as string[], en: [] as string[] };
+if (allowed) {
+  const store = getServiceStore();
+  const [groups, hook, news] = await Promise.all([loadRoundGroups(store), newsWebhookConfigured(store), store.select('news')]);
+  roundGroups = groups;
+  webhook = hook;
+  taken = { de: news.map((n) => n.slug_de), en: news.map((n) => n.slug_en) };
+}
+---
+
+<AdminLayout title="Neuer Artikel" breadcrumbs={[{ label: 'News', href: '/admin/news' }, { label: 'Neu' }]} wide>
+  {
+    !allowed ? (
+      <NoAccess roles="Redaktion und Admins" />
+    ) : (
+      <>
+        <ActionMessage result={result} />
+        <NewsForm news={null} submitted={submitted} errors={errors} roundGroups={roundGroups} staffName={staff?.name ?? ''} webhookConfigured={webhook} taken={taken} />
+      </>
+    )
+  }
+</AdminLayout>

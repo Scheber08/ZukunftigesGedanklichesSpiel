@@ -1,0 +1,93 @@
+---
+/**
+ * Seiten-Inhalte – Übersicht (Plan §5): FAQ, Orga-Team, offene Rollen, Partner, Texte,
+ * jeweils mit Anzahl und fehlenden Übersetzungen. Rolle: Redaktion/Admin.
+ */
+import ContentNav from '~/components/admin/content/ContentNav.astro';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { exclusionHits } from '~/lib/admin/content/partners';
+import { countMissing, FAQ_EN_FIELDS, PARTNER_EN_FIELDS, POSITION_EN_FIELDS, STAFF_EN_FIELDS } from '~/lib/admin/content/translations';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { readPublicSettings } from '~/lib/server/settings';
+import { REGISTRATION_STATE_LABELS } from '~/lib/admin/content/labels';
+
+export const prerender = false;
+
+const allowed = hasRole(Astro.locals.staff, 'redakteur');
+if (!allowed) Astro.response.status = 403;
+
+type Card = { href: string; title: string; text: string; count: string; missing: number; warn?: string };
+let cards: Card[] = [];
+if (allowed) {
+  const store = getServiceStore();
+  const [faq, staff, positions, partners, settings] = await Promise.all([
+    store.select('faq_items'),
+    store.select('staff_members'),
+    store.select('open_positions'),
+    store.select('partners'),
+    readPublicSettings(store),
+  ]);
+  const flagged = partners.filter((p) => exclusionHits(p.name, p.text_de, p.text_en, p.url).length > 0).length;
+  cards = [
+    { href: '/admin/inhalte/faq', title: 'FAQ', text: 'Fragen und Antworten für Einsteiger, als Akkordeon nach Kategorien.', count: `${faq.length} Einträge`, missing: countMissing(faq, FAQ_EN_FIELDS) },
+    { href: '/admin/inhalte/team', title: 'Orga-Team', text: 'Karten auf „Über uns“: Gamertag, Rolle, seit wann, optional Avatar.', count: `${staff.length} Personen`, missing: countMissing(staff, STAFF_EN_FIELDS) },
+    {
+      href: '/admin/inhalte/rollen',
+      title: 'Offene Rollen',
+      text: 'Team-Suche: Aufgaben, Zeitaufwand, Kontakt per Discord-Ticket.',
+      count: `${positions.filter((p) => p.active).length} aktiv von ${positions.length}`,
+      missing: countMissing(positions, POSITION_EN_FIELDS),
+    },
+    {
+      href: '/admin/inhalte/partner',
+      title: 'Partner',
+      text: 'Partnerkarten mit Logo, Text und Link – gekennzeichnet als „Anzeige“.',
+      count: `${partners.filter((p) => p.active).length} aktiv von ${partners.length}`,
+      missing: countMissing(partners, PARTNER_EN_FIELDS),
+      warn: flagged > 0 ? `${flagged} mit Hinweis auf die Ausschlussliste` : undefined,
+    },
+    {
+      href: '/admin/inhalte/texte',
+      title: 'Texte',
+      text: 'Claim der Startseite und Anmeldestatus mit Hinweistext.',
+      count: `Anmeldung: ${REGISTRATION_STATE_LABELS[settings.registration.state].split(' – ')[0]}`,
+      missing: (settings.registration.note_de && !settings.registration.note_en ? 1 : 0) + (settings.home.claim_de && !settings.home.claim_en ? 1 : 0),
+    },
+  ];
+}
+---
+
+<AdminLayout title="Seiten-Inhalte" breadcrumbs={[{ label: 'Seiten-Inhalte' }]}>
+  {
+    !allowed ? (
+      <NoAccess roles="Redaktion und Admins" />
+    ) : (
+      <>
+        <ContentNav current="overview" />
+        <p class="mb-6 max-w-prose text-sm text-muted">
+          Änderungen sind nach dem nächsten Build (gebündelt, 1–3 Minuten) auf der Website. Fehlt eine englische Übersetzung, zeigt die englische Seite den
+          deutschen Text mit dem Hinweis „Not yet translated“.
+        </p>
+        <ul role="list" class="grid gap-4 sm:grid-cols-2">
+          {cards.map((c) => (
+            <li class="card card-hover relative flex flex-col gap-2 p-5">
+              <h2 class="text-xl">
+                <a href={c.href} class="after:absolute after:inset-0">
+                  {c.title}
+                </a>
+              </h2>
+              <p class="text-sm text-muted">{c.text}</p>
+              <p class="mt-auto flex flex-wrap items-center gap-2 pt-2 text-sm">
+                <span>{c.count}</span>
+                {c.missing > 0 ? <span class="badge badge-warning">EN fehlt bei {c.missing}</span> : <span class="badge badge-green">EN vollständig</span>}
+                {c.warn && <span class="badge badge-danger">{c.warn}</span>}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </>
+    )
+  }
+</AdminLayout>

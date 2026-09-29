@@ -1,0 +1,115 @@
+---
+/**
+ * Texte der Startseite und des Anmeldestatus (Plan §5 Seiten-Inhalte): Claim DE/EN,
+ * Anmeldestatus (offen / Warteliste / geschlossen), freie Plätze und Hinweis DE/EN.
+ * Gespeichert als öffentliche Einstellungen „home“ und „registration“. Rolle: Redaktion/Admin.
+ */
+import { actions } from 'astro:actions';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import ContentNav from '~/components/admin/content/ContentNav.astro';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { fieldErrors, flashMessage, pick, submittedValues } from '~/lib/admin/content/form';
+import { REGISTRATION_STATE_LABELS } from '~/lib/admin/content/labels';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { readPublicSettings } from '~/lib/server/settings';
+import { DEFAULT_PUBLIC_SETTINGS, type PublicSettings, type RegistrationState } from '~/lib/settings';
+
+export const prerender = false;
+
+const allowed = hasRole(Astro.locals.staff, 'redakteur');
+if (!allowed) Astro.response.status = 403;
+
+const result = Astro.getActionResult(actions.admin.pageTextsSave);
+if (result && !result.error) return Astro.redirect('/admin/inhalte/texte?ok=saved', 303);
+const submitted = await submittedValues(Astro.request, Boolean(result?.error));
+const errors = fieldErrors(result?.error);
+
+let settings: PublicSettings = DEFAULT_PUBLIC_SETTINGS;
+if (allowed) settings = await readPublicSettings(getServiceStore());
+const v = {
+  claim_de: pick(submitted, 'claim_de', settings.home.claim_de),
+  claim_en: pick(submitted, 'claim_en', settings.home.claim_en),
+  registration_state: pick(submitted, 'registration_state', settings.registration.state),
+  free_seats: pick(submitted, 'free_seats', settings.registration.free_seats),
+  free_reserve: pick(submitted, 'free_reserve', settings.registration.free_reserve),
+  note_de: pick(submitted, 'note_de', settings.registration.note_de),
+  note_en: pick(submitted, 'note_en', settings.registration.note_en),
+};
+const STATES = Object.keys(REGISTRATION_STATE_LABELS) as RegistrationState[];
+const err = (name: string) => errors[name]?.[0] ?? null;
+const flash = flashMessage(Astro.url, { saved: 'Texte gespeichert – sichtbar nach dem nächsten Build (1–3 Minuten).' });
+---
+
+<AdminLayout title="Texte" breadcrumbs={[{ label: 'Seiten-Inhalte', href: '/admin/inhalte' }, { label: 'Texte' }]}>
+  {
+    !allowed ? (
+      <NoAccess roles="Redaktion und Admins" />
+    ) : (
+      <>
+        <ContentNav current="texte" />
+        {flash && (
+          <p class="alert alert-success mb-6" role="status">
+            {flash}
+          </p>
+        )}
+        <ActionMessage result={result} />
+        <form method="POST" action={actions.admin.pageTextsSave} class="grid max-w-3xl gap-6">
+          <section class="card p-4 md:p-6" aria-labelledby="h-home">
+            <h2 id="h-home" class="mb-1 text-2xl">
+              Startseite
+            </h2>
+            <p class="mb-4 text-sm text-muted">Der Claim steht groß im Hero-Bereich unter dem Liganamen.</p>
+            <div class="grid gap-4">
+              <Field id="claim_de" label="Claim (DE)" required error={err('claim_de')}>
+                <input class="input" id="claim_de" name="claim_de" required maxlength="200" lang="de" value={v.claim_de} aria-invalid={err('claim_de') ? 'true' : undefined} aria-describedby={err('claim_de') ? 'claim_de-error' : undefined} />
+              </Field>
+              <Field id="claim_en" label="Claim (EN)" required error={err('claim_en')}>
+                <input class="input" id="claim_en" name="claim_en" required maxlength="200" lang="en" value={v.claim_en} aria-invalid={err('claim_en') ? 'true' : undefined} aria-describedby={err('claim_en') ? 'claim_en-error' : undefined} />
+              </Field>
+            </div>
+          </section>
+
+          <section class="card p-4 md:p-6" aria-labelledby="h-reg">
+            <h2 id="h-reg" class="mb-1 text-2xl">
+              Anmeldestatus
+            </h2>
+            <p class="mb-4 text-sm text-muted">Erscheint auf der Startseite und auf „Mitfahren“.</p>
+            <fieldset class="grid gap-2">
+              <legend class="label mb-1">Status</legend>
+              {STATES.map((s) => (
+                <label class="checkbox">
+                  <input type="radio" name="registration_state" value={s} checked={v.registration_state === s} required />
+                  <span>{REGISTRATION_STATE_LABELS[s]}</span>
+                </label>
+              ))}
+              {err('registration_state') && <p class="field-error">{err('registration_state')}</p>}
+            </fieldset>
+            <div class="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field id="free_seats" label="Freie Stammcockpits" required hint="0–22" error={err('free_seats')}>
+                <input class="input" type="number" inputmode="numeric" min="0" max="22" id="free_seats" name="free_seats" required value={v.free_seats} aria-describedby={`free_seats-hint${err('free_seats') ? ' free_seats-error' : ''}`} />
+              </Field>
+              <Field id="free_reserve" label="Freie Reserveplätze" required error={err('free_reserve')}>
+                <input class="input" type="number" inputmode="numeric" min="0" max="99" id="free_reserve" name="free_reserve" required value={v.free_reserve} />
+              </Field>
+              <Field id="note_de" label="Hinweis (DE)" hint="Optional, z. B. „Alle Cockpits vergeben – im Reservepool ist noch Platz.“" error={err('note_de')}>
+                <textarea class="textarea" id="note_de" name="note_de" rows="3" maxlength="300" lang="de" aria-describedby="note_de-hint">{v.note_de}</textarea>
+              </Field>
+              <Field id="note_en" label="Hinweis (EN)" error={err('note_en')}>
+                <textarea class="textarea" id="note_en" name="note_en" rows="3" maxlength="300" lang="en">{v.note_en}</textarea>
+              </Field>
+            </div>
+          </section>
+
+          <div>
+            <button type="submit" class="btn btn-primary">
+              Speichern
+            </button>
+          </div>
+        </form>
+      </>
+    )
+  }
+</AdminLayout>

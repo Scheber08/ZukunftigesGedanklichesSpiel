@@ -1,0 +1,111 @@
+---
+/** FAQ-Einträge (Plan §4.8, §5 Seiten-Inhalte): nach Kategorie, Reihenfolge, fehlende EN-Texte. Rolle: Redaktion/Admin. */
+import { actions } from 'astro:actions';
+import Plus from '@lucide/astro/icons/plus';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import ContentNav from '~/components/admin/content/ContentNav.astro';
+import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import EnMissing from '~/components/admin/content/EnMissing.astro';
+import MoveButtons from '~/components/admin/content/MoveButtons.astro';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { flashMessage } from '~/lib/admin/content/form';
+import { FAQ_CATEGORY_LABELS } from '~/lib/admin/content/labels';
+import { bySort } from '~/lib/admin/content/order';
+import { FAQ_EN_FIELDS, missingEn } from '~/lib/admin/content/translations';
+import { FAQ_CATEGORIES, type FaqItemRow } from '~/lib/db/types';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+
+export const prerender = false;
+
+const allowed = hasRole(Astro.locals.staff, 'redakteur');
+if (!allowed) Astro.response.status = 403;
+
+const moved = Astro.getActionResult(actions.admin.faqMove);
+if (moved && !moved.error) return Astro.redirect('/admin/inhalte/faq?ok=moved', 303);
+const deleted = Astro.getActionResult(actions.admin.faqDelete);
+if (deleted && !deleted.error) return Astro.redirect('/admin/inhalte/faq?ok=deleted', 303);
+
+let items: FaqItemRow[] = [];
+if (allowed) items = bySort(await getServiceStore().select('faq_items'));
+const groups = FAQ_CATEGORIES.map((c) => ({ category: c, items: items.filter((i) => i.category === c) }));
+const missingCount = items.filter((i) => missingEn(i, FAQ_EN_FIELDS).length > 0).length;
+const flash = flashMessage(Astro.url, { saved: 'Eintrag gespeichert.', moved: 'Reihenfolge geändert.', deleted: 'Eintrag gelöscht.' });
+---
+
+<AdminLayout title="FAQ" breadcrumbs={[{ label: 'Seiten-Inhalte', href: '/admin/inhalte' }, { label: 'FAQ' }]}>
+  {
+    allowed && (
+      <a slot="actions" href="/admin/inhalte/faq/neu" class="btn btn-primary">
+        <Plus size={18} aria-hidden="true" /> Neuer Eintrag
+      </a>
+    )
+  }
+  {
+    !allowed ? (
+      <NoAccess roles="Redaktion und Admins" />
+    ) : (
+      <>
+        <ContentNav current="faq" />
+        {flash && (
+          <p class="alert alert-success mb-6" role="status">
+            {flash}
+          </p>
+        )}
+        <ActionMessage result={moved} />
+        <ActionMessage result={deleted} />
+        <p class="mb-6 text-sm text-muted">
+          {items.length} Einträge{missingCount > 0 && <>, davon {missingCount} mit fehlender englischer Übersetzung</>}. Die FAQ-Seite zeigt die Einträge als Akkordeon, gruppiert nach Kategorie in dieser Reihenfolge.
+        </p>
+        <div class="grid gap-6">
+          {groups.map((g) => (
+            <section class="card p-4 md:p-5" aria-labelledby={`h-${g.category}`}>
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <h2 id={`h-${g.category}`} class="text-xl">
+                  {FAQ_CATEGORY_LABELS[g.category]} <span class="text-base text-muted">({g.items.length})</span>
+                </h2>
+                <a href={`/admin/inhalte/faq/neu?category=${g.category}`} class="btn btn-ghost btn-sm">
+                  <Plus size={16} aria-hidden="true" /> Eintrag
+                  <span class="sr-only"> in {FAQ_CATEGORY_LABELS[g.category]}</span>
+                </a>
+              </div>
+              {g.items.length === 0 ? (
+                <p class="text-sm text-muted">Keine Einträge.</p>
+              ) : (
+                <ul role="list">
+                  {g.items.map((item, i) => (
+                    <li class="row" id={`item-${item.id}`}>
+                      <div class="min-w-0 flex-1">
+                        <a href={`/admin/inhalte/faq/${item.id}`} class="font-semibold hover:text-teal">
+                          {item.question_de}
+                        </a>
+                        {item.question_en && <span class="block text-sm text-muted" lang="en">{item.question_en}</span>}
+                        <EnMissing fields={missingEn(item, FAQ_EN_FIELDS)} compact />
+                      </div>
+                      <div class="flex items-center">
+                        <MoveButtons action={actions.admin.faqMove} id={item.id} label={item.question_de} first={i === 0} last={i === g.items.length - 1} />
+                        <DeleteForm action={actions.admin.faqDelete} id={item.id} label={`FAQ-Eintrag „${item.question_de}“`} compact />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ))}
+        </div>
+      </>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.625rem 0;
+    border-top: 1px solid var(--color-border);
+  }
+</style>

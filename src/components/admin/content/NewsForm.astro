@@ -1,0 +1,407 @@
+---
+/**
+ * News-Editor (Plan §4.7, §5): DE und EN nebeneinander (mobil untereinander), Markdown mit
+ * Live-Vorschau, Titelbild-Upload, Kategorie, verknüpftes Rennen, Autor, Status
+ * (Entwurf / geplant / veröffentlicht), optionaler Discord-Post und Vorschau der fertigen Karte.
+ */
+import { actions } from 'astro:actions';
+import Field from '~/components/admin/ui/Field.astro';
+import { t } from '~/i18n';
+import type { RoundGroup } from '~/lib/admin/content/loaders';
+import { dateToLocalInput, pick, pickChecked } from '~/lib/admin/content/form';
+import { missingNewsTranslations, NEWS_STATUS_LABELS } from '~/lib/admin/content/news';
+import { NEWS_CATEGORIES, NEWS_STATUSES, type NewsRow } from '~/lib/db/types';
+import EnMissing from './EnMissing.astro';
+import ImageUpload from './ImageUpload.svelte';
+import MarkdownEditor from './MarkdownEditor.svelte';
+import NewsCardPreview from './NewsCardPreview.astro';
+
+interface Props {
+  news: NewsRow | null;
+  submitted: Record<string, string> | null;
+  errors: Record<string, string[]>;
+  roundGroups: RoundGroup[];
+  staffName: string;
+  webhookConfigured: boolean;
+  taken: { de: string[]; en: string[] };
+}
+const { news, submitted, errors, roundGroups, staffName, webhookConfigured, taken } = Astro.props;
+
+const v = (name: string, stored: string | number | null | undefined) => pick(submitted, name, stored);
+const err = (name: string) => errors[name]?.[0] ?? null;
+const described = (name: string, hint = false) =>
+  [hint ? `${name}-hint` : null, err(name) ? `${name}-error` : null].filter(Boolean).join(' ') || undefined;
+
+const values = {
+  title_de: v('title_de', news?.title_de),
+  title_en: v('title_en', news?.title_en),
+  slug_de: v('slug_de', news?.slug_de),
+  slug_en: v('slug_en', news?.slug_en),
+  excerpt_de: v('excerpt_de', news?.excerpt_de),
+  excerpt_en: v('excerpt_en', news?.excerpt_en),
+  body_de: v('body_de', news?.body_de),
+  body_en: v('body_en', news?.body_en),
+  cover_image: v('cover_image', news?.cover_image),
+  cover_alt_de: v('cover_alt_de', news?.cover_alt_de),
+  cover_alt_en: v('cover_alt_en', news?.cover_alt_en),
+  category: v('category', news?.category ?? 'announcement'),
+  round_id: v('round_id', news?.round_id),
+  author_name: v('author_name', news?.author_name ?? staffName),
+  status: v('status', news?.status ?? 'draft'),
+  publish_at: v('publish_at', dateToLocalInput(news?.publish_at)),
+};
+const discordChecked = pickChecked(submitted, 'discord_post', webhookConfigured);
+const wasPublished = news?.status === 'published';
+const missing = news ? missingNewsTranslations(news) : [];
+const STATUS_HINTS: Record<(typeof NEWS_STATUSES)[number], string> = {
+  draft: 'Nur im Admin sichtbar.',
+  scheduled: 'Der Cron-Job veröffentlicht zum gewählten Zeitpunkt (und postet in #news, falls ein Webhook hinterlegt ist).',
+  published: 'Sofort öffentlich (nach dem nächsten Build in 1–3 Minuten).',
+};
+const publicHref = news && wasPublished ? { de: `/news/${news.slug_de}`, en: `/en/news/${news.slug_en}` } : null;
+---
+
+<form
+  method="POST"
+  action={actions.admin.newsSave}
+  id="news-form"
+  class="news-form"
+  data-news-form
+  data-taken-de={JSON.stringify(taken.de)}
+  data-taken-en={JSON.stringify(taken.en)}
+>
+  {news && <input type="hidden" name="id" value={news.id} />}
+
+  <div class="layout">
+    <div class="main">
+      <section class="card p-4 md:p-6" aria-labelledby="h-texte">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 id="h-texte" class="text-2xl">Texte</h2>
+          {news && <EnMissing fields={missing} />}
+        </div>
+        <div class="langs">
+          {
+            (['de', 'en'] as const).map((lang) => (
+              <fieldset class="lang" lang={lang}>
+                <legend class="micro mb-3">{lang === 'de' ? 'Deutsch · verbindlich' : 'English · optional'}</legend>
+                <div class="grid gap-4">
+                  <Field id={`title_${lang}`} label={lang === 'de' ? 'Titel' : 'Title'} required={lang === 'de'} error={err(`title_${lang}`)}>
+                    <input
+                      class="input"
+                      id={`title_${lang}`}
+                      name={`title_${lang}`}
+                      value={values[`title_${lang}`]}
+                      maxlength="160"
+                      required={lang === 'de'}
+                      data-slug-source={lang}
+                      aria-invalid={err(`title_${lang}`) ? 'true' : undefined}
+                      aria-describedby={described(`title_${lang}`)}
+                    />
+                  </Field>
+                  <Field
+                    id={`slug_${lang}`}
+                    label="Slug"
+                    hint={
+                      lang === 'de'
+                        ? `Adresse: /news/…  – wird aus dem Titel erzeugt.${wasPublished ? ' Nach der Veröffentlichung besser nicht mehr ändern (geteilte Links).' : ''}`
+                        : 'Adresse: /en/news/…  – aus dem englischen (sonst deutschen) Titel.'
+                    }
+                    error={err(`slug_${lang}`)}
+                  >
+                    <input
+                      class="input"
+                      id={`slug_${lang}`}
+                      name={`slug_${lang}`}
+                      value={values[`slug_${lang}`]}
+                      maxlength="90"
+                      pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                      inputmode="url"
+                      autocomplete="off"
+                      spellcheck="false"
+                      data-slug-target={lang}
+                      aria-describedby={[`slug_${lang}-hint`, `slug_${lang}-note`, err(`slug_${lang}`) ? `slug_${lang}-error` : null].filter(Boolean).join(' ')}
+                    />
+                    <p class="field-hint" id={`slug_${lang}-note`} data-slug-note={lang} aria-live="polite" />
+                  </Field>
+                  <Field
+                    id={`excerpt_${lang}`}
+                    label={lang === 'de' ? 'Teaser' : 'Teaser (EN)'}
+                    hint={lang === 'de' ? 'Ein bis zwei Sätze für die News-Karte, Discord und Suchmaschinen.' : undefined}
+                    required={lang === 'de' && values.status !== 'draft'}
+                    error={err(`excerpt_${lang}`)}
+                  >
+                    <textarea
+                      class="textarea"
+                      id={`excerpt_${lang}`}
+                      name={`excerpt_${lang}`}
+                      rows="3"
+                      maxlength="320"
+                      aria-invalid={err(`excerpt_${lang}`) ? 'true' : undefined}
+                      aria-describedby={described(`excerpt_${lang}`, lang === 'de')}
+                    >{values[`excerpt_${lang}`]}</textarea>
+                  </Field>
+                  <MarkdownEditor
+                    client:load
+                    id={`body_${lang}`}
+                    name={`body_${lang}`}
+                    label={lang === 'de' ? 'Text' : 'Text (EN)'}
+                    value={values[`body_${lang}`]}
+                    lang={lang}
+                    rows={16}
+                    maxlength={60000}
+                    required={false}
+                    error={err(`body_${lang}`)}
+                  />
+                </div>
+              </fieldset>
+            ))
+          }
+        </div>
+      </section>
+
+      <section class="card p-4 md:p-6" aria-labelledby="h-bild">
+        <h2 id="h-bild" class="mb-4 text-2xl">Titelbild</h2>
+        <div class="grid gap-4">
+          <ImageUpload
+            client:load
+            id="cover_image"
+            name="cover_image"
+            label="Bild"
+            kind="news"
+            value={values.cover_image}
+            error={err('cover_image')}
+            hint="Querformat, ideal 16:9. Wird im Browser auf 1600 px und 800 px verkleinert und als WebP ohne EXIF-Daten gespeichert. Keine F1-, Team- oder Konsolen-Logos."
+          />
+          <div class="grid gap-4 md:grid-cols-2">
+            <Field id="cover_alt_de" label="Alt-Text (DE)" hint="Was ist zu sehen? Pflicht, sobald es ein Bild gibt." error={err('cover_alt_de')}>
+              <input class="input" id="cover_alt_de" name="cover_alt_de" value={values.cover_alt_de} maxlength="200" lang="de" aria-describedby={described('cover_alt_de', true)} aria-invalid={err('cover_alt_de') ? 'true' : undefined} />
+            </Field>
+            <Field id="cover_alt_en" label="Alt-Text (EN)" error={err('cover_alt_en')}>
+              <input class="input" id="cover_alt_en" name="cover_alt_en" value={values.cover_alt_en} maxlength="200" lang="en" aria-describedby={described('cover_alt_en')} />
+            </Field>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="side" aria-label="Veröffentlichung und Einordnung">
+      <section class="card p-4 md:p-5" aria-labelledby="h-pub">
+        <h2 id="h-pub" class="mb-4 text-xl">Veröffentlichung</h2>
+        <fieldset class="grid gap-2" aria-describedby={err('status') ? 'status-error' : undefined}>
+          <legend class="label mb-1">Status</legend>
+          {
+            NEWS_STATUSES.map((s) => (
+              <label class="checkbox status-option">
+                <input type="radio" name="status" value={s} checked={values.status === s} data-status-radio />
+                <span>
+                  <span class="font-semibold">{NEWS_STATUS_LABELS[s]}</span>
+                  <span class="block text-sm text-muted">{STATUS_HINTS[s]}</span>
+                </span>
+              </label>
+            ))
+          }
+          {err('status') && <p class="field-error" id="status-error">{err('status')}</p>}
+        </fieldset>
+
+        <div class="mt-4">
+          <Field id="publish_at" label="Zeitpunkt (Liga-Zeit, Europe/Berlin)" hint="Bei „geplant“ Pflicht. Bei „veröffentlicht“ leer lassen für jetzt." error={err('publish_at')}>
+            <input
+              class="input"
+              type="datetime-local"
+              id="publish_at"
+              name="publish_at"
+              value={values.publish_at}
+              aria-describedby={described('publish_at', true)}
+              aria-invalid={err('publish_at') ? 'true' : undefined}
+              data-publish-at
+            />
+          </Field>
+        </div>
+
+        <div class="mt-4" data-discord-box data-was-published={wasPublished ? 'true' : 'false'} hidden={values.status !== 'published' || wasPublished}>
+          <label class="checkbox">
+            <input type="checkbox" name="discord_post" checked={discordChecked && webhookConfigured} disabled={!webhookConfigured} />
+            <span>
+              Beim Veröffentlichen in <strong>#news</strong> posten
+              <span class="block text-sm text-muted">
+                {webhookConfigured ? 'Titel, Teaser, Bild und Link.' : 'Kein Webhook für #news hinterlegt (Einstellungen).'}
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div class="mt-5 flex flex-wrap gap-2">
+          <button type="submit" class="btn btn-primary">Speichern</button>
+          {
+            publicHref && (
+              <a href={publicHref.de} class="btn btn-ghost btn-sm" target="_blank" rel="noopener">
+                Ansehen (DE)
+              </a>
+            )
+          }
+          {
+            publicHref && (
+              <a href={publicHref.en} class="btn btn-ghost btn-sm" target="_blank" rel="noopener">
+                View (EN)
+              </a>
+            )
+          }
+        </div>
+      </section>
+
+      <section class="card p-4 md:p-5" aria-labelledby="h-meta">
+        <h2 id="h-meta" class="mb-4 text-xl">Einordnung</h2>
+        <div class="grid gap-4">
+          <Field id="category" label="Kategorie" required error={err('category')}>
+            <select class="select" id="category" name="category" required aria-describedby={described('category')}>
+              {NEWS_CATEGORIES.map((c) => <option value={c} selected={values.category === c}>{t('de', `news.category.${c}`)}</option>)}
+            </select>
+          </Field>
+          <Field id="round_id" label="Verknüpftes Rennen" hint="Optional. Der Ergebnis-Kasten wird im Artikel automatisch eingebettet." error={err('round_id')}>
+            <select class="select" id="round_id" name="round_id" aria-describedby={described('round_id', true)}>
+              <option value="">– kein Rennen –</option>
+              {
+                roundGroups.map((g) => (
+                  <optgroup label={g.label}>
+                    {g.rounds.map((r) => (
+                      <option value={r.id} selected={values.round_id === String(r.id)}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))
+              }
+            </select>
+          </Field>
+          <Field id="author_name" label="Autor (Anzeigename)" hint="Standard: dein Name. Gamertag, keine Klarnamen." error={err('author_name')}>
+            <input class="input" id="author_name" name="author_name" value={values.author_name} maxlength="60" aria-describedby={described('author_name', true)} />
+          </Field>
+        </div>
+      </section>
+
+      <section class="card p-4 md:p-5" aria-labelledby="h-preview">
+        <h2 id="h-preview" class="mb-3 text-xl">Vorschau der Karte</h2>
+        <NewsCardPreview form="news-form" values={{ ...values, publish_at: news?.publish_at ?? null }} />
+      </section>
+    </aside>
+  </div>
+</form>
+
+<style>
+  .layout {
+    display: grid;
+    gap: 1.5rem;
+  }
+  @media (min-width: 1280px) {
+    .layout {
+      grid-template-columns: minmax(0, 1fr) 22rem;
+      align-items: start;
+    }
+    .side {
+      position: sticky;
+      top: 4.5rem;
+    }
+  }
+  .main,
+  .side {
+    display: grid;
+    gap: 1.5rem;
+    min-width: 0;
+  }
+  .langs {
+    display: grid;
+    gap: 2rem;
+  }
+  @media (min-width: 1024px) {
+    .langs {
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+  }
+  .lang {
+    min-width: 0;
+    border: 0;
+    padding: 0;
+    margin: 0;
+  }
+  .lang + .lang {
+    border-top: 1px solid var(--color-border);
+    padding-top: 1.5rem;
+  }
+  @media (min-width: 1024px) {
+    .lang + .lang {
+      border-top: 0;
+      padding-top: 0;
+      border-left: 1px solid var(--color-border);
+      padding-left: 1.5rem;
+    }
+  }
+  .status-option {
+    padding: 0.5rem 0.625rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+  }
+  .status-option:has(input:checked) {
+    border-color: var(--color-teal);
+    background: var(--color-surface-2);
+  }
+</style>
+
+<script>
+  import { newsSlug } from '~/lib/admin/content/news';
+  import { uniqueSlug } from '~/lib/domain/text';
+
+  const form = document.querySelector<HTMLFormElement>('[data-news-form]');
+  if (form) {
+    const taken = {
+      de: JSON.parse(form.dataset.takenDe ?? '[]') as string[],
+      en: JSON.parse(form.dataset.takenEn ?? '[]') as string[],
+    };
+    const input = (sel: string) => form.querySelector<HTMLInputElement>(sel);
+    const titleDe = input('[data-slug-source="de"]');
+    const titleEn = input('[data-slug-source="en"]');
+
+    for (const lang of ['de', 'en'] as const) {
+      const target = input(`[data-slug-target="${lang}"]`);
+      const note = form.querySelector<HTMLElement>(`[data-slug-note="${lang}"]`);
+      if (!target) continue;
+      const sourceText = () => (lang === 'de' ? titleDe?.value : titleEn?.value.trim() || titleDe?.value) ?? '';
+      // Automatisch, solange der Slug leer ist oder genau dem Titel entspricht
+      let auto = target.value === '' || target.value === newsSlug(sourceText());
+
+      const showNote = () => {
+        if (!note) return;
+        const slug = target.value || newsSlug(sourceText());
+        note.textContent = taken[lang].includes(slug) ? `„${slug}“ ist schon vergeben – beim Speichern wird daraus „${uniqueSlug(slug, taken[lang])}“.` : '';
+      };
+      const sync = () => {
+        if (auto) target.value = sourceText().trim() ? newsSlug(sourceText()) : '';
+        showNote();
+      };
+
+      titleDe?.addEventListener('input', sync);
+      if (lang === 'en') titleEn?.addEventListener('input', sync);
+      target.addEventListener('input', () => {
+        auto = target.value === '';
+        showNote();
+      });
+      target.addEventListener('blur', () => {
+        if (target.value.trim() !== '') target.value = newsSlug(target.value);
+        showNote();
+      });
+      showNote();
+    }
+
+    // Status: Zeitpunkt-Pflicht und Discord-Option passend einblenden
+    const publishAt = input('[data-publish-at]');
+    const discordBox = form.querySelector<HTMLElement>('[data-discord-box]');
+    const wasPublished = discordBox?.dataset.wasPublished === 'true';
+    const onStatus = () => {
+      const status = form.querySelector<HTMLInputElement>('[data-status-radio]:checked')?.value;
+      if (publishAt) publishAt.required = status === 'scheduled';
+      if (discordBox && !wasPublished) discordBox.hidden = status !== 'published';
+    };
+    for (const r of form.querySelectorAll<HTMLInputElement>('[data-status-radio]')) r.addEventListener('change', onStatus);
+    onStatus();
+  }
+</script>

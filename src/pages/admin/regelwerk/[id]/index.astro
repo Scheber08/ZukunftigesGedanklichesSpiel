@@ -1,0 +1,357 @@
+---
+/**
+ * Eine Regelwerk-Version (Plan §4.8, §5): §-Struktur bearbeiten (Entwurf), Changelog und
+ * „gilt ab“ pflegen, veröffentlichen (archiviert die bisherige Version, setzt die aktive Saison).
+ * Veröffentlichte/archivierte Versionen sind nur lesbar. Rolle: Admin.
+ */
+import { actions } from 'astro:actions';
+import Plus from '@lucide/astro/icons/plus';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import EnMissing from '~/components/admin/content/EnMissing.astro';
+import MarkdownEditor from '~/components/admin/content/MarkdownEditor.svelte';
+import MoveButtons from '~/components/admin/content/MoveButtons.astro';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { fieldErrors, flashMessage, pick, pickChecked, submittedValues } from '~/lib/admin/content/form';
+import { descendantIds, flattenSections, publishChecks, RULES_STATUS_LABELS, suggestNextVersion } from '~/lib/admin/content/rules';
+import { missingEn, RULES_SECTION_EN_FIELDS } from '~/lib/admin/content/translations';
+import { selectOne } from '~/lib/db/store';
+import type { RulesSectionRow, RulesVersionRow, SeasonRow } from '~/lib/db/types';
+import { formatDate, formatDateTime } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { renderMarkdown } from '~/lib/util/markdown';
+import { intParam } from '~/lib/view';
+
+export const prerender = false;
+
+const allowed = hasRole(Astro.locals.staff, 'admin');
+if (!allowed) Astro.response.status = 403;
+const versionId = intParam(Astro.params.id);
+const self = `/admin/regelwerk/${versionId}`;
+
+const r = {
+  update: Astro.getActionResult(actions.admin.rulesVersionUpdate),
+  publish: Astro.getActionResult(actions.admin.rulesVersionPublish),
+  move: Astro.getActionResult(actions.admin.rulesSectionMove),
+  delSection: Astro.getActionResult(actions.admin.rulesSectionDelete),
+  delVersion: Astro.getActionResult(actions.admin.rulesVersionDelete),
+  create: Astro.getActionResult(actions.admin.rulesVersionCreate),
+};
+if (r.update && !r.update.error) return Astro.redirect(`${self}?ok=saved`, 303);
+if (r.publish && !r.publish.error) {
+  const p = new URLSearchParams({ ok: 'published' });
+  if (r.publish.data.season) p.set('season', r.publish.data.season);
+  if (r.publish.data.archived.length) p.set('archived', r.publish.data.archived.join(', '));
+  return Astro.redirect(`${self}?${p}`, 303);
+}
+if (r.move && !r.move.error) return Astro.redirect(`${self}?ok=moved#s-${r.move.data.id}`, 303);
+if (r.delSection && !r.delSection.error) return Astro.redirect(`${self}?ok=section-deleted`, 303);
+if (r.delVersion && !r.delVersion.error) return Astro.redirect('/admin/regelwerk?ok=deleted', 303);
+if (r.create && !r.create.error) return Astro.redirect(`/admin/regelwerk/${r.create.data.id}?ok=created&copied=${r.create.data.copied}`, 303);
+
+const metaResult = r.publish?.error ? r.publish : r.update;
+const submitted = await submittedValues(Astro.request, Boolean(metaResult?.error));
+const errors = fieldErrors(metaResult?.error);
+const createErrors = fieldErrors(r.create?.error);
+
+let version: RulesVersionRow | null = null;
+let sections: RulesSectionRow[] = [];
+let versions: RulesVersionRow[] = [];
+let seasons: SeasonRow[] = [];
+if (allowed && versionId != null) {
+  const store = getServiceStore();
+  version = await selectOne(store, 'rules_versions', { id: versionId });
+  if (version) {
+    [sections, versions, seasons] = await Promise.all([
+      store.select('rules_sections', { eq: { version_id: versionId } }),
+      store.select('rules_versions'),
+      store.select('seasons'),
+    ]);
+  }
+}
+if (allowed && !version) return new Response('Version nicht gefunden', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+
+const draft = version?.status === 'draft';
+const flat = flattenSections(sections);
+const activeSeason = seasons.find((s) => s.status === 'active');
+const usedBy = seasons.filter((s) => s.rules_version_id === versionId);
+const meta = {
+  version: pick(submitted, 'version', version?.version),
+  effective_from: pick(submitted, 'effective_from', version?.effective_from),
+  changelog_de: pick(submitted, 'changelog_de', version?.changelog_de),
+  changelog_en: pick(submitted, 'changelog_en', version?.changelog_en),
+};
+const checks = publishChecks({ changelog_de: version?.changelog_de, effective_from: version?.effective_from }, sections);
+const missingCount = sections.filter((s) => missingEn(s, RULES_SECTION_EN_FIELDS).length > 0).length;
+const currentPublished = versions.find((v) => v.status === 'published' && v.id !== versionId);
+const publicHref = version?.status === 'published' ? '/liga/regelwerk' : version?.status === 'archived' ? `/liga/regelwerk/v/${version.version}` : null;
+const flash = flashMessage(Astro.url, {
+  saved: 'Entwurf gespeichert.',
+  created: `Version angelegt${Astro.url.searchParams.get('copied') ? ` – ${Astro.url.searchParams.get('copied')} Abschnitte übernommen` : ''}.`,
+  published: `Version veröffentlicht.${Astro.url.searchParams.get('archived') ? ` Archiviert: ${Astro.url.searchParams.get('archived')}.` : ''}${Astro.url.searchParams.get('season') ? ` ${Astro.url.searchParams.get('season')} nutzt jetzt diese Version.` : ''} Die Website aktualisiert sich nach dem nächsten Build.`,
+  moved: 'Reihenfolge geändert.',
+  section: 'Abschnitt gespeichert.',
+  'section-deleted': 'Abschnitt gelöscht.',
+});
+const BADGE = { draft: 'badge-teal', published: 'badge-green', archived: 'badge-muted' } as const;
+---
+
+<AdminLayout
+  title={version ? `Regelwerk ${version.version}` : 'Regelwerk'}
+  breadcrumbs={[{ label: 'Regelwerk', href: '/admin/regelwerk' }, { label: version ? `Version ${version.version}` : '…' }]}
+  wide
+>
+  {
+    !allowed ? (
+      <NoAccess roles="Admins" />
+    ) : (
+      version && (
+        <>
+          {flash && (
+            <p class="alert alert-success mb-4" role="status">
+              {flash}
+            </p>
+          )}
+          {Object.values(r).map((res) => res?.error && <ActionMessage result={res} />)}
+
+          <div class="mb-6 flex flex-wrap items-center gap-3 text-sm">
+            <span class={`badge ${BADGE[version.status]}`}>{RULES_STATUS_LABELS[version.status]}</span>
+            {version.effective_from && <span class="text-muted">gilt ab {formatDate(`${version.effective_from}T12:00:00Z`, 'de')}</span>}
+            {version.published_at && <span class="text-muted">veröffentlicht {formatDateTime(version.published_at, 'de')}</span>}
+            <span class="text-muted">{sections.length} Abschnitte</span>
+            {missingCount > 0 && <span class="badge badge-warning">EN fehlt bei {missingCount}</span>}
+            {usedBy.length > 0 && <span class="text-muted">genutzt von {usedBy.map((s) => s.name).join(', ')}</span>}
+            {publicHref && (
+              <a href={publicHref} class="btn btn-ghost btn-sm" target="_blank" rel="noopener">
+                Öffentlich ansehen
+              </a>
+            )}
+          </div>
+
+          {!draft && (
+            <div class="alert alert-warning mb-6">
+              <p>
+                Diese Version ist {version.status === 'published' ? 'veröffentlicht' : 'archiviert'} und eingefroren. Für Änderungen legst du eine neue Version
+                an – alle Abschnitte werden übernommen.
+              </p>
+              <form method="POST" action={actions.admin.rulesVersionCreate} class="mt-3 flex flex-wrap items-end gap-3">
+                <input type="hidden" name="copy_from" value={version.id} />
+                <div class="field">
+                  <label for="new-version" class="label">
+                    Neue Versionsnummer
+                  </label>
+                  <input
+                    class="input"
+                    id="new-version"
+                    name="version"
+                    required
+                    maxlength="20"
+                    pattern="\d{1,3}(\.\d{1,3}){0,2}"
+                    value={suggestNextVersion(versions.map((v) => v.version))}
+                    aria-invalid={createErrors.version ? 'true' : undefined}
+                    aria-describedby={createErrors.version ? 'new-version-error' : undefined}
+                  />
+                  {createErrors.version && (
+                    <p class="field-error" id="new-version-error">
+                      {createErrors.version[0]}
+                    </p>
+                  )}
+                </div>
+                <button type="submit" class="btn btn-primary">
+                  Neue Version aus {version.version}
+                </button>
+              </form>
+            </div>
+          )}
+
+          <div class="layout">
+            <section class="card p-4 md:p-6" aria-labelledby="h-sections">
+              <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <h2 id="h-sections" class="text-2xl">
+                  Abschnitte
+                </h2>
+                {draft && (
+                  <a href={`${self}/abschnitt/neu`} class="btn btn-secondary btn-sm">
+                    <Plus size={16} aria-hidden="true" /> Kapitel hinzufügen
+                  </a>
+                )}
+              </div>
+              {flat.length === 0 ? (
+                <p class="text-muted">Noch keine Abschnitte.</p>
+              ) : (
+                <ol class="sections" role="list">
+                  {flat.map(({ section: s, depth, index, siblings }) => {
+                    const missing = missingEn(s, RULES_SECTION_EN_FIELDS);
+                    const children = descendantIds(sections, s.id).length;
+                    return (
+                      <li id={`s-${s.id}`} class="section-row" style={`--depth: ${depth}`}>
+                        <div class="min-w-0 flex-1">
+                          <a href={`${self}/abschnitt/${s.id}`} class="font-semibold hover:text-teal">
+                            <span class="tabular">{s.number}</span> {s.title_de}
+                          </a>
+                          <span class="block text-xs text-muted">
+                            #{s.anchor}
+                            {s.body_de.trim() === '' && children > 0 && ' · Kapitel ohne eigenen Text'}
+                          </span>
+                          {missing.length > 0 && <EnMissing fields={missing} compact />}
+                        </div>
+                        {draft && (
+                          <div class="row-actions">
+                            <MoveButtons
+                              action={actions.admin.rulesSectionMove}
+                              id={s.id}
+                              label={`${s.number} ${s.title_de}`}
+                              first={index === 0}
+                              last={index === siblings - 1}
+                              extra={{ version_id: version.id }}
+                            />
+                            {depth === 0 && (
+                              <a href={`${self}/abschnitt/neu?parent=${s.id}`} class="btn btn-ghost btn-icon" title="Unterabschnitt hinzufügen">
+                                <Plus size={18} aria-hidden="true" />
+                                <span class="sr-only">Unterabschnitt zu {s.number} hinzufügen</span>
+                              </a>
+                            )}
+                            <DeleteForm
+                              action={actions.admin.rulesSectionDelete}
+                              id={s.id}
+                              label={`${s.number} ${s.title_de}`}
+                              note={children > 0 ? `Die ${children} Unterabschnitte werden mitgelöscht.` : undefined}
+                              extra={{ version_id: version.id }}
+                              compact
+                            />
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </section>
+
+            <aside class="side">
+              {draft ? (
+                <section class="card p-4 md:p-6" aria-labelledby="h-publish">
+                  <h2 id="h-publish" class="mb-4 text-2xl">
+                    Version &amp; Veröffentlichung
+                  </h2>
+                  <form method="POST" action={actions.admin.rulesVersionUpdate} class="grid gap-4">
+                    <input type="hidden" name="id" value={version.id} />
+                    <div class="grid gap-4 sm:grid-cols-2">
+                      <Field id="version" label="Versionsnummer" required error={errors.version}>
+                        <input class="input" id="version" name="version" required maxlength="20" value={meta.version} />
+                      </Field>
+                      <Field id="effective_from" label="Gilt ab" hint="Pflicht zum Veröffentlichen." error={errors.effective_from}>
+                        <input
+                          class="input"
+                          type="date"
+                          id="effective_from"
+                          name="effective_from"
+                          value={meta.effective_from}
+                          aria-describedby={`effective_from-hint${errors.effective_from ? ' effective_from-error' : ''}`}
+                          aria-invalid={errors.effective_from ? 'true' : undefined}
+                        />
+                      </Field>
+                    </div>
+                    <MarkdownEditor
+                      client:load
+                      id="changelog_de"
+                      name="changelog_de"
+                      label="Changelog (DE)"
+                      value={meta.changelog_de}
+                      rows={6}
+                      lang="de"
+                      required
+                      hint="Pflicht zum Veröffentlichen: Was ändert sich gegenüber der letzten Fassung? Erscheint oben im Regelwerk."
+                      error={errors.changelog_de?.[0] ?? null}
+                    />
+                    <MarkdownEditor client:load id="changelog_en" name="changelog_en" label="Changelog (EN, optional)" value={meta.changelog_en} rows={5} lang="en" />
+                    <label class="checkbox">
+                      <input type="checkbox" name="set_season" checked={pickChecked(submitted, 'set_season', true)} disabled={!activeSeason} />
+                      <span>
+                        Aktive Saison auf diese Version setzen
+                        <span class="block text-sm text-muted">
+                          {activeSeason ? `${activeSeason.name} nutzt derzeit Version ${versions.find((v) => v.id === activeSeason.rules_version_id)?.version ?? '–'}.` : 'Es gibt gerade keine aktive Saison.'}
+                        </span>
+                      </span>
+                    </label>
+
+                    {(checks.problems.length > 0 || Object.keys(checks.fields).length > 0) && (
+                      <div class="alert alert-warning text-sm">
+                        <p class="font-semibold">Vor dem Veröffentlichen (Stand gespeicherter Entwurf):</p>
+                        <ul class="ml-5 list-disc">
+                          {[...Object.values(checks.fields), ...checks.problems].map((p) => (
+                            <li>{p}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <p class="field-hint">
+                      Beim Veröffentlichen wird {currentPublished ? `Version ${currentPublished.version} archiviert (bleibt unter /liga/regelwerk/v/${currentPublished.version} abrufbar)` : 'die Version zur gültigen Fassung'}. Danach ist diese Version eingefroren.
+                    </p>
+                    <div class="flex flex-wrap gap-2">
+                      <button type="submit" class="btn btn-secondary">
+                        Entwurf speichern
+                      </button>
+                      <button type="submit" class="btn btn-primary" formaction={actions.admin.rulesVersionPublish}>
+                        Veröffentlichen
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              ) : (
+                <section class="card p-4 md:p-6" aria-labelledby="h-changelog">
+                  <h2 id="h-changelog" class="mb-3 text-2xl">
+                    Changelog
+                  </h2>
+                  <div class="prose text-sm" lang="de" set:html={renderMarkdown(version.changelog_de) || '<p>–</p>'} />
+                  {version.changelog_en && <div class="prose mt-4 border-t border-border pt-4 text-sm" lang="en" set:html={renderMarkdown(version.changelog_en)} />}
+                </section>
+              )}
+              {draft && (
+                <div class="mt-4">
+                  <DeleteForm action={actions.admin.rulesVersionDelete} id={version.id} label={`Entwurf ${version.version}`} note="Alle Abschnitte dieses Entwurfs werden gelöscht." />
+                </div>
+              )}
+            </aside>
+          </div>
+        </>
+      )
+    )
+  }
+</AdminLayout>
+
+<style>
+  .layout {
+    display: grid;
+    gap: 1.5rem;
+  }
+  @media (min-width: 1280px) {
+    .layout {
+      grid-template-columns: minmax(0, 1fr) 30rem;
+      align-items: start;
+    }
+  }
+  .sections {
+    display: grid;
+  }
+  .section-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.625rem 0 0.625rem calc(var(--depth, 0) * 1.25rem);
+    border-bottom: 1px solid var(--color-border);
+    scroll-margin-top: 5rem;
+  }
+  .section-row:target {
+    background: var(--color-surface-2);
+  }
+  .row-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.125rem;
+  }
+</style>

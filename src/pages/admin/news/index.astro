@@ -1,0 +1,174 @@
+---
+/**
+ * News-Übersicht im Admin (Plan §5): Entwürfe, geplante und veröffentlichte Artikel,
+ * fehlende EN-Übersetzungen markiert. Rolle: Redaktion oder Admin.
+ */
+import { actions } from 'astro:actions';
+import Plus from '@lucide/astro/icons/plus';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import EnMissing from '~/components/admin/content/EnMissing.astro';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { t } from '~/i18n';
+import { flashMessage } from '~/lib/admin/content/form';
+import { loadRoundLabels } from '~/lib/admin/content/loaders';
+import { missingNewsTranslations, NEWS_STATE_LABELS, newsListState, type NewsListState } from '~/lib/admin/content/news';
+import type { NewsRow } from '~/lib/db/types';
+import { formatDateTime } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+
+export const prerender = false;
+
+const allowed = hasRole(Astro.locals.staff, 'redakteur');
+if (!allowed) Astro.response.status = 403;
+
+const deleted = Astro.getActionResult(actions.admin.newsDelete);
+if (deleted && !deleted.error) return Astro.redirect('/admin/news?ok=deleted', 303);
+
+const FILTERS = ['all', 'draft', 'scheduled', 'published'] as const;
+type Filter = (typeof FILTERS)[number];
+const FILTER_LABELS: Record<Filter, string> = { all: 'Alle', draft: 'Entwürfe', scheduled: 'Geplant', published: 'Veröffentlicht' };
+const requested = Astro.url.searchParams.get('status') as Filter | null;
+const filter: Filter = requested && FILTERS.includes(requested) ? requested : 'all';
+
+const now = new Date();
+let rows: Array<{ news: NewsRow; state: NewsListState; missing: string[] }> = [];
+let roundLabels = new Map<number, string>();
+if (allowed) {
+  const store = getServiceStore();
+  const [news, labels] = await Promise.all([store.select('news'), loadRoundLabels(store)]);
+  roundLabels = labels;
+  const order: Record<NewsListState, number> = { due: 0, scheduled: 1, draft: 2, published: 3 };
+  rows = news
+    .map((n) => ({ news: n, state: newsListState(n, now), missing: missingNewsTranslations(n) }))
+    .sort(
+      (a, b) =>
+        order[a.state] - order[b.state] ||
+        (b.news.publish_at ?? b.news.updated_at).localeCompare(a.news.publish_at ?? a.news.updated_at),
+    );
+}
+const counts = {
+  all: rows.length,
+  draft: rows.filter((r) => r.state === 'draft').length,
+  scheduled: rows.filter((r) => r.state === 'scheduled' || r.state === 'due').length,
+  published: rows.filter((r) => r.state === 'published').length,
+};
+const visible = rows.filter((r) => filter === 'all' || r.news.status === filter);
+const missingCount = rows.filter((r) => r.missing.length > 0).length;
+const flash = flashMessage(Astro.url, { deleted: 'Artikel gelöscht.' });
+const BADGE: Record<NewsListState, 'muted' | 'teal' | 'warning' | 'green'> = { draft: 'muted', scheduled: 'teal', due: 'warning', published: 'green' };
+---
+
+<AdminLayout title="News" breadcrumbs={[{ label: 'News' }]}>
+  {
+    allowed && (
+      <a slot="actions" href="/admin/news/neu" class="btn btn-primary">
+        <Plus size={18} aria-hidden="true" />
+        Neuer Artikel
+      </a>
+    )
+  }
+  {
+    !allowed ? (
+      <NoAccess roles="Redaktion und Admins" />
+    ) : (
+      <>
+        {flash && (
+          <p class="alert alert-success mb-6" role="status">
+            {flash}
+          </p>
+        )}
+        <ActionMessage result={deleted} />
+
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <nav class="segmented" aria-label="Nach Status filtern">
+            {FILTERS.map((f) => (
+              <a href={f === 'all' ? '/admin/news' : `/admin/news?status=${f}`} aria-current={filter === f ? 'page' : undefined} class="filter">
+                {FILTER_LABELS[f]} <span class="text-muted">({counts[f]})</span>
+              </a>
+            ))}
+          </nav>
+          {missingCount > 0 && (
+            <p class="text-sm text-muted">
+              <span class="badge badge-warning">EN fehlt</span> bei {missingCount} {missingCount === 1 ? 'Artikel' : 'Artikeln'}
+            </p>
+          )}
+        </div>
+
+        {visible.length === 0 ? (
+          <div class="card p-6 text-muted">
+            <p>Keine Artikel in dieser Ansicht.</p>
+            <p class="mt-3">
+              <a href="/admin/news/neu" class="btn btn-secondary btn-sm">
+                Ersten Artikel schreiben
+              </a>
+            </p>
+          </div>
+        ) : (
+          <div class="table-wrap">
+            <table class="timing-table news-table">
+              <caption class="sr-only">
+                News-Artikel ({FILTER_LABELS[filter]}), sortiert nach Status und Datum
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Titel</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Datum</th>
+                  <th scope="col">Kategorie</th>
+                  <th scope="col">Übersetzung</th>
+                  <th scope="col">
+                    <span class="sr-only">Aktionen</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map(({ news, state, missing }) => (
+                  <tr>
+                    <td class="title-cell">
+                      <a href={`/admin/news/${news.id}`} class="font-semibold hover:text-teal">
+                        {news.title_de}
+                      </a>
+                      <span class="block text-xs text-muted">
+                        /news/{news.slug_de}
+                        {news.round_id != null && roundLabels.has(news.round_id) && <> · {roundLabels.get(news.round_id)}</>}
+                        {news.author_name && <> · {news.author_name}</>}
+                      </span>
+                    </td>
+                    <td>
+                      <span class={`badge badge-${BADGE[state]}`}>{NEWS_STATE_LABELS[state]}</span>
+                    </td>
+                    <td class="muted whitespace-nowrap">{news.publish_at ? formatDateTime(news.publish_at, 'de') : '–'}</td>
+                    <td class="muted whitespace-nowrap">{t('de', `news.category.${news.category}`)}</td>
+                    <td>{missing.length > 0 ? <EnMissing fields={missing} compact /> : <span class="text-sm text-muted">vollständig</span>}</td>
+                    <td class="whitespace-nowrap text-right">
+                      <a href={`/admin/news/${news.id}`} class="btn btn-ghost btn-sm">
+                        Bearbeiten
+                      </a>
+                      <DeleteForm action={actions.admin.newsDelete} id={news.id} label={`Artikel „${news.title_de}“`} compact />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p class="field-hint mt-4">
+          „Geplant (fällig)“: Der Zeitpunkt ist erreicht, der Cron-Job veröffentlicht den Artikel in der nächsten Minute.
+        </p>
+      </>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .segmented .filter {
+    min-height: 44px;
+  }
+  .news-table .title-cell {
+    min-width: 16rem;
+    white-space: normal;
+  }
+</style>

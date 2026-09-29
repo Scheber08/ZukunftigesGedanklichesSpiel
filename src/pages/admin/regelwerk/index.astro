@@ -1,0 +1,151 @@
+---
+/**
+ * Regelwerk-Versionen (Plan §4.8, §5): Entwurf / veröffentlicht / archiviert.
+ * Neue Version als Kopie einer bestehenden (alle Abschnitte) oder leer anlegen. Rolle: Admin.
+ */
+import { actions } from 'astro:actions';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { fieldErrors, flashMessage, pick, submittedValues } from '~/lib/admin/content/form';
+import { RULES_STATUS_LABELS, suggestNextVersion } from '~/lib/admin/content/rules';
+import { countMissing, RULES_SECTION_EN_FIELDS } from '~/lib/admin/content/translations';
+import type { RulesSectionRow, RulesVersionRow, SeasonRow } from '~/lib/db/types';
+import { formatDate, formatDateTime } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+
+export const prerender = false;
+
+const allowed = hasRole(Astro.locals.staff, 'admin');
+if (!allowed) Astro.response.status = 403;
+
+const created = Astro.getActionResult(actions.admin.rulesVersionCreate);
+if (created && !created.error) return Astro.redirect(`/admin/regelwerk/${created.data.id}?ok=created&copied=${created.data.copied}`, 303);
+const submitted = await submittedValues(Astro.request, Boolean(created?.error));
+const errors = fieldErrors(created?.error);
+
+let versions: RulesVersionRow[] = [];
+let sections: RulesSectionRow[] = [];
+let seasons: SeasonRow[] = [];
+if (allowed) {
+  const store = getServiceStore();
+  [versions, sections, seasons] = await Promise.all([store.select('rules_versions'), store.select('rules_sections'), store.select('seasons')]);
+}
+const STATUS_ORDER = { draft: 0, published: 1, archived: 2 } as const;
+const sorted = [...versions].sort(
+  (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || (b.published_at ?? b.created_at).localeCompare(a.published_at ?? a.created_at),
+);
+const current = versions.find((v) => v.status === 'published');
+const activeSeason = seasons.find((s) => s.status === 'active');
+const suggestion = suggestNextVersion(versions.map((v) => v.version));
+const copyDefault = pick(submitted, 'copy_from', current?.id ?? sorted[0]?.id ?? '');
+const flash = flashMessage(Astro.url, { deleted: 'Entwurf gelöscht.' });
+const BADGE = { draft: 'badge-teal', published: 'badge-green', archived: 'badge-muted' } as const;
+---
+
+<AdminLayout title="Regelwerk" breadcrumbs={[{ label: 'Regelwerk' }]}>
+  {
+    !allowed ? (
+      <NoAccess roles="Admins" />
+    ) : (
+      <>
+        {flash && (
+          <p class="alert alert-success mb-6" role="status">
+            {flash}
+          </p>
+        )}
+        <ActionMessage result={created} />
+
+        <p class="mb-6 max-w-prose text-sm text-muted">
+          Veröffentlichte Versionen sind eingefroren. Änderungen laufen immer über eine neue Version: kopieren, Abschnitte bearbeiten, mit Changelog
+          veröffentlichen. Die bisherige Fassung wird dabei archiviert und bleibt öffentlich abrufbar.
+          {activeSeason && (
+            <>
+              {' '}
+              Aktive Saison: <strong class="text-fg">{activeSeason.name}</strong> (Regelwerk {versions.find((v) => v.id === activeSeason.rules_version_id)?.version ?? '–'}).
+            </>
+          )}
+        </p>
+
+        <div class="table-wrap mb-8">
+          <table class="timing-table">
+            <caption class="sr-only">Regelwerk-Versionen</caption>
+            <thead>
+              <tr>
+                <th scope="col">Version</th>
+                <th scope="col">Status</th>
+                <th scope="col">Gilt ab</th>
+                <th scope="col">Veröffentlicht</th>
+                <th scope="col" class="num">Abschnitte</th>
+                <th scope="col">Übersetzung</th>
+                <th scope="col">Saisons</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((v) => {
+                const own = sections.filter((s) => s.version_id === v.id);
+                const missing = countMissing(own, RULES_SECTION_EN_FIELDS);
+                const usedBy = seasons.filter((s) => s.rules_version_id === v.id);
+                return (
+                  <tr>
+                    <td>
+                      <a href={`/admin/regelwerk/${v.id}`} class="font-semibold hover:text-teal">
+                        Version {v.version}
+                      </a>
+                    </td>
+                    <td>
+                      <span class={`badge ${BADGE[v.status]}`}>{RULES_STATUS_LABELS[v.status]}</span>
+                    </td>
+                    <td class="muted">{v.effective_from ? formatDate(`${v.effective_from}T12:00:00Z`, 'de') : '–'}</td>
+                    <td class="muted">{v.published_at ? formatDateTime(v.published_at, 'de') : '–'}</td>
+                    <td class="num">{own.length}</td>
+                    <td>{missing > 0 ? <span class="badge badge-warning">EN fehlt bei {missing}</span> : <span class="text-sm text-muted">vollständig</span>}</td>
+                    <td class="muted">{usedBy.map((s) => s.name).join(', ') || '–'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <section class="card max-w-2xl p-4 md:p-6" aria-labelledby="h-new">
+          <h2 id="h-new" class="mb-2 text-2xl">Neue Version anlegen</h2>
+          <p class="mb-4 text-sm text-muted">Die neue Version startet als Entwurf und ist erst nach dem Veröffentlichen sichtbar.</p>
+          <form method="POST" action={actions.admin.rulesVersionCreate} class="grid gap-4 sm:grid-cols-2">
+            <Field id="version" label="Versionsnummer" required hint={`Vorschlag: ${suggestion}`} error={errors.version}>
+              <input
+                class="input"
+                id="version"
+                name="version"
+                required
+                maxlength="20"
+                pattern="\d{1,3}(\.\d{1,3}){0,2}"
+                value={pick(submitted, 'version', suggestion)}
+                aria-describedby={`version-hint${errors.version ? ' version-error' : ''}`}
+              />
+            </Field>
+            <Field id="copy_from" label="Inhalt übernehmen aus" error={errors.copy_from}>
+              <select class="select" id="copy_from" name="copy_from">
+                {sorted.map((v) => (
+                  <option value={v.id} selected={copyDefault === String(v.id)}>
+                    Version {v.version} ({RULES_STATUS_LABELS[v.status]})
+                  </option>
+                ))}
+                <option value="" selected={copyDefault === ''}>
+                  Leer beginnen
+                </option>
+              </select>
+            </Field>
+            <div class="sm:col-span-2">
+              <button type="submit" class="btn btn-primary">
+                Version anlegen
+              </button>
+            </div>
+          </form>
+        </section>
+      </>
+    )
+  }
+</AdminLayout>

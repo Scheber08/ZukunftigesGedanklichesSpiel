@@ -1,0 +1,96 @@
+---
+/** Offene Rollen (Plan §4.8 Team-Suche): Titel, Beschreibung, Zeitaufwand, aktiv. Rolle: Redaktion/Admin. */
+import { actions } from 'astro:actions';
+import Plus from '@lucide/astro/icons/plus';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import ContentNav from '~/components/admin/content/ContentNav.astro';
+import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import EnMissing from '~/components/admin/content/EnMissing.astro';
+import MoveButtons from '~/components/admin/content/MoveButtons.astro';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { flashMessage } from '~/lib/admin/content/form';
+import { bySort } from '~/lib/admin/content/order';
+import { missingEn, POSITION_EN_FIELDS } from '~/lib/admin/content/translations';
+import type { OpenPositionRow } from '~/lib/db/types';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+
+export const prerender = false;
+
+const allowed = hasRole(Astro.locals.staff, 'redakteur');
+if (!allowed) Astro.response.status = 403;
+
+const moved = Astro.getActionResult(actions.admin.positionMove);
+if (moved && !moved.error) return Astro.redirect('/admin/inhalte/rollen?ok=moved', 303);
+const deleted = Astro.getActionResult(actions.admin.positionDelete);
+if (deleted && !deleted.error) return Astro.redirect('/admin/inhalte/rollen?ok=deleted', 303);
+
+let positions: OpenPositionRow[] = [];
+if (allowed) positions = bySort(await getServiceStore().select('open_positions'));
+const flash = flashMessage(Astro.url, { saved: 'Rolle gespeichert.', moved: 'Reihenfolge geändert.', deleted: 'Rolle gelöscht.' });
+---
+
+<AdminLayout title="Offene Rollen" breadcrumbs={[{ label: 'Seiten-Inhalte', href: '/admin/inhalte' }, { label: 'Offene Rollen' }]}>
+  {
+    allowed && (
+      <a slot="actions" href="/admin/inhalte/rollen/neu" class="btn btn-primary">
+        <Plus size={18} aria-hidden="true" /> Neue Rolle
+      </a>
+    )
+  }
+  {
+    !allowed ? (
+      <NoAccess roles="Redaktion und Admins" />
+    ) : (
+      <>
+        <ContentNav current="rollen" />
+        {flash && (
+          <p class="alert alert-success mb-6" role="status">
+            {flash}
+          </p>
+        )}
+        <ActionMessage result={moved} />
+        <ActionMessage result={deleted} />
+        <p class="mb-6 text-sm text-muted">Aktive Rollen erscheinen auf „Über uns“ unter „Mach mit“. Kontakt läuft über ein Discord-Ticket.</p>
+        {positions.length === 0 ? (
+          <p class="card p-6 text-muted">Keine Rollen eingetragen.</p>
+        ) : (
+          <ul role="list" class="card divide-y divide-border">
+            {positions.map((p, i) => (
+              <li class="row" id={`item-${p.id}`}>
+                <div class="min-w-0 flex-1">
+                  <a href={`/admin/inhalte/rollen/${p.id}`} class="font-semibold hover:text-teal">
+                    {p.title_de}
+                  </a>
+                  <span class="block text-sm text-muted">
+                    {p.effort ?? 'Zeitaufwand nicht angegeben'}
+                    {p.title_en && <span lang="en"> · {p.title_en}</span>}
+                  </span>
+                  <span class="mt-1 flex flex-wrap gap-2">
+                    {p.active ? <span class="badge badge-green">Aktiv</span> : <span class="badge badge-muted">Inaktiv (ausgeblendet)</span>}
+                    <EnMissing fields={missingEn(p, POSITION_EN_FIELDS)} compact />
+                  </span>
+                </div>
+                <div class="flex items-center">
+                  <MoveButtons action={actions.admin.positionMove} id={p.id} label={p.title_de} first={i === 0} last={i === positions.length - 1} />
+                  <DeleteForm action={actions.admin.positionDelete} id={p.id} label={`Rolle „${p.title_de}“`} compact />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 1rem;
+  }
+</style>

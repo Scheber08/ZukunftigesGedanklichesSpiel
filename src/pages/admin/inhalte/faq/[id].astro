@@ -1,0 +1,122 @@
+---
+/** FAQ-Eintrag anlegen (id = „neu“) oder bearbeiten: Kategorie, Frage und Antwort DE/EN. Rolle: Redaktion/Admin. */
+import { actions } from 'astro:actions';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import ContentNav from '~/components/admin/content/ContentNav.astro';
+import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import MarkdownEditor from '~/components/admin/content/MarkdownEditor.svelte';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { fieldErrors, pick, submittedValues } from '~/lib/admin/content/form';
+import { FAQ_CATEGORY_LABELS } from '~/lib/admin/content/labels';
+import { selectOne } from '~/lib/db/store';
+import { FAQ_CATEGORIES, type FaqItemRow } from '~/lib/db/types';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { intParam } from '~/lib/view';
+
+export const prerender = false;
+
+const allowed = hasRole(Astro.locals.staff, 'redakteur');
+if (!allowed) Astro.response.status = 403;
+const isNew = Astro.params.id === 'neu';
+const itemId = isNew ? null : intParam(Astro.params.id);
+
+const result = Astro.getActionResult(actions.admin.faqSave);
+if (result && !result.error) return Astro.redirect(`/admin/inhalte/faq?ok=saved#item-${result.data.id}`, 303);
+const deleted = Astro.getActionResult(actions.admin.faqDelete);
+if (deleted && !deleted.error) return Astro.redirect('/admin/inhalte/faq?ok=deleted', 303);
+const submitted = await submittedValues(Astro.request, Boolean(result?.error));
+const errors = fieldErrors(result?.error);
+
+let item: FaqItemRow | null = null;
+if (allowed && itemId != null) item = await selectOne(getServiceStore(), 'faq_items', { id: itemId });
+if (allowed && !isNew && !item) return new Response('Eintrag nicht gefunden', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+
+const presetCategory = Astro.url.searchParams.get('category');
+const v = {
+  category: pick(submitted, 'category', item?.category ?? (FAQ_CATEGORIES.includes(presetCategory as never) ? presetCategory : 'general')),
+  question_de: pick(submitted, 'question_de', item?.question_de),
+  question_en: pick(submitted, 'question_en', item?.question_en),
+  answer_de: pick(submitted, 'answer_de', item?.answer_de),
+  answer_en: pick(submitted, 'answer_en', item?.answer_en),
+};
+const err = (name: string) => errors[name]?.[0] ?? null;
+---
+
+<AdminLayout
+  title={isNew ? 'Neuer FAQ-Eintrag' : 'FAQ-Eintrag bearbeiten'}
+  breadcrumbs={[{ label: 'Seiten-Inhalte', href: '/admin/inhalte' }, { label: 'FAQ', href: '/admin/inhalte/faq' }, { label: isNew ? 'Neu' : `#${itemId}` }]}
+  wide
+>
+  {item && <DeleteForm slot="actions" action={actions.admin.faqDelete} id={item.id} label={`FAQ-Eintrag „${item.question_de}“`} />}
+  {
+    !allowed ? (
+      <NoAccess roles="Redaktion und Admins" />
+    ) : (
+      <>
+        <ContentNav current="faq" />
+        <ActionMessage result={result} />
+        <form method="POST" action={actions.admin.faqSave} class="grid gap-6">
+          {item && <input type="hidden" name="id" value={item.id} />}
+          <div class="max-w-sm">
+            <Field id="category" label="Kategorie" required error={err('category')}>
+              <select class="select" id="category" name="category" required>
+                {FAQ_CATEGORIES.map((c) => (
+                  <option value={c} selected={v.category === c}>
+                    {FAQ_CATEGORY_LABELS[c]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div class="langs">
+            <fieldset class="card p-4 md:p-5" lang="de">
+              <legend class="micro px-1">Deutsch</legend>
+              <div class="grid gap-4">
+                <Field id="question_de" label="Frage" required error={err('question_de')}>
+                  <input class="input" id="question_de" name="question_de" required maxlength="300" value={v.question_de} aria-invalid={err('question_de') ? 'true' : undefined} aria-describedby={err('question_de') ? 'question_de-error' : undefined} />
+                </Field>
+                <MarkdownEditor client:load id="answer_de" name="answer_de" label="Antwort" value={v.answer_de} rows={9} lang="de" required maxlength={8000} error={err('answer_de')} />
+              </div>
+            </fieldset>
+            <fieldset class="card p-4 md:p-5" lang="en">
+              <legend class="micro px-1">English · optional</legend>
+              <div class="grid gap-4">
+                <Field id="question_en" label="Question" error={err('question_en')}>
+                  <input class="input" id="question_en" name="question_en" maxlength="300" value={v.question_en} />
+                </Field>
+                <MarkdownEditor client:load id="answer_en" name="answer_en" label="Answer" value={v.answer_en} rows={9} lang="en" maxlength={8000} error={err('answer_en')} />
+              </div>
+            </fieldset>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary">
+              {isNew ? 'Eintrag anlegen' : 'Speichern'}
+            </button>
+            <a href="/admin/inhalte/faq" class="btn btn-ghost">
+              Abbrechen
+            </a>
+          </div>
+        </form>
+      </>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .langs {
+    display: grid;
+    gap: 1.5rem;
+  }
+  @media (min-width: 1024px) {
+    .langs {
+      grid-template-columns: 1fr 1fr;
+      align-items: start;
+    }
+  }
+  fieldset {
+    min-width: 0;
+  }
+</style>

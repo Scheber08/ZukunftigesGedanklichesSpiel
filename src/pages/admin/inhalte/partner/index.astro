@@ -1,0 +1,133 @@
+---
+/**
+ * Partner (Plan §4.8): Logo, Text, Link, Kennzeichnung „Anzeige“, aktiv, Reihenfolge.
+ * Interne Ausschlussliste: Glücksspiel, Wetten, Skins und Cases, Alkohol, Krypto. Rolle: Redaktion/Admin.
+ */
+import { actions } from 'astro:actions';
+import Plus from '@lucide/astro/icons/plus';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import ContentNav from '~/components/admin/content/ContentNav.astro';
+import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import EnMissing from '~/components/admin/content/EnMissing.astro';
+import MoveButtons from '~/components/admin/content/MoveButtons.astro';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { flashMessage } from '~/lib/admin/content/form';
+import { mediaVariantUrl } from '~/lib/admin/content/media';
+import { bySort } from '~/lib/admin/content/order';
+import { EXCLUSION_CATEGORIES, exclusionHits } from '~/lib/admin/content/partners';
+import { missingEn, PARTNER_EN_FIELDS } from '~/lib/admin/content/translations';
+import type { PartnerRow } from '~/lib/db/types';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+
+export const prerender = false;
+
+const allowed = hasRole(Astro.locals.staff, 'redakteur');
+if (!allowed) Astro.response.status = 403;
+
+const moved = Astro.getActionResult(actions.admin.partnerMove);
+if (moved && !moved.error) return Astro.redirect('/admin/inhalte/partner?ok=moved', 303);
+const deleted = Astro.getActionResult(actions.admin.partnerDelete);
+if (deleted && !deleted.error) return Astro.redirect('/admin/inhalte/partner?ok=deleted', 303);
+
+let partners: PartnerRow[] = [];
+if (allowed) partners = bySort(await getServiceStore().select('partners'));
+const flash = flashMessage(Astro.url, { saved: 'Partner gespeichert.', moved: 'Reihenfolge geändert.', deleted: 'Partner gelöscht.' });
+---
+
+<AdminLayout title="Partner" breadcrumbs={[{ label: 'Seiten-Inhalte', href: '/admin/inhalte' }, { label: 'Partner' }]}>
+  {
+    allowed && (
+      <a slot="actions" href="/admin/inhalte/partner/neu" class="btn btn-primary">
+        <Plus size={18} aria-hidden="true" /> Neuer Partner
+      </a>
+    )
+  }
+  {
+    !allowed ? (
+      <NoAccess roles="Redaktion und Admins" />
+    ) : (
+      <>
+        <ContentNav current="partner" />
+        {flash && (
+          <p class="alert alert-success mb-6" role="status">
+            {flash}
+          </p>
+        )}
+        <ActionMessage result={moved} />
+        <ActionMessage result={deleted} />
+
+        <div class="alert alert-warning mb-6 text-sm">
+          <p class="font-semibold">Ausschlussliste (intern)</p>
+          <p>
+            Keine Partner aus den Bereichen {EXCLUSION_CATEGORIES.map((c) => c.label).join(', ')}. Viele Mitglieder sind ab 16 – bezahlte Partner werden immer
+            als „Anzeige“ gekennzeichnet und mit <code>rel="sponsored"</code> verlinkt.
+          </p>
+        </div>
+
+        {partners.length === 0 ? (
+          <p class="card p-6 text-muted">Noch keine Partner.</p>
+        ) : (
+          <ul role="list" class="card divide-y divide-border">
+            {partners.map((p, i) => {
+              const hits = exclusionHits(p.name, p.text_de, p.text_en, p.url);
+              return (
+                <li class="row" id={`item-${p.id}`}>
+                  {p.logo ? (
+                    <img src={mediaVariantUrl(p.logo, 800)} alt="" width="64" height="64" class="logo" loading="lazy" />
+                  ) : (
+                    <span class="logo placeholder" aria-hidden="true">
+                      Logo
+                    </span>
+                  )}
+                  <div class="min-w-0 flex-1">
+                    <a href={`/admin/inhalte/partner/${p.id}`} class="font-semibold hover:text-teal">
+                      {p.name}
+                    </a>
+                    <span class="block truncate text-sm text-muted">{p.url}</span>
+                    <span class="mt-1 flex flex-wrap gap-2">
+                      {p.active ? <span class="badge badge-green">Aktiv</span> : <span class="badge badge-muted">Inaktiv</span>}
+                      {p.label_ad ? <span class="badge">„Anzeige“</span> : <span class="badge badge-warning">ohne Anzeige-Kennzeichnung</span>}
+                      {hits.length > 0 && <span class="badge badge-danger">Ausschlussliste prüfen: {hits.join(', ')}</span>}
+                      <EnMissing fields={missingEn(p, PARTNER_EN_FIELDS)} compact />
+                    </span>
+                  </div>
+                  <div class="flex items-center">
+                    <MoveButtons action={actions.admin.partnerMove} id={p.id} label={p.name} first={i === 0} last={i === partners.length - 1} />
+                    <DeleteForm action={actions.admin.partnerDelete} id={p.id} label={`Partner „${p.name}“`} compact />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 1rem;
+  }
+  .logo {
+    width: 64px;
+    height: 64px;
+    flex: none;
+    border-radius: 8px;
+    object-fit: contain;
+    background: var(--color-surface-2);
+  }
+  .placeholder {
+    display: grid;
+    place-items: center;
+    font-size: var(--fs-micro);
+    color: var(--color-muted);
+    border: 1px dashed var(--color-border);
+  }
+</style>

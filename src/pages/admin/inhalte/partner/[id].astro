@@ -1,0 +1,134 @@
+---
+/** Partner anlegen (id = „neu“) oder bearbeiten: Name, Logo, Link, Text DE/EN, „Anzeige“, aktiv. Rolle: Redaktion/Admin. */
+import { actions } from 'astro:actions';
+import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import ContentNav from '~/components/admin/content/ContentNav.astro';
+import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import ImageUpload from '~/components/admin/content/ImageUpload.svelte';
+import NoAccess from '~/components/admin/content/NoAccess.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { fieldErrors, pick, pickChecked, submittedValues } from '~/lib/admin/content/form';
+import { EXCLUSION_CATEGORIES, exclusionHits } from '~/lib/admin/content/partners';
+import { selectOne } from '~/lib/db/store';
+import type { PartnerRow } from '~/lib/db/types';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { intParam } from '~/lib/view';
+
+export const prerender = false;
+
+const allowed = hasRole(Astro.locals.staff, 'redakteur');
+if (!allowed) Astro.response.status = 403;
+const isNew = Astro.params.id === 'neu';
+const partnerId = isNew ? null : intParam(Astro.params.id);
+
+const result = Astro.getActionResult(actions.admin.partnerSave);
+if (result && !result.error) return Astro.redirect(`/admin/inhalte/partner?ok=saved#item-${result.data.id}`, 303);
+const deleted = Astro.getActionResult(actions.admin.partnerDelete);
+if (deleted && !deleted.error) return Astro.redirect('/admin/inhalte/partner?ok=deleted', 303);
+const submitted = await submittedValues(Astro.request, Boolean(result?.error));
+const errors = fieldErrors(result?.error);
+
+let partner: PartnerRow | null = null;
+if (allowed && partnerId != null) partner = await selectOne(getServiceStore(), 'partners', { id: partnerId });
+if (allowed && !isNew && !partner) return new Response('Partner nicht gefunden', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+
+const v = {
+  name: pick(submitted, 'name', partner?.name),
+  url: pick(submitted, 'url', partner?.url),
+  logo: pick(submitted, 'logo', partner?.logo),
+  text_de: pick(submitted, 'text_de', partner?.text_de),
+  text_en: pick(submitted, 'text_en', partner?.text_en),
+  label_ad: pickChecked(submitted, 'label_ad', partner?.label_ad ?? true),
+  active: pickChecked(submitted, 'active', partner?.active ?? true),
+  exclusion_confirmed: pickChecked(submitted, 'exclusion_confirmed', false),
+};
+const hits = exclusionHits(v.name, v.text_de, v.text_en, v.url);
+const err = (name: string) => errors[name]?.[0] ?? null;
+---
+
+<AdminLayout
+  title={isNew ? 'Neuer Partner' : `${partner?.name ?? 'Partner'} bearbeiten`}
+  breadcrumbs={[{ label: 'Seiten-Inhalte', href: '/admin/inhalte' }, { label: 'Partner', href: '/admin/inhalte/partner' }, { label: isNew ? 'Neu' : (partner?.name ?? '…') }]}
+>
+  {partner && <DeleteForm slot="actions" action={actions.admin.partnerDelete} id={partner.id} label={`Partner „${partner.name}“`} />}
+  {
+    !allowed ? (
+      <NoAccess roles="Redaktion und Admins" />
+    ) : (
+      <>
+        <ContentNav current="partner" />
+        <ActionMessage result={result} />
+        <form method="POST" action={actions.admin.partnerSave} class="card grid max-w-3xl gap-5 p-4 md:p-6">
+          {partner && <input type="hidden" name="id" value={partner.id} />}
+          <div class="grid gap-4 sm:grid-cols-2">
+            <Field id="name" label="Name" required error={err('name')}>
+              <input class="input" id="name" name="name" required maxlength="80" value={v.name} aria-invalid={err('name') ? 'true' : undefined} aria-describedby={err('name') ? 'name-error' : undefined} />
+            </Field>
+            <Field id="url" label="Link" required hint={'https://… – wird mit rel="sponsored" verlinkt.'} error={err('url')}>
+              <input class="input" type="url" inputmode="url" id="url" name="url" required maxlength="500" value={v.url} placeholder="https://" aria-describedby={`url-hint${err('url') ? ' url-error' : ''}`} aria-invalid={err('url') ? 'true' : undefined} />
+            </Field>
+          </div>
+          <ImageUpload
+            client:load
+            id="logo"
+            name="logo"
+            label="Logo"
+            kind="partners"
+            aspect="square"
+            value={v.logo}
+            error={err('logo')}
+            hint="Am besten mit transparentem Hintergrund (PNG oder SVG). Wird als WebP gespeichert."
+          />
+          <div class="grid gap-4 sm:grid-cols-2">
+            <Field id="text_de" label="Text (DE)" required hint="Zwei, drei Sätze: Was bietet der Partner der Community?" error={err('text_de')}>
+              <textarea class="textarea" id="text_de" name="text_de" rows="5" required maxlength="1000" lang="de" aria-describedby={`text_de-hint${err('text_de') ? ' text_de-error' : ''}`} aria-invalid={err('text_de') ? 'true' : undefined}>{v.text_de}</textarea>
+            </Field>
+            <Field id="text_en" label="Text (EN)" error={err('text_en')}>
+              <textarea class="textarea" id="text_en" name="text_en" rows="5" maxlength="1000" lang="en">{v.text_en}</textarea>
+            </Field>
+          </div>
+          <div class="grid gap-2">
+            <label class="checkbox">
+              <input type="checkbox" name="label_ad" checked={v.label_ad} />
+              <span>
+                Als „Anzeige“ kennzeichnen
+                <span class="block text-sm text-muted">Pflicht bei bezahlten oder vergüteten Partnerschaften – nur bei unentgeltlichen Kooperationen abschalten.</span>
+              </span>
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" name="active" checked={v.active} />
+              <span>
+                Aktiv
+                <span class="block text-sm text-muted">Inaktive Partner bleiben gespeichert, erscheinen aber nicht auf der Website.</span>
+              </span>
+            </label>
+          </div>
+          <div class:list={['alert text-sm', hits.length > 0 || err('exclusion_confirmed') ? 'alert-danger' : 'alert-warning']}>
+            <p class="font-semibold">Ausschlussliste</p>
+            <p>Keine Partner aus den Bereichen {EXCLUSION_CATEGORIES.map((c) => c.label).join(', ')}.</p>
+            {hits.length > 0 && <p class="mt-1">Hinweis gefunden: {hits.join(', ')}.</p>}
+            <label class="checkbox mt-2">
+              <input type="checkbox" name="exclusion_confirmed" checked={v.exclusion_confirmed} aria-describedby={err('exclusion_confirmed') ? 'exclusion-error' : undefined} />
+              <span>Ich habe geprüft: Der Partner fällt nicht unter die Ausschlussliste.</span>
+            </label>
+            {err('exclusion_confirmed') && (
+              <p class="field-error" id="exclusion-error" role="alert">
+                {err('exclusion_confirmed')}
+              </p>
+            )}
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary">
+              {isNew ? 'Partner anlegen' : 'Speichern'}
+            </button>
+            <a href="/admin/inhalte/partner" class="btn btn-ghost">
+              Abbrechen
+            </a>
+          </div>
+        </form>
+      </>
+    )
+  }
+</AdminLayout>
