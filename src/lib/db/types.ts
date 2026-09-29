@@ -166,6 +166,9 @@ export interface TrackRow extends Timestamps {
   game_track_id: number | null;
   length_km: number | null;
   laps_default: number | null;
+  /** Streckenkarte als SVG-Umriss (Plan §7.5) */
+  map_url: string | null;
+  map_credit: string | null;
 }
 
 export interface RoundRow extends Timestamps {
@@ -431,6 +434,7 @@ export interface OpenPositionRow extends Timestamps {
   description_de: string;
   description_en: string | null;
   effort: string | null;
+  effort_en: string | null;
   active: boolean;
   sort: number;
 }
@@ -523,6 +527,15 @@ export interface RateLimitEventRow extends Timestamps {
   ip_hash: string;
 }
 
+/** 301-Weiterleitung bei Umbenennungen (Plan §2.2) */
+export interface SlugRedirectRow extends Timestamps {
+  id: Id;
+  entity: 'driver' | 'team' | 'season' | 'news';
+  old_slug: string;
+  new_slug: string;
+  lang: 'de' | 'en' | null;
+}
+
 export interface ImportBatchRow extends Timestamps {
   id: Id;
   session_id: Id;
@@ -571,6 +584,7 @@ export interface Tables {
   audit_log: AuditLogRow;
   rate_limit_events: RateLimitEventRow;
   import_batches: ImportBatchRow;
+  slug_redirects: SlugRedirectRow;
 }
 
 export type TableName = keyof Tables;
@@ -611,6 +625,7 @@ export const PRIMARY_KEYS: { [T in TableName]: ReadonlyArray<keyof Tables[T] & s
   audit_log: ['id'],
   rate_limit_events: ['id'],
   import_batches: ['id'],
+  slug_redirects: ['id'],
 };
 
 /** Tabellen, deren Primärschlüssel eine generierte bigint-`id` ist. */

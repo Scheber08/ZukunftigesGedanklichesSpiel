@@ -898,6 +898,8 @@ export function demoDataset(now: Date = new Date()): Dataset {
         processed_at: iso(addHours(now, -60)),
       },
     ],
+    // Beispiel für eine Umbenennung: alte Profil-URL leitet per 301 weiter
+    slug_redirects: [{ id: 1, entity: 'driver', old_slug: 'kurvenkoenig-alt', new_slug: slugify('Kurvenkönig'), lang: null }],
     contact_messages: [
       {
         id: 1,

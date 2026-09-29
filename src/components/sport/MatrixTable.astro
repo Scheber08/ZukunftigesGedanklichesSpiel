@@ -16,8 +16,9 @@ interface Props {
   league: League;
   seasonId: Id;
   upToRound?: number;
+  caption?: string;
 }
-const { lang, league, seasonId, upToRound } = Astro.props;
+const { lang, league, seasonId, upToRound, caption } = Astro.props;
 const t = useT(lang);
 const rounds = league.roundsOf(seasonId).filter((r) => r.status !== 'cancelled');
 const matrix = league.matrix(seasonId, upToRound);
@@ -38,7 +39,7 @@ const id = `matrix-${seasonId}`;
       </fieldset>
       <div class="table-wrap">
         <table class="timing-table matrix-table">
-          <caption class="sr-only">{t('matrix.caption')}</caption>
+          <caption class="sr-only">{caption ?? t('matrix.caption')}</caption>
           <thead>
             <tr>
               <th scope="col" class="pos">
@@ -115,7 +116,7 @@ const id = `matrix-${seasonId}`;
     outline-offset: 2px;
   }
   .segmented label {
-    min-height: 36px;
+    min-height: 44px;
     padding: 0.25rem 0.875rem;
     border-radius: 6px;
     font-size: 0.875rem;

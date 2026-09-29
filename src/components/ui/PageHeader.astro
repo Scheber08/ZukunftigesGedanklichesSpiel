@@ -42,7 +42,7 @@ const t = useT(lang);
     }
     {eyebrow && <p class="micro mb-2 text-teal!">{eyebrow}</p>}
     <div class="flex flex-wrap items-end justify-between gap-4">
-      <h1 class="uppercase">{title}</h1>
+      <h1 class="page-title uppercase">{title}</h1>
       <slot name="actions" />
     </div>
     {lead && <p class="mt-4 max-w-2xl text-muted">{lead}</p>}
@@ -50,3 +50,13 @@ const t = useT(lang);
     {updated && <p class="micro mt-4">{t('common.updated', { date: formatDate(updated, lang) })}</p>}
   </div>
 </header>
+
+<style>
+  /* Lange Versalwörter dürfen mobil umbrechen (Plan §10: 320 px ohne horizontales Scrollen) */
+  .page-title {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    hyphens: auto;
+  }
+</style>

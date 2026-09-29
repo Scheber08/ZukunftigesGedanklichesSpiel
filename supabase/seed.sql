@@ -11,7 +11,7 @@
 
 -- rules_versions (1)
 insert into public.rules_versions (id, version, effective_from, changelog_de, changelog_en, status, published_at) values
-  (1, '1.0', '2026-11-01', 'Erste Fassung des Regelwerks. Entwurf auf Basis bewährter Praxis im Online-Rennsport – die Liga-Leitung prüft und ergänzt ihn vor dem Saisonstart.', 'First version of the rulebook. Draft based on established practice in online racing – league management will review and complete it before the season starts.', 'published', '2026-11-01T00:00:00Z')
+  (1, '1.0', '2026-11-01', 'Erste Fassung des Regelwerks. Entwurf auf Basis bewährter Praxis im Online-Rennsport – die Liga-Leitung prüft und ergänzt ihn vor dem Saisonstart.', 'First version of the rulebook. Draft based on established practice in online racing – league management will review and complete it before the season starts.', 'published', '2026-09-29T12:00:00Z')
 on conflict do nothing;
 
 -- rules_sections (69)
@@ -664,32 +664,32 @@ insert into public.teams (id, slug, name, short_name, color_hex, text_color_hex,
 on conflict do nothing;
 
 -- tracks (25)
-insert into public.tracks (id, slug, name_de, name_en, country_code, game_track_id, length_km, laps_default) values
-  (1, 'melbourne', 'Melbourne', 'Melbourne', 'AU', 0, 5.278, 58),
-  (2, 'shanghai', 'Shanghai', 'Shanghai', 'CN', 2, 5.451, 56),
-  (3, 'suzuka', 'Suzuka', 'Suzuka', 'JP', 13, 5.807, 53),
-  (4, 'sakhir', 'Sakhir', 'Sakhir', 'BH', 3, 5.412, 57),
-  (5, 'jeddah', 'Dschidda', 'Jeddah', 'SA', 29, 6.174, 50),
-  (6, 'miami', 'Miami', 'Miami', 'US', 30, 5.412, 57),
-  (7, 'montreal', 'Montreal', 'Montreal', 'CA', 6, 4.361, 70),
-  (8, 'monaco', 'Monaco', 'Monaco', 'MC', 5, 3.337, 78),
-  (9, 'barcelona', 'Barcelona', 'Barcelona', 'ES', 4, 4.657, 66),
-  (10, 'spielberg', 'Spielberg', 'Spielberg', 'AT', 17, 4.318, 71),
-  (11, 'silverstone', 'Silverstone', 'Silverstone', 'GB', 7, 5.891, 52),
-  (12, 'spa', 'Spa-Francorchamps', 'Spa-Francorchamps', 'BE', 10, 7.004, 44),
-  (13, 'budapest', 'Budapest', 'Budapest', 'HU', 9, 4.381, 70),
-  (14, 'zandvoort', 'Zandvoort', 'Zandvoort', 'NL', 26, 4.259, 72),
-  (15, 'monza', 'Monza', 'Monza', 'IT', 11, 5.793, 53),
-  (16, 'madrid', 'Madrid', 'Madrid', 'ES', NULL, 5.474, 57),
-  (17, 'baku', 'Baku', 'Baku', 'AZ', 20, 6.003, 51),
-  (18, 'singapore', 'Singapur', 'Singapore', 'SG', 12, 4.94, 62),
-  (19, 'austin', 'Austin', 'Austin', 'US', 15, 5.513, 56),
-  (20, 'mexico-city', 'Mexiko-Stadt', 'Mexico City', 'MX', 19, 4.304, 71),
-  (21, 'sao-paulo', 'São Paulo', 'São Paulo', 'BR', 16, 4.309, 71),
-  (22, 'las-vegas', 'Las Vegas', 'Las Vegas', 'US', 31, 6.201, 50),
-  (23, 'lusail', 'Lusail', 'Lusail', 'QA', 32, 5.419, 57),
-  (24, 'abu-dhabi', 'Abu Dhabi', 'Abu Dhabi', 'AE', 14, 5.281, 58),
-  (25, 'imola', 'Imola', 'Imola', 'IT', 27, 4.909, 63)
+insert into public.tracks (id, slug, name_de, name_en, country_code, game_track_id, length_km, laps_default, map_url, map_credit) values
+  (1, 'melbourne', 'Melbourne', 'Melbourne', 'AU', 0, 5.278, 58, NULL, NULL),
+  (2, 'shanghai', 'Shanghai', 'Shanghai', 'CN', 2, 5.451, 56, NULL, NULL),
+  (3, 'suzuka', 'Suzuka', 'Suzuka', 'JP', 13, 5.807, 53, NULL, NULL),
+  (4, 'sakhir', 'Sakhir', 'Sakhir', 'BH', 3, 5.412, 57, NULL, NULL),
+  (5, 'jeddah', 'Dschidda', 'Jeddah', 'SA', 29, 6.174, 50, NULL, NULL),
+  (6, 'miami', 'Miami', 'Miami', 'US', 30, 5.412, 57, NULL, NULL),
+  (7, 'montreal', 'Montreal', 'Montreal', 'CA', 6, 4.361, 70, NULL, NULL),
+  (8, 'monaco', 'Monaco', 'Monaco', 'MC', 5, 3.337, 78, NULL, NULL),
+  (9, 'barcelona', 'Barcelona', 'Barcelona', 'ES', 4, 4.657, 66, NULL, NULL),
+  (10, 'spielberg', 'Spielberg', 'Spielberg', 'AT', 17, 4.318, 71, NULL, NULL),
+  (11, 'silverstone', 'Silverstone', 'Silverstone', 'GB', 7, 5.891, 52, NULL, NULL),
+  (12, 'spa', 'Spa-Francorchamps', 'Spa-Francorchamps', 'BE', 10, 7.004, 44, NULL, NULL),
+  (13, 'budapest', 'Budapest', 'Budapest', 'HU', 9, 4.381, 70, NULL, NULL),
+  (14, 'zandvoort', 'Zandvoort', 'Zandvoort', 'NL', 26, 4.259, 72, NULL, NULL),
+  (15, 'monza', 'Monza', 'Monza', 'IT', 11, 5.793, 53, NULL, NULL),
+  (16, 'madrid', 'Madrid', 'Madrid', 'ES', NULL, 5.474, 57, NULL, NULL),
+  (17, 'baku', 'Baku', 'Baku', 'AZ', 20, 6.003, 51, NULL, NULL),
+  (18, 'singapore', 'Singapur', 'Singapore', 'SG', 12, 4.94, 62, NULL, NULL),
+  (19, 'austin', 'Austin', 'Austin', 'US', 15, 5.513, 56, NULL, NULL),
+  (20, 'mexico-city', 'Mexiko-Stadt', 'Mexico City', 'MX', 19, 4.304, 71, NULL, NULL),
+  (21, 'sao-paulo', 'São Paulo', 'São Paulo', 'BR', 16, 4.309, 71, NULL, NULL),
+  (22, 'las-vegas', 'Las Vegas', 'Las Vegas', 'US', 31, 6.201, 50, NULL, NULL),
+  (23, 'lusail', 'Lusail', 'Lusail', 'QA', 32, 5.419, 57, NULL, NULL),
+  (24, 'abu-dhabi', 'Abu Dhabi', 'Abu Dhabi', 'AE', 14, 5.281, 58, NULL, NULL),
+  (25, 'imola', 'Imola', 'Imola', 'IT', 27, 4.909, 63, NULL, NULL)
 on conflict do nothing;
 
 -- faq_items (24)

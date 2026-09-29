@@ -20,6 +20,8 @@ async function loadDataset(store: Store): Promise<LeagueDataset> {
   const data = Object.fromEntries(entries) as unknown as LeagueDataset;
   // Doppelte Absicherung zusätzlich zur RLS: nur öffentliche Einstellungen
   data.settings = data.settings.filter((s) => s.is_public);
+  // Wie die View drivers_public: Links nur, wenn der Fahrer das wünscht
+  data.drivers = data.drivers.map((d) => (d.show_links ? d : { ...d, twitch_url: null, youtube_url: null }));
   return data;
 }
 

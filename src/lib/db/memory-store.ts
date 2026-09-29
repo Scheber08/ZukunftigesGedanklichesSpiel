@@ -27,7 +27,7 @@ const DEFAULTS: { [T in TableName]?: Partial<Row<T>> } = {
     starts_on: null,
     ends_on: null,
   },
-  tracks: { game_track_id: null, length_km: null, laps_default: null },
+  tracks: { game_track_id: null, length_km: null, laps_default: null, map_url: null, map_credit: null },
   rounds: {
     timezone: 'Europe/Berlin',
     format: 'standard',
@@ -123,7 +123,7 @@ const DEFAULTS: { [T in TableName]?: Partial<Row<T>> } = {
   },
   faq_items: { category: 'general', question_en: null, answer_en: null, sort: 0 },
   staff_members: { role_en: null, avatar: null, since_season: null, sort: 0 },
-  open_positions: { title_en: null, description_en: null, effort: null, active: true, sort: 0 },
+  open_positions: { title_en: null, description_en: null, effort: null, effort_en: null, active: true, sort: 0 },
   partners: { logo: null, text_de: '', text_en: null, label_ad: true, active: true, sort: 0 },
   settings: { is_public: false },
   registrations: {
@@ -142,6 +142,7 @@ const DEFAULTS: { [T in TableName]?: Partial<Row<T>> } = {
   staff_accounts: { avatar_url: null, roles: [], driver_id: null, roles_checked_at: null },
   audit_log: { actor_id: null, actor_name: null, entity_id: null, diff: null },
   import_batches: { mapping: null, status: 'draft', uploaded_by: null },
+  slug_redirects: { lang: null },
 };
 
 interface UniqueConstraint {
@@ -173,6 +174,7 @@ const UNIQUES: { [T in TableName]?: UniqueConstraint[] } = {
   decisions: [{ columns: ['public_ref'] }],
   news: [{ columns: ['slug_de'] }, { columns: ['slug_en'] }],
   staff_accounts: [{ columns: ['discord_user_id'] }],
+  slug_redirects: [{ columns: ['entity', 'old_slug', 'lang'] }],
 };
 
 const clone = <T>(v: T): T => structuredClone(v);

@@ -149,6 +149,8 @@
   "results.penaltySeconds": "+{n} s",
   "results.positionsUp": "{n} Plätze gewonnen",
   "results.positionsDown": "{n} Plätze verloren",
+  "results.positionsUp1": "1 Platz gewonnen",
+  "results.positionsDown1": "1 Platz verloren",
   "results.positionsSame": "Position gehalten",
   "results.none": "Für diese Session gibt es noch kein Ergebnis.",
   "results.caption": "Ergebnis {session}",

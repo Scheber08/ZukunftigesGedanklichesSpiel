@@ -56,7 +56,16 @@ function gained(r: ResultRow): { n: number; label: string } | null {
   const n = r.grid_position - r.position;
   return {
     n,
-    label: n > 0 ? t('results.positionsUp', { n }) : n < 0 ? t('results.positionsDown', { n: -n }) : t('results.positionsSame'),
+    label:
+      n === 1
+        ? t('results.positionsUp1')
+        : n === -1
+          ? t('results.positionsDown1')
+          : n > 0
+            ? t('results.positionsUp', { n })
+            : n < 0
+              ? t('results.positionsDown', { n: -n })
+              : t('results.positionsSame'),
   };
 }
 const sessionLabel = t(`session.${type}`);

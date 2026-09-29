@@ -15,6 +15,7 @@ export const SITE = {
 } as const;
 
 /** Hinweis im <title>: „Seite · [LIGANAME]“ (Plan §10). */
-export function pageTitle(title?: string): string {
-  return title ? `${title} · ${SITE.name}` : `${SITE.name} – Online-Liga für ${SITE.gameName}`;
+export function pageTitle(title?: string, lang: 'de' | 'en' = 'de'): string {
+  if (title) return `${title} · ${SITE.name}`;
+  return lang === 'de' ? `${SITE.name} – Online-Liga für ${SITE.gameName}` : `${SITE.name} – Online league for ${SITE.gameName}`;
 }

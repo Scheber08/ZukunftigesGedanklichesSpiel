@@ -32,8 +32,13 @@ export function roundLabel(round: Pick<RoundRow, 'number'>, track: Pick<TrackRow
   return `R${round.number} · ${trackName(track, lang)}`;
 }
 
+/**
+ * Saisonname. Der Name wird in der DB deutsch gepflegt; das Standardmuster „Saison N“
+ * (auch mit Zusatz, z. B. „Saison 2 · 2026/27“) wird für EN übersetzt.
+ */
 export function seasonLabel(season: Pick<SeasonRow, 'number' | 'name'>, lang: Lang): string {
-  return season.name || (lang === 'de' ? `Saison ${season.number}` : `Season ${season.number}`);
+  const name = season.name?.trim() || `Saison ${season.number}`;
+  return lang === 'en' ? name.replace(/^Saison(?= |$)/, 'Season') : name;
 }
 
 /** CSS-Variable für den Teamstreifen. */

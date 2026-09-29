@@ -149,6 +149,8 @@
   "results.penaltySeconds": "+{n} s",
   "results.positionsUp": "gained {n} places",
   "results.positionsDown": "lost {n} places",
+  "results.positionsUp1": "gained 1 place",
+  "results.positionsDown1": "lost 1 place",
   "results.positionsSame": "held position",
   "results.none": "There is no result for this session yet.",
   "results.caption": "Result {session}",

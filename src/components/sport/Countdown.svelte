@@ -19,9 +19,11 @@
     /** Start des letzten Rennens – Basis für den Fortschrittsbalken */
     previousStartUtc?: string | null;
     labels: { days: string; hours: string; minutes: string; seconds: string; next: string; now: string; none: string };
+    /** Rundenbezeichnung verlinken (auf der Rennseite selbst: false) */
+    linkTarget?: boolean;
   }
 
-  let { targets, previousStartUtc = null, labels }: Props = $props();
+  let { targets, previousStartUtc = null, labels, linkTarget = true }: Props = $props();
 
   let now = $state<number | null>(null);
 
@@ -56,7 +58,11 @@
 {#if target}
   <div class="countdown">
     <p class="micro">{labels.next}</p>
-    <a class="target" href={target.href}>{target.label}</a>
+    {#if linkTarget}
+      <a class="target" href={target.href}>{target.label}</a>
+    {:else}
+      <p class="target">{target.label}</p>
+    {/if}
     <p class="date">{target.dateText}</p>
     {#if isLive}
       <p class="live"><span class="live-dot" aria-hidden="true"></span>{labels.now}</p>
@@ -98,13 +104,16 @@
   }
   .digits {
     display: flex;
-    gap: 0.75rem;
+    gap: 0.5rem;
     margin-top: 0.75rem;
   }
   .unit {
     display: grid;
     justify-items: center;
-    min-width: 3.6rem;
+    /* passt ab 320 px: Blöcke teilen sich die Breite */
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 6.5rem;
     padding: 0.5rem 0.25rem;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-control);

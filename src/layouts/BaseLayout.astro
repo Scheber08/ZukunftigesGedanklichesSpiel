@@ -70,7 +70,7 @@ const robotsNoindex = noindex || demo || env.noindex;
     <Font cssVariable="--font-inter" />
     <SeoHead
       lang={lang}
-      title={pageTitle(title)}
+      title={pageTitle(title, lang)}
       description={description ?? t('meta.defaultDescription')}
       alternates={alternates}
       ogImage={ogImage}

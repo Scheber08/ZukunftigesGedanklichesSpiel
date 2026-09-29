@@ -222,6 +222,7 @@ export const TABLE_ORDER = [
   'audit_log',
   'rate_limit_events',
   'import_batches',
+  'slug_redirects',
 ] as const;
 
 /** Primärschlüssel für ON CONFLICT (muss zu src/lib/db/types.ts → PRIMARY_KEYS passen). */

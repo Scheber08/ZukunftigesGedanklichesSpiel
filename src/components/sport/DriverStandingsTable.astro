@@ -15,8 +15,13 @@ interface Props {
   /** Siege/Podien/Poles/SR anzeigen */
   detail?: boolean;
   caption?: string;
+  /**
+   * Stichtag für Startnummer und Reserve-Kennzeichen (Archiv): Nummer zu diesem Zeitpunkt,
+   * Reserve = alle Starts als Ersatzfahrer. Ohne Angabe: aktuelle Nummer und Status.
+   */
+  numberAt?: Date;
 }
-const { lang, league, standings, limit, detail = true, caption } = Astro.props;
+const { lang, league, standings, limit, detail = true, caption, numberAt } = Astro.props;
 const t = useT(lang);
 const rows = limit ? standings.slice(0, limit) : standings;
 ---
@@ -52,7 +57,13 @@ const rows = limit ? standings.slice(0, limit) : standings;
                   {s.tied ? `=${s.position}` : s.position}
                 </td>
                 <th scope="row" class="sticky-col font-normal">
-                  <DriverLink lang={lang} driver={driver} team={team} number={league.numberOf(s.driverId)} reserve={driver?.status === 'reserve'} />
+                  <DriverLink
+                    lang={lang}
+                    driver={driver}
+                    team={team}
+                    number={numberAt ? league.numberAt(s.driverId, numberAt) : league.numberOf(s.driverId)}
+                    reserve={numberAt ? s.starts > 0 && s.reserveStarts === s.starts : driver?.status === 'reserve'}
+                  />
                 </th>
                 <td class="muted"><TeamName lang={lang} team={team} stripe={false} /></td>
                 <td class="num text-lg font-bold">{s.points}</td>

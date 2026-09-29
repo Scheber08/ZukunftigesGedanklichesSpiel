@@ -38,8 +38,11 @@ function fail(table: string, op: string, error: { message: string; code?: string
 export class SupabaseStore implements Store {
   readonly kind = 'supabase' as const;
   readonly client: SupabaseClient;
+  /** Tabellen, die über eine View gelesen werden (z. B. drivers → drivers_public für anon). */
+  private readonly views: Partial<Record<TableName, string>>;
 
-  constructor(url: string, key: string) {
+  constructor(url: string, key: string, options: { views?: Partial<Record<TableName, string>> } = {}) {
+    this.views = options.views ?? {};
     this.client = createClient(url, key, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
       global: { headers: { 'x-client-info': 'liga-web' } },
@@ -54,7 +57,7 @@ export class SupabaseStore implements Store {
     for (let from = 0; ; from += PAGE_SIZE) {
       const want = f?.limit != null ? Math.min(PAGE_SIZE, f.limit - out.length) : PAGE_SIZE;
       if (want <= 0) break;
-      let q = this.client.from(table).select('*') as unknown as Query;
+      let q = this.client.from(this.views[table] ?? table).select('*') as unknown as Query;
       q = applyFilter(q, f).order(orderColumn, { ascending }).range(from, from + want - 1);
       const { data, error } = (await (q as unknown as PromiseLike<{ data: Row<T>[] | null; error: { message: string; code?: string } | null }>));
       if (error) fail(table, 'select', error);

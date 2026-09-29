@@ -4,6 +4,8 @@
  */
 import { defineMiddleware } from 'astro:middleware';
 import { getStaff } from '~/lib/server/auth';
+import { getPublicStore } from '~/lib/server/db';
+import { findRedirect } from '~/lib/server/redirects';
 
 const PUBLIC_ADMIN_PATHS = ['/admin/login', '/admin/auth/'];
 
@@ -11,8 +13,22 @@ function isAdminPath(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/') || pathname.startsWith('/_actions/admin.');
 }
 
+/** Alte URLs nach Umbenennungen per 301 auf die neue Adresse (Plan §2.2). */
+async function redirectIfRenamed(pathname: string, response: Response): Promise<Response> {
+  if (response.status !== 404) return response;
+  try {
+    const target = await findRedirect(getPublicStore(), pathname);
+    return target ? new Response(null, { status: 301, headers: { location: target } }) : response;
+  } catch {
+    return response;
+  }
+}
+
 export const onRequest = defineMiddleware(async (context, next) => {
-  if (context.isPrerendered) return next();
+  if (context.isPrerendered) {
+    const res = await next();
+    return context.request.method === 'GET' ? redirectIfRenamed(context.url.pathname, res) : res;
+  }
 
   const { pathname } = context.url;
   const admin = isAdminPath(pathname);
@@ -24,7 +40,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  const response = await next();
+  const response = context.request.method === 'GET' ? await redirectIfRenamed(pathname, await next()) : await next();
   const headers = new Headers(response.headers);
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');

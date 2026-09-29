@@ -109,7 +109,13 @@ export async function refreshStaffRoles(row: StaffAccountRow): Promise<StaffAcco
   const roleIds = await fetchMemberRoleIds(row.discord_user_id);
   const settings = await readPrivateSettings(store);
   const roles = roleIds == null ? [] : mapRoles(roleIds, settings.discord_role_map);
-  const [updated] = await store.update('staff_accounts', { user_id: row.user_id }, { roles, roles_checked_at: new Date().toISOString() });
+  // Verknüpfung zum Fahrer mitprüfen (Befangenheit, Plan §5.3) – die Discord-ID kann nachträglich gepflegt werden
+  const [priv] = await store.select('driver_private', { eq: { discord_user_id: row.discord_user_id } });
+  const [updated] = await store.update(
+    'staff_accounts',
+    { user_id: row.user_id },
+    { roles, driver_id: priv?.driver_id ?? null, roles_checked_at: new Date().toISOString() },
+  );
   return updated ?? { ...row, roles };
 }
 

@@ -38,6 +38,23 @@ export async function publishScheduledNews(now = new Date()): Promise<number> {
   return due.length;
 }
 
+/**
+ * Protestfrist abgelaufen → statische Seiten neu bauen, damit Banner und „Vorfall melden“
+ * den neuen Stand zeigen (Plan §11.1). Prüft Fristen, die in den letzten zwei Minuten endeten.
+ */
+export async function rebuildAfterProtestDeadline(now = new Date()): Promise<boolean> {
+  const store = getServiceStore();
+  const since = now.getTime() - 2 * 60_000;
+  const ended = (await store.select('rounds', { eq: { status: 'provisional' } })).filter((r) => {
+    if (!r.protest_deadline) return false;
+    const t = new Date(r.protest_deadline).getTime();
+    return t <= now.getTime() && t > since;
+  });
+  if (ended.length === 0) return false;
+  await requestRebuild(store, `Protestfrist abgelaufen (${ended.map((r) => 'R' + r.number).join(', ')})`);
+  return true;
+}
+
 /** Discord-Mitglieder/online für die Discord-Karte cachen. */
 export async function refreshDiscordCounts(): Promise<void> {
   const store = getServiceStore();
@@ -57,6 +74,7 @@ export async function runScheduled(cron: string, now: Date): Promise<void> {
   }
   await safely('Twitch-Status', () => refreshLiveStatus(store));
   await safely('Geplante News', () => publishScheduledNews(now));
+  await safely('Protestfristen', () => rebuildAfterProtestDeadline(now));
   if (now.getUTCMinutes() % 10 === 0) await safely('Discord-Zahlen', () => refreshDiscordCounts());
   await safely('Rebuild', () => processRebuildQueue(store, now));
 }
