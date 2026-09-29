@@ -11,7 +11,7 @@ import NoAccess from '~/components/admin/content/NoAccess.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import { flashMessage } from '~/lib/admin/content/form';
 import { bySort } from '~/lib/admin/content/order';
-import { missingEn, POSITION_EN_FIELDS } from '~/lib/admin/content/translations';
+import { missingPositionTranslations } from '~/lib/admin/content/translations';
 import type { OpenPositionRow } from '~/lib/db/types';
 import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
@@ -59,17 +59,22 @@ const flash = flashMessage(Astro.url, { saved: 'Rolle gespeichert.', moved: 'Rei
           <ul role="list" class="card divide-y divide-border">
             {positions.map((p, i) => (
               <li class="row" id={`item-${p.id}`}>
-                <div class="min-w-0 flex-1">
+                <div class="row-main">
                   <a href={`/admin/inhalte/rollen/${p.id}`} class="font-semibold hover:text-teal">
                     {p.title_de}
                   </a>
                   <span class="block text-sm text-muted">
                     {p.effort ?? 'Zeitaufwand nicht angegeben'}
-                    {p.title_en && <span lang="en"> · {p.title_en}</span>}
+                    {p.effort_en && <span lang="en"> · {p.effort_en}</span>}
                   </span>
+                  {p.title_en && (
+                    <span class="block text-sm text-muted" lang="en">
+                      {p.title_en}
+                    </span>
+                  )}
                   <span class="mt-1 flex flex-wrap gap-2">
                     {p.active ? <span class="badge badge-green">Aktiv</span> : <span class="badge badge-muted">Inaktiv (ausgeblendet)</span>}
-                    <EnMissing fields={missingEn(p, POSITION_EN_FIELDS)} compact />
+                    <EnMissing fields={missingPositionTranslations(p)} compact />
                   </span>
                 </div>
                 <div class="flex items-center">
@@ -92,5 +97,10 @@ const flash = flashMessage(Astro.url, { saved: 'Rolle gespeichert.', moved: 'Rei
     align-items: center;
     gap: 0.5rem 1rem;
     padding: 0.75rem 1rem;
+  }
+  /* Text zuerst; die Knöpfe rutschen auf schmalen Bildschirmen in die nächste Zeile */
+  .row-main {
+    flex: 1 1 12rem;
+    min-width: 0;
   }
 </style>

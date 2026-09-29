@@ -14,9 +14,11 @@ import {
   normalizeSectionSorts,
   parentOptions,
   publishChecks,
+  removedAnchors,
   sectionConflicts,
   suggestNextVersion,
   versionsToArchive,
+  versionTaken,
 } from '~/lib/admin/content/rules';
 
 type S = { id: number; parent_id: number | null; number: string; anchor: string; sort: number; title_de: string };
@@ -172,5 +174,24 @@ describe('Versionen', () => {
     ];
     expect(versionsToArchive(versions, 3)).toEqual([2]);
     expect(versionsToArchive(versions, 2)).toEqual([]);
+  });
+
+  it('erkennt vergebene Versionsnummern (ohne die eigene Version)', () => {
+    const versions = [
+      { id: 1, version: '1.0' },
+      { id: 2, version: '1.1' },
+    ];
+    expect(versionTaken(versions, '1.1')).toBe(true);
+    expect(versionTaken(versions, ' 1.1 ', 2)).toBe(false);
+    expect(versionTaken(versions, '1.2', 2)).toBe(false);
+  });
+
+  it('meldet Anker der gültigen Fassung, die im Entwurf fehlen', () => {
+    const draft = SECTIONS.filter((s) => s.id !== 3).map((s) => (s.id === 5 ? { ...s, anchor: 'p2-1-neu' } : s));
+    expect(removedAnchors(SECTIONS, draft)).toEqual([
+      { anchor: 'p1-2', number: '§1.2', title: 'Begriffe' },
+      { anchor: 'p2-1', number: '§2.1', title: 'Ablauf' },
+    ]);
+    expect(removedAnchors(SECTIONS, SECTIONS)).toEqual([]);
   });
 });

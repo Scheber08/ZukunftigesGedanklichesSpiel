@@ -3,7 +3,9 @@ import {
   decideNewsStatus,
   missingNewsTranslations,
   newsListState,
+  newsRedirectsFor,
   newsSlug,
+  newsSlugChanges,
   publishProblems,
   resolveNewsSlugs,
 } from '~/lib/admin/content/news';
@@ -42,6 +44,37 @@ describe('News-Slugs', () => {
 
   it('bevorzugt eingetragene Slugs und nutzt für EN notfalls den deutschen Titel', () => {
     expect(resolveNewsSlugs({ slugDe: 'Mein Slug', titleDe: 'Titel', titleEn: '' }, [])).toEqual({ slug_de: 'mein-slug', slug_en: 'titel' });
+  });
+
+  it('behält bei veröffentlichten Artikeln leere Slugs statt sie aus dem neuen Titel zu bilden', () => {
+    const prev = { id: 5, status: 'published' as const, slug_de: 'alter-titel', slug_en: 'old-title' };
+    expect(resolveNewsSlugs({ titleDe: 'Neuer Titel', titleEn: 'New title' }, [prev], 5, prev)).toEqual({ slug_de: 'alter-titel', slug_en: 'old-title' });
+    // Entwurf: Slug folgt dem Titel
+    expect(resolveNewsSlugs({ titleDe: 'Neuer Titel' }, [prev], 5, { ...prev, status: 'draft' })).toEqual({ slug_de: 'neuer-titel', slug_en: 'neuer-titel' });
+    // bewusst geänderter Slug gilt auch bei veröffentlichten Artikeln
+    expect(resolveNewsSlugs({ slugDe: 'neu', titleDe: 'Neuer Titel' }, [prev], 5, prev).slug_de).toBe('neu');
+  });
+
+  it('leitet alte Slugs nur bei veröffentlichten Artikeln weiter', () => {
+    const before = { status: 'published' as const, slug_de: 'alt', slug_en: 'old' };
+    expect(newsSlugChanges(before, { slug_de: 'neu', slug_en: 'old' })).toEqual([{ lang: 'de', from: 'alt', to: 'neu' }]);
+    expect(newsSlugChanges(before, { slug_de: 'neu', slug_en: 'new' })).toHaveLength(2);
+    expect(newsSlugChanges(before, before)).toEqual([]);
+    expect(newsSlugChanges({ ...before, status: 'draft' }, { slug_de: 'neu', slug_en: 'new' })).toEqual([]);
+    expect(newsSlugChanges(null, { slug_de: 'neu', slug_en: 'new' })).toEqual([]);
+  });
+
+  it('listet alte Adressen je Sprache', () => {
+    const redirects = [
+      { entity: 'news', old_slug: 'alt', new_slug: 'neu', lang: 'de' as const },
+      { entity: 'news', old_slug: 'old', new_slug: 'new', lang: 'en' as const },
+      { entity: 'news', old_slug: 'fremd', new_slug: 'new', lang: 'de' as const },
+      { entity: 'driver', old_slug: 'x', new_slug: 'neu', lang: null },
+    ];
+    expect(newsRedirectsFor({ slug_de: 'neu', slug_en: 'new' }, redirects)).toEqual([
+      { lang: 'de', path: '/news/alt' },
+      { lang: 'en', path: '/en/news/old' },
+    ]);
   });
 });
 

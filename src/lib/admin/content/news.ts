@@ -22,20 +22,55 @@ export function newsSlug(input: string | null | undefined): string {
 /**
  * Eindeutige Slugs für DE und EN. Eingetragene Slugs haben Vorrang vor dem Titel;
  * EN fällt auf den deutschen Titel zurück. Vergebene Slugs (ohne den eigenen Artikel)
- * werden mit -2, -3 … umgangen.
+ * werden mit -2, -3 … umgangen. Bei einem veröffentlichten Artikel (`previous`) bleibt
+ * ein leer gelassener Slug unverändert, statt aus dem (evtl. geänderten) Titel neu zu entstehen.
  */
 export function resolveNewsSlugs(
   input: { slugDe?: string | null; slugEn?: string | null; titleDe: string; titleEn?: string | null },
   existing: ReadonlyArray<Pick<NewsRow, 'id' | 'slug_de' | 'slug_en'>>,
   selfId?: number | null,
+  previous?: Pick<NewsRow, 'status' | 'slug_de' | 'slug_en'> | null,
 ): { slug_de: string; slug_en: string } {
   const others = existing.filter((n) => n.id !== selfId);
-  const baseDe = newsSlug(input.slugDe?.trim() || input.titleDe);
-  const baseEn = newsSlug(input.slugEn?.trim() || input.titleEn?.trim() || input.titleDe);
+  const keep = isPublicNews(previous) ? previous : null;
+  const baseDe = newsSlug(input.slugDe?.trim() || keep?.slug_de || input.titleDe);
+  const baseEn = newsSlug(input.slugEn?.trim() || keep?.slug_en || input.titleEn?.trim() || input.titleDe);
   return {
     slug_de: uniqueSlug(baseDe, others.map((n) => n.slug_de)),
     slug_en: uniqueSlug(baseEn, others.map((n) => n.slug_en)),
   };
+}
+
+export interface NewsSlugChange {
+  lang: 'de' | 'en';
+  from: string;
+  to: string;
+}
+
+/**
+ * Slug-Änderungen, für die alte Adressen per 301 weiterleiten sollen (Plan §2.2):
+ * nur wenn der Artikel vor dem Speichern öffentlich war – Entwürfe hatten nie eine URL.
+ */
+export function newsSlugChanges(
+  before: Pick<NewsRow, 'status' | 'slug_de' | 'slug_en'> | null | undefined,
+  after: Pick<NewsRow, 'slug_de' | 'slug_en'>,
+): NewsSlugChange[] {
+  if (!before || !isPublicNews(before)) return [];
+  const changes: NewsSlugChange[] = [];
+  if (before.slug_de && before.slug_de !== after.slug_de) changes.push({ lang: 'de', from: before.slug_de, to: after.slug_de });
+  if (before.slug_en && before.slug_en !== after.slug_en) changes.push({ lang: 'en', from: before.slug_en, to: after.slug_en });
+  return changes;
+}
+
+/** Alte Adressen eines Artikels aus `slug_redirects` (je Sprache auf den aktuellen Slug). */
+export function newsRedirectsFor(
+  news: Pick<NewsRow, 'slug_de' | 'slug_en'>,
+  redirects: ReadonlyArray<{ entity: string; old_slug: string; new_slug: string; lang: 'de' | 'en' | null }>,
+): Array<{ lang: 'de' | 'en'; path: string }> {
+  return redirects
+    .filter((r) => r.entity === 'news' && ((r.lang === 'de' && r.new_slug === news.slug_de) || (r.lang === 'en' && r.new_slug === news.slug_en)))
+    .map((r) => ({ lang: r.lang as 'de' | 'en', path: r.lang === 'en' ? `/en/news/${r.old_slug}` : `/news/${r.old_slug}` }))
+    .sort((a, b) => a.lang.localeCompare(b.lang) || a.path.localeCompare(b.path));
 }
 
 export type StatusDecision =
@@ -102,7 +137,7 @@ export const NEWS_STATUS_LABELS: Record<NewsStatus, string> = {
 };
 
 /** Ist der Artikel öffentlich sichtbar (bzw. wird er es beim nächsten Build)? */
-export function isPublicNews(row: Pick<NewsRow, 'status'> | null | undefined): boolean {
+export function isPublicNews<T extends Pick<NewsRow, 'status'>>(row: T | null | undefined): row is T {
   return row?.status === 'published';
 }
 

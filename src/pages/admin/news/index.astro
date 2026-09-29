@@ -164,7 +164,15 @@ const BADGE: Record<NewsListState, 'muted' | 'teal' | 'warning' | 'green'> = { d
 </AdminLayout>
 
 <style>
+  /* Filter umbrechen statt die Seite ab 320 px seitlich scrollen zu lassen */
+  .segmented {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
   .segmented .filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     min-height: 44px;
   }
   .news-table .title-cell {

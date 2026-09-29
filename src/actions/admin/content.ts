@@ -18,7 +18,7 @@ import {
 } from '~/lib/db/types';
 import { localInputToDate, orNull } from '~/lib/admin/content/form';
 import { DEMO_MAX_DATA_URL_CHARS, normalizeImageValue, redactDataUrl } from '~/lib/admin/content/media';
-import { decideNewsStatus, isPublicNews, publishProblems, resolveNewsSlugs } from '~/lib/admin/content/news';
+import { decideNewsStatus, isPublicNews, newsSlugChanges, publishProblems, resolveNewsSlugs } from '~/lib/admin/content/news';
 import { moveInList, nextSort, type SortUpdate } from '~/lib/admin/content/order';
 import { exclusionHits, normalizePartnerUrl } from '~/lib/admin/content/partners';
 import {
@@ -35,13 +35,15 @@ import {
   sectionConflicts,
   VERSION_RE,
   versionsToArchive,
+  versionTaken,
 } from '~/lib/admin/content/rules';
 import { audit, type AuditAction } from '~/lib/server/audit';
 import type { Staff } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 import { EMBED_TEAL, notify, siteUrl } from '~/lib/server/discord';
-import { isDemoMode } from '~/lib/server/env';
+import { env, isDemoMode } from '~/lib/server/env';
 import { requestRebuild } from '~/lib/server/rebuild';
+import { recordSlugChange } from '~/lib/server/redirects';
 import { patchSetting, readPublicSettings } from '~/lib/server/settings';
 import { staffFrom, toActionError } from '../_helpers';
 
@@ -75,6 +77,15 @@ const direction = z.enum(['up', 'down']);
 function mdOrNull(value: string | undefined): string | null {
   const v = value?.replace(/\s+$/, '');
   return v && v.trim() !== '' ? v : null;
+}
+
+/** Bildfeld prüfen (Upload-URL aus dem eigenen Bucket bzw. Demo-Data-URL); Fehler am Feld. */
+function imageValue(field: string, value: string | undefined, previous: string | null | undefined): string | null {
+  try {
+    return normalizeImageValue(value, { demo: isDemoMode(), storageUrl: env.supabaseUrl, previous });
+  } catch (e) {
+    throw fieldError({ [field]: e instanceof Error ? e.message : 'Ungültiges Bild.' });
+  }
 }
 
 /** Zeilen für Audit/Discord ohne lange Data-URLs (Demo-Bilder). */
@@ -193,12 +204,7 @@ const newsActions = {
         const before = input.id ? await selectOne(store, 'news', { id: input.id }) : null;
         if (input.id && !before) throw new ActionError({ code: 'NOT_FOUND', message: 'Artikel nicht gefunden.' });
 
-        let cover: string | null;
-        try {
-          cover = normalizeImageValue(input.cover_image, { demo: isDemoMode() });
-        } catch (e) {
-          throw fieldError({ cover_image: e instanceof Error ? e.message : 'Ungültiges Bild.' });
-        }
+        const cover = imageValue('cover_image', input.cover_image, before?.cover_image);
 
         const publishAt = localInputToDate(input.publish_at);
         if (input.publish_at && !publishAt) throw fieldError({ publish_at: 'Ungültiges Datum.' });
@@ -214,6 +220,7 @@ const newsActions = {
           { slugDe: input.slug_de, slugEn: input.slug_en, titleDe: input.title_de, titleEn: input.title_en },
           existing,
           before?.id ?? null,
+          before,
         );
 
         const row = {
@@ -250,8 +257,21 @@ const newsActions = {
 
         const wasPublic = isPublicNews(before);
         const isPublic = isPublicNews(saved);
+
+        // Geteilte Links sollen gültig bleiben: alte Slugs veröffentlichter Artikel leiten per 301 weiter
+        const slugChanges = newsSlugChanges(before, saved);
+        for (const c of slugChanges) await recordSlugChange(store, 'news', c.from, c.to, c.lang);
+
         const action: AuditAction = !before ? 'create' : isPublic && !wasPublic ? 'publish' : wasPublic && !isPublic ? 'unpublish' : 'update';
-        await audit(store, staff, action, 'news', saved.id, redacted(before), redacted(saved));
+        await audit(
+          store,
+          staff,
+          action,
+          'news',
+          saved.id,
+          redacted(before),
+          slugChanges.length > 0 ? { ...redacted(saved), redirects: slugChanges } : redacted(saved),
+        );
         if (wasPublic || isPublic) await requestRebuild(store, `News „${saved.title_de}“`);
 
         let discord = false;
@@ -262,7 +282,7 @@ const newsActions = {
           status: saved.status,
           note: decision.note ?? null,
           discord,
-          slugChanged: Boolean(before && (before.slug_de !== saved.slug_de || before.slug_en !== saved.slug_en)),
+          redirected: slugChanges.length > 0,
         };
       } catch (err) {
         toActionError(err, 'Dieser Slug ist schon vergeben.');
@@ -280,6 +300,9 @@ const newsActions = {
         const before = await selectOne(store, 'news', { id: newsId });
         if (!before) throw new ActionError({ code: 'NOT_FOUND', message: 'Artikel nicht gefunden.' });
         await store.remove('news', { id: newsId });
+        // Weiterleitungen auf den gelöschten Artikel würden ins Leere zeigen
+        await store.remove('slug_redirects', { entity: 'news', new_slug: before.slug_de, lang: 'de' });
+        await store.remove('slug_redirects', { entity: 'news', new_slug: before.slug_en, lang: 'en' });
         await audit(store, staff, 'delete', 'news', newsId, redacted(before), null);
         if (isPublicNews(before)) await requestRebuild(store, `News „${before.title_de}“ gelöscht`);
         return { title: before.title_de };
@@ -371,6 +394,7 @@ const rulesActions = {
       try {
         const before = await draftVersion(store, input.id);
         if (input.effective_from && !/^\d{4}-\d{2}-\d{2}$/.test(input.effective_from)) throw fieldError({ effective_from: 'Ungültiges Datum.' });
+        if (versionTaken(await store.select('rules_versions'), input.version, input.id)) throw fieldError({ version: `Version ${input.version} gibt es schon.` });
         const [saved] = await store.update(
           'rules_versions',
           { id: input.id },
@@ -533,6 +557,7 @@ const rulesActions = {
         const before = await draftVersion(store, input.id);
         const sections = await store.select('rules_sections', { eq: { version_id: input.id } });
         const checks = publishChecks({ changelog_de: input.changelog_de, effective_from: input.effective_from }, sections);
+        if (versionTaken(await store.select('rules_versions'), input.version, input.id)) checks.fields.version = `Version ${input.version} gibt es schon.`;
         if (Object.keys(checks.fields).length > 0) throw fieldError(checks.fields);
         if (checks.problems.length > 0) throw new ActionError({ code: 'BAD_REQUEST', message: checks.problems.join(' · ') });
 
@@ -658,12 +683,8 @@ const inhalteActions = {
     handler: async (input, context) => {
       const staff = staffFrom(context, 'redakteur');
       try {
-        let avatar: string | null;
-        try {
-          avatar = normalizeImageValue(input.avatar, { demo: isDemoMode() });
-        } catch (e) {
-          throw fieldError({ avatar: e instanceof Error ? e.message : 'Ungültiges Bild.' });
-        }
+        const previous = input.id ? await selectOne(getServiceStore(), 'staff_members', { id: input.id }) : null;
+        const avatar = imageValue('avatar', input.avatar, previous?.avatar);
         const saved = await saveSortable(
           staff,
           'staff_members',
@@ -719,7 +740,8 @@ const inhalteActions = {
       title_en: opt('Titel (EN)', 120),
       description_de: req('Beschreibung (DE)', 4000),
       description_en: markdown('Beschreibung (EN)', 4000),
-      effort: opt('Zeitaufwand', 120),
+      effort: opt('Zeitaufwand (DE)', 120),
+      effort_en: opt('Zeitaufwand (EN)', 120),
       active: z.boolean().optional(),
     }),
     handler: async (input, context) => {
@@ -735,6 +757,7 @@ const inhalteActions = {
             description_de: input.description_de,
             description_en: mdOrNull(input.description_en),
             effort: orNull(input.effort),
+            effort_en: orNull(input.effort_en),
             active: input.active ?? false,
           },
           'Offene Rolle',
@@ -791,12 +814,8 @@ const inhalteActions = {
       try {
         const url = normalizePartnerUrl(input.url);
         if (!url) throw fieldError({ url: 'Bitte einen gültigen https-Link angeben.' });
-        let logo: string | null;
-        try {
-          logo = normalizeImageValue(input.logo, { demo: isDemoMode() });
-        } catch (e) {
-          throw fieldError({ logo: e instanceof Error ? e.message : 'Ungültiges Logo.' });
-        }
+        const previous = input.id ? await selectOne(getServiceStore(), 'partners', { id: input.id }) : null;
+        const logo = imageValue('logo', input.logo, previous?.logo);
         const hits = exclusionHits(input.name, input.text_de, input.text_en, url);
         if (hits.length > 0 && !input.exclusion_confirmed) {
           throw fieldError({

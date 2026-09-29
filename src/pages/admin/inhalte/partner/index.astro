@@ -81,7 +81,7 @@ const flash = flashMessage(Astro.url, { saved: 'Partner gespeichert.', moved: 'R
                       Logo
                     </span>
                   )}
-                  <div class="min-w-0 flex-1">
+                  <div class="row-main">
                     <a href={`/admin/inhalte/partner/${p.id}`} class="font-semibold hover:text-teal">
                       {p.name}
                     </a>
@@ -129,5 +129,10 @@ const flash = flashMessage(Astro.url, { saved: 'Partner gespeichert.', moved: 'R
     font-size: var(--fs-micro);
     color: var(--color-muted);
     border: 1px dashed var(--color-border);
+  }
+  /* Text zuerst; die Knöpfe rutschen auf schmalen Bildschirmen in die nächste Zeile */
+  .row-main {
+    flex: 1 1 12rem;
+    min-width: 0;
   }
 </style>

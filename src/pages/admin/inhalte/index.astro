@@ -7,7 +7,7 @@ import ContentNav from '~/components/admin/content/ContentNav.astro';
 import NoAccess from '~/components/admin/content/NoAccess.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import { exclusionHits } from '~/lib/admin/content/partners';
-import { countMissing, FAQ_EN_FIELDS, PARTNER_EN_FIELDS, POSITION_EN_FIELDS, STAFF_EN_FIELDS } from '~/lib/admin/content/translations';
+import { countMissing, FAQ_EN_FIELDS, missingPositionTranslations, PARTNER_EN_FIELDS, STAFF_EN_FIELDS } from '~/lib/admin/content/translations';
 import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 import { readPublicSettings } from '~/lib/server/settings';
@@ -38,7 +38,7 @@ if (allowed) {
       title: 'Offene Rollen',
       text: 'Team-Suche: Aufgaben, Zeitaufwand, Kontakt per Discord-Ticket.',
       count: `${positions.filter((p) => p.active).length} aktiv von ${positions.length}`,
-      missing: countMissing(positions, POSITION_EN_FIELDS),
+      missing: positions.filter((p) => missingPositionTranslations(p).length > 0).length,
     },
     {
       href: '/admin/inhalte/partner',

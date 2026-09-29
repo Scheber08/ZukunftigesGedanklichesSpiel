@@ -67,7 +67,7 @@ const flash = flashMessage(Astro.url, { saved: 'Eintrag gespeichert.', moved: 'R
                     {m.gamertag.slice(0, 1).toUpperCase()}
                   </span>
                 )}
-                <div class="min-w-0 flex-1">
+                <div class="row-main">
                   <a href={`/admin/inhalte/team/${m.id}`} class="font-semibold hover:text-teal">
                     {m.gamertag}
                   </a>
@@ -114,5 +114,10 @@ const flash = flashMessage(Astro.url, { saved: 'Eintrag gespeichert.', moved: 'R
     font-weight: 700;
     color: var(--color-muted);
     border: 1px solid var(--color-border);
+  }
+  /* Text zuerst; die Knöpfe rutschen auf schmalen Bildschirmen in die nächste Zeile */
+  .row-main {
+    flex: 1 1 12rem;
+    min-width: 0;
   }
 </style>

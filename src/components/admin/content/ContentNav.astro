@@ -14,7 +14,7 @@ const items = [
 ] as const;
 ---
 
-<nav aria-label="Seiten-Inhalte" class="tabs mb-6">
+<nav aria-label="Seiten-Inhalte" class="tabs content-nav mb-6">
   {
     items.map((i) => (
       <a href={i.href} class="tab" aria-current={i.key === current ? 'page' : undefined}>
@@ -23,3 +23,11 @@ const items = [
     ))
   }
 </nav>
+
+<style>
+  /* Auf schmalen Bildschirmen umbrechen statt versteckt seitlich zu scrollen */
+  .content-nav {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+</style>

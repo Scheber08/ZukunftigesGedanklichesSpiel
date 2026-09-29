@@ -5,10 +5,12 @@ import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
 import Field from '~/components/admin/ui/Field.astro';
 import ContentNav from '~/components/admin/content/ContentNav.astro';
 import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import EnMissing from '~/components/admin/content/EnMissing.astro';
 import MarkdownEditor from '~/components/admin/content/MarkdownEditor.svelte';
 import NoAccess from '~/components/admin/content/NoAccess.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import { fieldErrors, pick, pickChecked, submittedValues } from '~/lib/admin/content/form';
+import { effortEnPreview, missingPositionTranslations } from '~/lib/admin/content/translations';
 import { selectOne } from '~/lib/db/store';
 import type { OpenPositionRow } from '~/lib/db/types';
 import { hasRole } from '~/lib/server/auth';
@@ -39,9 +41,16 @@ const v = {
   description_de: pick(submitted, 'description_de', position?.description_de),
   description_en: pick(submitted, 'description_en', position?.description_en),
   effort: pick(submitted, 'effort', position?.effort),
+  effort_en: pick(submitted, 'effort_en', position?.effort_en),
   active: pickChecked(submitted, 'active', position?.active ?? true),
 };
 const err = (name: string) => errors[name]?.[0] ?? null;
+const missing = position ? missingPositionTranslations(position) : [];
+const effortEn = effortEnPreview(v.effort, v.effort_en);
+const EFFORT_EN_NOTES = {
+  auto: 'Leer gelassen: Die englische Seite zeigt automatisch',
+  fallback: 'Leer gelassen: Keine automatische Übersetzung möglich – die englische Seite zeigt den deutschen Text:',
+} as const;
 ---
 
 <AdminLayout
@@ -59,17 +68,15 @@ const err = (name: string) => errors[name]?.[0] ?? null;
         <ActionMessage result={result} />
         <form method="POST" action={actions.admin.positionSave} class="grid gap-6">
           {position && <input type="hidden" name="id" value={position.id} />}
-          <div class="card grid gap-4 p-4 sm:grid-cols-2 md:p-5">
-            <Field id="effort" label="Zeitaufwand" hint="z. B. „ca. 2 h pro Renntag“ – erscheint in beiden Sprachen gleich." error={err('effort')}>
-              <input class="input" id="effort" name="effort" maxlength="120" value={v.effort} aria-describedby="effort-hint" />
-            </Field>
-            <label class="checkbox self-end">
+          <div class="card flex flex-wrap items-center justify-between gap-3 p-4 md:p-5">
+            <label class="checkbox">
               <input type="checkbox" name="active" checked={v.active} />
               <span>
                 Aktiv
                 <span class="block text-sm text-muted">Nur aktive Rollen sind auf der Website sichtbar.</span>
               </span>
             </label>
+            <EnMissing fields={missing} />
           </div>
           <div class="langs">
             <fieldset class="card p-4 md:p-5" lang="de">
@@ -78,6 +85,9 @@ const err = (name: string) => errors[name]?.[0] ?? null;
                 <Field id="title_de" label="Titel" required hint="z. B. Steward (m/w/d)" error={err('title_de')}>
                   <input class="input" id="title_de" name="title_de" required maxlength="120" value={v.title_de} aria-describedby={`title_de-hint${err('title_de') ? ' title_de-error' : ''}`} aria-invalid={err('title_de') ? 'true' : undefined} />
                 </Field>
+                <Field id="effort" label="Zeitaufwand" hint="z. B. „ca. 2 h pro Renntag“ oder „ca. 1–2 h pro Woche“" error={err('effort')}>
+                  <input class="input" id="effort" name="effort" maxlength="120" value={v.effort} data-effort-de aria-describedby={`effort-hint${err('effort') ? ' effort-error' : ''}`} aria-invalid={err('effort') ? 'true' : undefined} />
+                </Field>
                 <MarkdownEditor client:load id="description_de" name="description_de" label="Aufgaben und Beschreibung" value={v.description_de} rows={8} lang="de" required maxlength={4000} error={err('description_de')} />
               </div>
             </fieldset>
@@ -85,7 +95,21 @@ const err = (name: string) => errors[name]?.[0] ?? null;
               <legend class="micro px-1">English · optional</legend>
               <div class="grid gap-4">
                 <Field id="title_en" label="Title" error={err('title_en')}>
-                  <input class="input" id="title_en" name="title_en" maxlength="120" value={v.title_en} />
+                  <input class="input" id="title_en" name="title_en" maxlength="120" value={v.title_en} aria-invalid={err('title_en') ? 'true' : undefined} aria-describedby={err('title_en') ? 'title_en-error' : undefined} />
+                </Field>
+                <Field id="effort_en" label="Time commitment" error={err('effort_en')}>
+                  <input class="input" id="effort_en" name="effort_en" maxlength="120" value={v.effort_en} data-effort-en placeholder={effortEn.source === 'auto' ? effortEn.text : 'approx. 2 h per race day'} aria-describedby={`effort_en-note${err('effort_en') ? ' effort_en-error' : ''}`} aria-invalid={err('effort_en') ? 'true' : undefined} />
+                  <p class="field-hint" id="effort_en-note" lang="de" aria-live="polite" data-effort-note>
+                    {effortEn.source === 'auto' || effortEn.source === 'fallback' ? (
+                      <>
+                        {EFFORT_EN_NOTES[effortEn.source]} „<span lang={effortEn.source === 'auto' ? 'en' : 'de'}>{effortEn.text}</span>“.
+                      </>
+                    ) : effortEn.source === 'manual' ? (
+                      'Eigener englischer Text – die automatische Übersetzung wird nicht verwendet.'
+                    ) : (
+                      'Leer lassen, wenn der deutsche Text automatisch übersetzt werden kann (z. B. „ca. 2 h pro Renntag“).'
+                    )}
+                  </p>
                 </Field>
                 <MarkdownEditor client:load id="description_en" name="description_en" label="Description" value={v.description_en} rows={8} lang="en" maxlength={4000} error={err('description_en')} />
               </div>
@@ -120,3 +144,37 @@ const err = (name: string) => errors[name]?.[0] ?? null;
     min-width: 0;
   }
 </style>
+
+<script>
+  import { effortEnPreview } from '~/lib/admin/content/translations';
+
+  // Hinweis unter „Time commitment“ live nachführen: automatische Übersetzung oder deutscher Fallback
+  const de = document.querySelector<HTMLInputElement>('[data-effort-de]');
+  const en = document.querySelector<HTMLInputElement>('[data-effort-en]');
+  const note = document.querySelector<HTMLElement>('[data-effort-note]');
+  if (de && en && note) {
+    const update = () => {
+      const preview = effortEnPreview(de.value, en.value);
+      note.replaceChildren();
+      if (preview.source === 'auto' || preview.source === 'fallback') {
+        const quoted = document.createElement('span');
+        quoted.lang = preview.source === 'auto' ? 'en' : 'de';
+        quoted.textContent = preview.text;
+        note.append(
+          preview.source === 'auto'
+            ? 'Leer gelassen: Die englische Seite zeigt automatisch „'
+            : 'Leer gelassen: Keine automatische Übersetzung möglich – die englische Seite zeigt den deutschen Text: „',
+          quoted,
+          '“.',
+        );
+        en.placeholder = preview.source === 'auto' ? preview.text : 'approx. 2 h per race day';
+      } else if (preview.source === 'none') {
+        note.textContent = 'Leer lassen, wenn der deutsche Text automatisch übersetzt werden kann (z. B. „ca. 2 h pro Renntag“).';
+      } else {
+        note.textContent = 'Eigener englischer Text – die automatische Übersetzung wird nicht verwendet.';
+      }
+    };
+    de.addEventListener('input', update);
+    en.addEventListener('input', update);
+  }
+</script>

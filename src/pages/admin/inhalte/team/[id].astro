@@ -5,10 +5,12 @@ import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
 import Field from '~/components/admin/ui/Field.astro';
 import ContentNav from '~/components/admin/content/ContentNav.astro';
 import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import EnMissing from '~/components/admin/content/EnMissing.astro';
 import ImageUpload from '~/components/admin/content/ImageUpload.svelte';
 import NoAccess from '~/components/admin/content/NoAccess.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import { fieldErrors, pick, submittedValues } from '~/lib/admin/content/form';
+import { missingEn, STAFF_EN_FIELDS } from '~/lib/admin/content/translations';
 import { selectOne } from '~/lib/db/store';
 import type { SeasonRow, StaffMemberRow } from '~/lib/db/types';
 import { hasRole } from '~/lib/server/auth';
@@ -47,6 +49,7 @@ const v = {
   avatar: pick(submitted, 'avatar', member?.avatar),
 };
 const err = (name: string) => errors[name]?.[0] ?? null;
+const missing = member ? missingEn(member, STAFF_EN_FIELDS) : [];
 const seasonNumbers = seasons.map((s) => s.number);
 const maxSeason = Math.max(1, ...seasonNumbers) + 1;
 ---
@@ -76,7 +79,12 @@ const maxSeason = Math.max(1, ...seasonNumbers) + 1;
               <input class="input" id="role_de" name="role_de" required maxlength="80" lang="de" value={v.role_de} aria-describedby={`role_de-hint${err('role_de') ? ' role_de-error' : ''}`} aria-invalid={err('role_de') ? 'true' : undefined} />
             </Field>
             <Field id="role_en" label="Rolle (EN)" hint="z. B. League director, Stewards, Editorial" error={err('role_en')}>
-              <input class="input" id="role_en" name="role_en" maxlength="80" lang="en" value={v.role_en} aria-describedby="role_en-hint" />
+              <input class="input" id="role_en" name="role_en" maxlength="80" lang="en" value={v.role_en} aria-describedby={`role_en-hint${err('role_en') ? ' role_en-error' : ''}`} />
+              {missing.length > 0 && (
+                <p class="mt-1">
+                  <EnMissing fields={missing} />
+                </p>
+              )}
             </Field>
           </div>
           <ImageUpload

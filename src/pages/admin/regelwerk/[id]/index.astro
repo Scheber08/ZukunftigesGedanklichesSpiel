@@ -15,7 +15,7 @@ import MoveButtons from '~/components/admin/content/MoveButtons.astro';
 import NoAccess from '~/components/admin/content/NoAccess.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import { fieldErrors, flashMessage, pick, pickChecked, submittedValues } from '~/lib/admin/content/form';
-import { descendantIds, flattenSections, publishChecks, RULES_STATUS_LABELS, suggestNextVersion } from '~/lib/admin/content/rules';
+import { descendantIds, flattenSections, publishChecks, removedAnchors, RULES_STATUS_LABELS, suggestNextVersion } from '~/lib/admin/content/rules';
 import { missingEn, RULES_SECTION_EN_FIELDS } from '~/lib/admin/content/translations';
 import { selectOne } from '~/lib/db/store';
 import type { RulesSectionRow, RulesVersionRow, SeasonRow } from '~/lib/db/types';
@@ -87,6 +87,11 @@ const meta = {
 const checks = publishChecks({ changelog_de: version?.changelog_de, effective_from: version?.effective_from }, sections);
 const missingCount = sections.filter((s) => missingEn(s, RULES_SECTION_EN_FIELDS).length > 0).length;
 const currentPublished = versions.find((v) => v.status === 'published' && v.id !== versionId);
+// Anker der gültigen Fassung, die im Entwurf fehlen (geteilte §-Links würden ins Leere zeigen)
+const lostAnchors =
+  draft && currentPublished
+    ? removedAnchors(await getServiceStore().select('rules_sections', { eq: { version_id: currentPublished.id } }), sections)
+    : [];
 const publicHref = version?.status === 'published' ? '/liga/regelwerk' : version?.status === 'archived' ? `/liga/regelwerk/v/${version.version}` : null;
 const flash = flashMessage(Astro.url, {
   saved: 'Entwurf gespeichert.',
@@ -188,7 +193,7 @@ const BADGE = { draft: 'badge-teal', published: 'badge-green', archived: 'badge-
                     const children = descendantIds(sections, s.id).length;
                     return (
                       <li id={`s-${s.id}`} class="section-row" style={`--depth: ${depth}`}>
-                        <div class="min-w-0 flex-1">
+                        <div class="row-main">
                           <a href={`${self}/abschnitt/${s.id}`} class="font-semibold hover:text-teal">
                             <span class="tabular">{s.number}</span> {s.title_de}
                           </a>
@@ -289,6 +294,19 @@ const BADGE = { draft: 'badge-teal', published: 'badge-green', archived: 'badge-
                         </ul>
                       </div>
                     )}
+                    {lostAnchors.length > 0 && currentPublished && (
+                      <div class="alert alert-warning text-sm">
+                        <p class="font-semibold">Hinweis: Anker aus Version {currentPublished.version} fehlen</p>
+                        <p>Links auf diese Paragrafen (z. B. aus Urteilen oder Discord) landen nach dem Veröffentlichen oben im Regelwerk. Wenn ein Paragraf nur umnummeriert wurde, übernimm den alten Anker.</p>
+                        <ul class="ml-5 mt-1 list-disc">
+                          {lostAnchors.map((a) => (
+                            <li>
+                              <code>#{a.anchor}</code> ({a.number} {a.title})
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     <p class="field-hint">
                       Beim Veröffentlichen wird {currentPublished ? `Version ${currentPublished.version} archiviert (bleibt unter /liga/regelwerk/v/${currentPublished.version} abrufbar)` : 'die Version zur gültigen Fassung'}. Danach ist diese Version eingefroren.
                     </p>
@@ -354,5 +372,10 @@ const BADGE = { draft: 'badge-teal', published: 'badge-green', archived: 'badge-
     display: flex;
     align-items: center;
     gap: 0.125rem;
+  }
+  /* Text zuerst; die Knöpfe rutschen auf schmalen Bildschirmen in die nächste Zeile */
+  .row-main {
+    flex: 1 1 12rem;
+    min-width: 0;
   }
 </style>

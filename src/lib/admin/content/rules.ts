@@ -276,6 +276,25 @@ export function publishChecks(
   return { fields, problems };
 }
 
+/** Ist die Versionsnummer schon an eine andere Version vergeben? */
+export function versionTaken(versions: ReadonlyArray<Pick<RulesVersionRow, 'id' | 'version'>>, version: string, selfId?: number | null): boolean {
+  const wanted = version.trim();
+  return versions.some((v) => v.id !== selfId && v.version.trim() === wanted);
+}
+
+/**
+ * Anker der bisher gültigen Fassung, die es im Entwurf nicht mehr gibt. Geteilte Links wie
+ * /liga/regelwerk#p3-2 landen nach dem Veröffentlichen sonst oben auf der Seite
+ * (Hinweis, keine Sperre – Kapitel dürfen wegfallen).
+ */
+export function removedAnchors(
+  previous: readonly Pick<RulesSectionRow, 'anchor' | 'number' | 'title_de'>[],
+  draft: readonly Pick<RulesSectionRow, 'anchor'>[],
+): Array<{ anchor: string; number: string; title: string }> {
+  const kept = new Set(draft.map((s) => s.anchor));
+  return previous.filter((s) => !kept.has(s.anchor)).map((s) => ({ anchor: s.anchor, number: s.number, title: s.title_de }));
+}
+
 /** IDs der bisher veröffentlichten Versionen, die beim Veröffentlichen archiviert werden. */
 export function versionsToArchive(versions: ReadonlyArray<Pick<RulesVersionRow, 'id' | 'status'>>, publishId: number): number[] {
   return versions.filter((v) => v.status === 'published' && v.id !== publishId).map((v) => v.id);

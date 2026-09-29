@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   fitWithin,
+  isOwnMediaUrl,
   isValidMediaPath,
   isWebp,
   mediaPath,
@@ -12,7 +13,7 @@ import {
 } from '~/lib/admin/content/media';
 import { moveInList, nextSort, positionInfo } from '~/lib/admin/content/order';
 import { exclusionHits, normalizePartnerUrl } from '~/lib/admin/content/partners';
-import { countMissing, FAQ_EN_FIELDS, missingEn } from '~/lib/admin/content/translations';
+import { countMissing, effortEnPreview, FAQ_EN_FIELDS, missingEn, missingPositionTranslations } from '~/lib/admin/content/translations';
 
 const UUID = '0f8fad5b-d9cb-469f-a165-70867728950e';
 
@@ -110,6 +111,25 @@ describe('Medien', () => {
     expect(redactDataUrl(data)).toMatch(/^\[Data-URL/);
     expect(redactDataUrl('https://x.test/a.webp')).toBe('https://x.test/a.webp');
   });
+
+  it('verlangt https und in Produktion Bilder aus dem eigenen Bucket', () => {
+    const storageUrl = 'https://abc.supabase.co';
+    const own = `${storageUrl}/storage/v1/object/public/media/news/2026/${UUID}-1600.webp`;
+    expect(() => normalizeImageValue('http://example.com/a.webp', { demo: true })).toThrow(/https/);
+    expect(normalizeImageValue(own, { demo: false, storageUrl })).toBe(own);
+    expect(() => normalizeImageValue('https://example.com/a.webp', { demo: false, storageUrl })).toThrow(/Upload/);
+    expect(() => normalizeImageValue(`${storageUrl}/storage/v1/object/public/media/../secret.webp`, { demo: false, storageUrl })).toThrow();
+    // Altwert bleibt beim Speichern gültig
+    expect(normalizeImageValue('https://example.com/alt.png', { demo: false, storageUrl, previous: 'https://example.com/alt.png' })).toBe(
+      'https://example.com/alt.png',
+    );
+    // Lokale Supabase-CLI (http) für den eigenen Bucket
+    const local = 'http://127.0.0.1:54321';
+    expect(normalizeImageValue(`${local}/storage/v1/object/public/media/staff/2026/${UUID}-1600.webp`, { demo: false, storageUrl: local })).toMatch(/^http:/);
+    expect(isOwnMediaUrl(own, `${storageUrl}/`)).toBe(true);
+    expect(isOwnMediaUrl(`${own}?v=2`, storageUrl)).toBe(true);
+    expect(isOwnMediaUrl(own.replace('abc.', 'evil.'), storageUrl)).toBe(false);
+  });
 });
 
 describe('Partner', () => {
@@ -146,5 +166,18 @@ describe('Übersetzungen', () => {
         FAQ_EN_FIELDS,
       ),
     ).toBe(1);
+  });
+
+  it('Zeitaufwand offener Rollen: eigener EN-Text, automatische Übersetzung oder Fallback', () => {
+    expect(effortEnPreview('ca. 1–2 h pro Woche', null)).toEqual({ text: 'approx. 1–2 h per week', source: 'auto' });
+    expect(effortEnPreview('ca. 1–2 h pro Woche', ' about 2 hours ')).toEqual({ text: 'about 2 hours', source: 'manual' });
+    expect(effortEnPreview('nach Absprache', '')).toEqual({ text: 'nach Absprache', source: 'fallback' });
+    expect(effortEnPreview(null, null)).toEqual({ text: '', source: 'none' });
+
+    const base = { title_de: 'Steward', title_en: 'Steward', description_de: 'Text', description_en: 'Text', effort: 'ca. 2 h pro Renntag', effort_en: null };
+    expect(missingPositionTranslations(base)).toEqual([]);
+    expect(missingPositionTranslations({ ...base, effort: 'nach Absprache' })).toEqual(['Zeitaufwand']);
+    expect(missingPositionTranslations({ ...base, effort: 'nach Absprache', effort_en: 'by arrangement' })).toEqual([]);
+    expect(missingPositionTranslations({ ...base, title_en: null, effort: null })).toEqual(['Titel']);
   });
 });

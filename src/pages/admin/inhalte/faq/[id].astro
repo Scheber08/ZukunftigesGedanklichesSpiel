@@ -5,11 +5,13 @@ import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
 import Field from '~/components/admin/ui/Field.astro';
 import ContentNav from '~/components/admin/content/ContentNav.astro';
 import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import EnMissing from '~/components/admin/content/EnMissing.astro';
 import MarkdownEditor from '~/components/admin/content/MarkdownEditor.svelte';
 import NoAccess from '~/components/admin/content/NoAccess.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import { fieldErrors, pick, submittedValues } from '~/lib/admin/content/form';
 import { FAQ_CATEGORY_LABELS } from '~/lib/admin/content/labels';
+import { FAQ_EN_FIELDS, missingEn } from '~/lib/admin/content/translations';
 import { selectOne } from '~/lib/db/store';
 import { FAQ_CATEGORIES, type FaqItemRow } from '~/lib/db/types';
 import { hasRole } from '~/lib/server/auth';
@@ -43,6 +45,7 @@ const v = {
   answer_en: pick(submitted, 'answer_en', item?.answer_en),
 };
 const err = (name: string) => errors[name]?.[0] ?? null;
+const missing = item ? missingEn(item, FAQ_EN_FIELDS) : [];
 ---
 
 <AdminLayout
@@ -83,6 +86,11 @@ const err = (name: string) => errors[name]?.[0] ?? null;
             </fieldset>
             <fieldset class="card p-4 md:p-5" lang="en">
               <legend class="micro px-1">English · optional</legend>
+              {missing.length > 0 && (
+                <p class="mb-3" lang="de">
+                  <EnMissing fields={missing} />
+                </p>
+              )}
               <div class="grid gap-4">
                 <Field id="question_en" label="Question" error={err('question_en')}>
                   <input class="input" id="question_en" name="question_en" maxlength="300" value={v.question_en} />

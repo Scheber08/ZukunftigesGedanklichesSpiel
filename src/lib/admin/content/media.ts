@@ -90,12 +90,20 @@ export function isDataImageUrl(value: string): boolean {
 }
 
 /**
- * Bildwert aus einem Formular prüfen: leer, eine http(s)-URL oder – nur im Demo-Modus –
+ * Bildwert aus einem Formular prüfen: leer, eine https-URL oder – nur im Demo-Modus –
  * eine kleine Data-URL. Liefert den bereinigten Wert oder wirft mit einer Meldung.
+ *
+ * Mit `storageUrl` (Supabase-URL, Produktion) sind nur Bilder aus dem eigenen Bucket
+ * „media“ erlaubt: Fremd eingebundene Bilder würden Besucherdaten an Dritte senden.
+ * Ein unveränderter Altwert (`previous`) bleibt gültig, damit Speichern nie daran scheitert.
  */
-export function normalizeImageValue(value: string | null | undefined, opts: { demo: boolean }): string | null {
+export function normalizeImageValue(
+  value: string | null | undefined,
+  opts: { demo: boolean; storageUrl?: string | null; previous?: string | null },
+): string | null {
   const v = (value ?? '').trim();
   if (v === '') return null;
+  if (opts.previous && v === opts.previous) return v;
   if (v.startsWith('data:')) {
     if (!opts.demo) throw new Error('Bilder bitte über den Upload hochladen.');
     if (v.length > DEMO_MAX_DATA_URL_CHARS || !isDataImageUrl(v)) throw new Error('Das Demo-Bild ist zu groß oder ungültig.');
@@ -108,8 +116,20 @@ export function normalizeImageValue(value: string | null | undefined, opts: { de
   } catch {
     throw new Error('Die Bild-URL ist ungültig.');
   }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('Die Bild-URL muss mit https:// beginnen.');
+  if (!opts.demo && opts.storageUrl) {
+    // Eigener Bucket (lokal mit der Supabase-CLI auch http://127.0.0.1:54321)
+    if (!isOwnMediaUrl(url.href, opts.storageUrl)) throw new Error('Bitte das Bild über den Upload hochladen – externe Bilder sind nicht erlaubt.');
+    return url.href;
+  }
+  if (url.protocol !== 'https:') throw new Error('Die Bild-URL muss mit https:// beginnen.');
   return url.href;
+}
+
+/** Liegt die URL im eigenen Bucket „media“ (mit gültigem Upload-Pfad)? */
+export function isOwnMediaUrl(url: string, storageUrl: string): boolean {
+  const prefix = publicMediaUrl(storageUrl, '');
+  if (!url.startsWith(prefix)) return false;
+  return isValidMediaPath(url.slice(prefix.length).replace(/[?#].*$/, ''));
 }
 
 /** Für Audit-Log und Discord: Data-URLs nicht in voller Länge speichern. */

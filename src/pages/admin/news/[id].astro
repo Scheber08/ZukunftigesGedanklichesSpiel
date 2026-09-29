@@ -8,7 +8,7 @@ import NoAccess from '~/components/admin/content/NoAccess.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import { fieldErrors, flashMessage, submittedValues } from '~/lib/admin/content/form';
 import { loadRoundGroups, newsWebhookConfigured, type RoundGroup } from '~/lib/admin/content/loaders';
-import { NEWS_STATE_LABELS, newsListState } from '~/lib/admin/content/news';
+import { NEWS_STATE_LABELS, newsListState, newsRedirectsFor } from '~/lib/admin/content/news';
 import { selectOne } from '~/lib/db/store';
 import type { NewsRow } from '~/lib/db/types';
 import { formatDateTime } from '~/lib/domain/time';
@@ -28,7 +28,7 @@ if (result && !result.error) {
   const params = new URLSearchParams({ ok: 'saved' });
   if (result.data.note) params.set('note', 'scheduled');
   if (result.data.discord) params.set('discord', '1');
-  if (result.data.slugChanged) params.set('slug', 'changed');
+  if (result.data.redirected) params.set('slug', 'redirect');
   return Astro.redirect(`/admin/news/${result.data.id}?${params}`, 303);
 }
 const deleted = Astro.getActionResult(actions.admin.newsDelete);
@@ -41,15 +41,22 @@ let news: NewsRow | null = null;
 let roundGroups: RoundGroup[] = [];
 let webhook = false;
 let taken = { de: [] as string[], en: [] as string[] };
+let redirects: Array<{ lang: 'de' | 'en'; path: string }> = [];
 if (allowed && newsId != null) {
   const store = getServiceStore();
   news = await selectOne(store, 'news', { id: newsId });
   if (news) {
-    const [groups, hook, all] = await Promise.all([loadRoundGroups(store), newsWebhookConfigured(store), store.select('news')]);
+    const [groups, hook, all, slugRedirects] = await Promise.all([
+      loadRoundGroups(store),
+      newsWebhookConfigured(store),
+      store.select('news'),
+      store.select('slug_redirects', { eq: { entity: 'news' } }),
+    ]);
     roundGroups = groups;
     webhook = hook;
     const others = all.filter((n) => n.id !== newsId);
     taken = { de: others.map((n) => n.slug_de), en: others.map((n) => n.slug_en) };
+    redirects = newsRedirectsFor(news, slugRedirects);
   }
 }
 if (allowed && !news) return new Response('Artikel nicht gefunden', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
@@ -58,7 +65,9 @@ const flash = flashMessage(Astro.url, { saved: 'Gespeichert.', created: 'Artikel
 const notes = [
   Astro.url.searchParams.get('note') === 'scheduled' ? 'Der Zeitpunkt liegt in der Zukunft – der Artikel ist jetzt geplant und wird automatisch veröffentlicht.' : null,
   Astro.url.searchParams.get('discord') === '1' ? 'In #news auf Discord gepostet.' : null,
-  Astro.url.searchParams.get('slug') === 'changed' ? 'Der Slug hat sich geändert – alte Links auf den Artikel funktionieren nicht mehr.' : null,
+  Astro.url.searchParams.get('slug') === 'redirect'
+    ? 'Die Adresse hat sich geändert. Alte Links leiten nach dem nächsten Build per 301 auf die neue Adresse weiter.'
+    : null,
 ].filter(Boolean);
 const state = news ? newsListState(news, new Date()) : null;
 ---
@@ -87,7 +96,7 @@ const state = news ? newsListState(news, new Date()) : null;
             Status: <strong class="text-fg">{state && NEWS_STATE_LABELS[state]}</strong>
             {news.publish_at && <> · {formatDateTime(news.publish_at, 'de')}</>} · zuletzt geändert {formatDateTime(news.updated_at, 'de')}
           </p>
-          <NewsForm news={news} submitted={submitted} errors={errors} roundGroups={roundGroups} staffName={staff?.name ?? ''} webhookConfigured={webhook} taken={taken} />
+          <NewsForm news={news} submitted={submitted} errors={errors} roundGroups={roundGroups} staffName={staff?.name ?? ''} webhookConfigured={webhook} taken={taken} redirects={redirects} />
         </>
       )
     )

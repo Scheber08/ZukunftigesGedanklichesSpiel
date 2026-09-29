@@ -76,7 +76,7 @@ const flash = flashMessage(Astro.url, { saved: 'Eintrag gespeichert.', moved: 'R
                 <ul role="list">
                   {g.items.map((item, i) => (
                     <li class="row" id={`item-${item.id}`}>
-                      <div class="min-w-0 flex-1">
+                      <div class="row-main">
                         <a href={`/admin/inhalte/faq/${item.id}`} class="font-semibold hover:text-teal">
                           {item.question_de}
                         </a>
@@ -107,5 +107,10 @@ const flash = flashMessage(Astro.url, { saved: 'Eintrag gespeichert.', moved: 'R
     gap: 0.5rem 1rem;
     padding: 0.625rem 0;
     border-top: 1px solid var(--color-border);
+  }
+  /* Text zuerst; die Knöpfe rutschen auf schmalen Bildschirmen in die nächste Zeile */
+  .row-main {
+    flex: 1 1 12rem;
+    min-width: 0;
   }
 </style>

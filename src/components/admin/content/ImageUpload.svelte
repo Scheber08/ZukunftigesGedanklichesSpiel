@@ -64,6 +64,9 @@
       img.src = src;
       await img.decode();
       return img;
+    } catch {
+      // z. B. HEIC in Chrome/Firefox oder beschädigte Dateien
+      throw new Error('Dein Browser kann dieses Bildformat nicht lesen. Bitte als JPG, PNG oder WebP speichern und erneut wählen.');
     } finally {
       // Nach decode() ist das Bild im Speicher
       setTimeout(() => URL.revokeObjectURL(src), 1000);
@@ -167,7 +170,7 @@
     message = '';
     demoNote = false;
     if (!file.type.startsWith('image/')) {
-      problem = 'Bitte eine Bilddatei wählen (JPG, PNG, WebP, HEIC oder SVG).';
+      problem = 'Bitte eine Bilddatei wählen (JPG, PNG, WebP oder SVG).';
       return;
     }
     if (file.size > MAX_INPUT_BYTES) {

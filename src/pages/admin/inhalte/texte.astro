@@ -8,6 +8,7 @@ import { actions } from 'astro:actions';
 import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
 import Field from '~/components/admin/ui/Field.astro';
 import ContentNav from '~/components/admin/content/ContentNav.astro';
+import EnMissing from '~/components/admin/content/EnMissing.astro';
 import NoAccess from '~/components/admin/content/NoAccess.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import { fieldErrors, flashMessage, pick, submittedValues } from '~/lib/admin/content/form';
@@ -98,7 +99,12 @@ const flash = flashMessage(Astro.url, { saved: 'Texte gespeichert – sichtbar n
                 <textarea class="textarea" id="note_de" name="note_de" rows="3" maxlength="300" lang="de" aria-describedby="note_de-hint">{v.note_de}</textarea>
               </Field>
               <Field id="note_en" label="Hinweis (EN)" error={err('note_en')}>
-                <textarea class="textarea" id="note_en" name="note_en" rows="3" maxlength="300" lang="en">{v.note_en}</textarea>
+                <textarea class="textarea" id="note_en" name="note_en" rows="3" maxlength="300" lang="en" aria-invalid={err('note_en') ? 'true' : undefined} aria-describedby={err('note_en') ? 'note_en-error' : undefined}>{v.note_en}</textarea>
+                {settings.registration.note_de && !settings.registration.note_en && (
+                  <p class="mt-1">
+                    <EnMissing fields={['Hinweis']} />
+                  </p>
+                )}
               </Field>
             </div>
           </section>

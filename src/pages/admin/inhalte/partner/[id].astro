@@ -5,11 +5,13 @@ import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
 import Field from '~/components/admin/ui/Field.astro';
 import ContentNav from '~/components/admin/content/ContentNav.astro';
 import DeleteForm from '~/components/admin/content/DeleteForm.astro';
+import EnMissing from '~/components/admin/content/EnMissing.astro';
 import ImageUpload from '~/components/admin/content/ImageUpload.svelte';
 import NoAccess from '~/components/admin/content/NoAccess.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import { fieldErrors, pick, pickChecked, submittedValues } from '~/lib/admin/content/form';
 import { EXCLUSION_CATEGORIES, exclusionHits } from '~/lib/admin/content/partners';
+import { missingEn, PARTNER_EN_FIELDS } from '~/lib/admin/content/translations';
 import { selectOne } from '~/lib/db/store';
 import type { PartnerRow } from '~/lib/db/types';
 import { hasRole } from '~/lib/server/auth';
@@ -46,6 +48,7 @@ const v = {
 };
 const hits = exclusionHits(v.name, v.text_de, v.text_en, v.url);
 const err = (name: string) => errors[name]?.[0] ?? null;
+const missing = partner ? missingEn(partner, PARTNER_EN_FIELDS) : [];
 ---
 
 <AdminLayout
@@ -86,7 +89,12 @@ const err = (name: string) => errors[name]?.[0] ?? null;
               <textarea class="textarea" id="text_de" name="text_de" rows="5" required maxlength="1000" lang="de" aria-describedby={`text_de-hint${err('text_de') ? ' text_de-error' : ''}`} aria-invalid={err('text_de') ? 'true' : undefined}>{v.text_de}</textarea>
             </Field>
             <Field id="text_en" label="Text (EN)" error={err('text_en')}>
-              <textarea class="textarea" id="text_en" name="text_en" rows="5" maxlength="1000" lang="en">{v.text_en}</textarea>
+              <textarea class="textarea" id="text_en" name="text_en" rows="5" maxlength="1000" lang="en" aria-invalid={err('text_en') ? 'true' : undefined} aria-describedby={err('text_en') ? 'text_en-error' : undefined}>{v.text_en}</textarea>
+              {missing.length > 0 && (
+                <p class="mt-1">
+                  <EnMissing fields={missing} />
+                </p>
+              )}
             </Field>
           </div>
           <div class="grid gap-2">

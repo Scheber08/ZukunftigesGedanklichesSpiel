@@ -24,8 +24,10 @@ interface Props {
   staffName: string;
   webhookConfigured: boolean;
   taken: { de: string[]; en: string[] };
+  /** Alte Adressen, die per 301 auf diesen Artikel weiterleiten */
+  redirects?: Array<{ lang: 'de' | 'en'; path: string }>;
 }
-const { news, submitted, errors, roundGroups, staffName, webhookConfigured, taken } = Astro.props;
+const { news, submitted, errors, roundGroups, staffName, webhookConfigured, taken, redirects = [] } = Astro.props;
 
 const v = (name: string, stored: string | number | null | undefined) => pick(submitted, name, stored);
 const err = (name: string) => errors[name]?.[0] ?? null;
@@ -103,9 +105,11 @@ const publicHref = news && wasPublished ? { de: `/news/${news.slug_de}`, en: `/e
                     id={`slug_${lang}`}
                     label="Slug"
                     hint={
-                      lang === 'de'
-                        ? `Adresse: /news/…  – wird aus dem Titel erzeugt.${wasPublished ? ' Nach der Veröffentlichung besser nicht mehr ändern (geteilte Links).' : ''}`
-                        : 'Adresse: /en/news/…  – aus dem englischen (sonst deutschen) Titel.'
+                      wasPublished
+                        ? `Adresse: ${lang === 'de' ? '/news/' : '/en/news/'}…  – bleibt beim Ändern des Titels gleich. Änderst du den Slug, leitet die alte Adresse per 301 weiter.`
+                        : lang === 'de'
+                          ? 'Adresse: /news/…  – wird aus dem Titel erzeugt.'
+                          : 'Adresse: /en/news/…  – aus dem englischen (sonst deutschen) Titel.'
                     }
                     error={err(`slug_${lang}`)}
                   >
@@ -231,6 +235,21 @@ const publicHref = news && wasPublished ? { de: `/news/${news.slug_de}`, en: `/e
           </label>
         </div>
 
+        {
+          redirects.length > 0 && (
+            <div class="mt-4 text-sm">
+              <p class="label">Alte Adressen (leiten per 301 weiter)</p>
+              <ul class="redirects" role="list">
+                {redirects.map((r) => (
+                  <li>
+                    <code lang={r.lang}>{r.path}</code>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        }
+
         <div class="mt-5 flex flex-wrap gap-2">
           <button type="submit" class="btn btn-primary">Speichern</button>
           {
@@ -346,6 +365,10 @@ const publicHref = news && wasPublished ? { de: `/news/${news.slug_de}`, en: `/e
     border-color: var(--color-teal);
     background: var(--color-surface-2);
   }
+  .redirects code {
+    overflow-wrap: anywhere;
+    color: var(--color-muted);
+  }
 </style>
 
 <script>
@@ -370,11 +393,13 @@ const publicHref = news && wasPublished ? { de: `/news/${news.slug_de}`, en: `/e
       // Automatisch, solange der Slug leer ist oder genau dem Titel entspricht –
       // bei veröffentlichten Artikeln nie (geteilte Links sollen gültig bleiben)
       const locked = form.dataset.slugLocked === 'true';
+      const original = target.defaultValue;
       let auto = !locked && (target.value === '' || target.value === newsSlug(sourceText()));
 
       const showNote = () => {
         if (!note) return;
-        const slug = target.value || newsSlug(sourceText());
+        // Leer bei veröffentlichten Artikeln: der bisherige Slug bleibt
+        const slug = target.value || (locked ? original : newsSlug(sourceText()));
         note.textContent = taken[lang].includes(slug) ? `„${slug}“ ist schon vergeben – beim Speichern wird daraus „${uniqueSlug(slug, taken[lang])}“.` : '';
       };
       const sync = () => {
