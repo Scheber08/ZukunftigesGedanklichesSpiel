@@ -1,0 +1,49 @@
+{
+  "name": "liga-web",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Website der Online-Liga für EA SPORTS F1® 25: Infos, Regelwerk, Kalender, Ergebnisse, Wertungen, Stewards, News und Admin.",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "lint": "astro check && svelte-check --tsconfig ./tsconfig.json --threshold error",
+    "db:seed:generate": "node --experimental-strip-types scripts/generate-seed-sql.ts",
+    "deploy": "astro build && wrangler deploy",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^14.3.3",
+    "@astrojs/svelte": "^9.0.1",
+    "@lucide/astro": "^1.48.0",
+    "@lucide/svelte": "^1.48.0",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.2",
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.3.5",
+    "country-flag-icons": "^1.6.20",
+    "marked": "^18.0.14",
+    "simple-icons": "^16.33.0",
+    "svelte": "^5.57.1",
+    "tailwindcss": "^4.3.3",
+    "vanilla-cookieconsent": "^3.1.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
+    "linkinator": "^8.1.0",
+    "svelte-check": "^4.7.6",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.2",
+    "wrangler": "^4.143.0"
+  }
+}

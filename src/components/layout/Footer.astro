@@ -1,0 +1,132 @@
+---
+/**
+ * Footer (Plan §3.5): Logo, Kurzbeschreibung, Social, rechtliche Links,
+ * „Cookie-Einstellungen“ und Disclaimer (Plan §9.1).
+ */
+import BrandIcon from '~/components/ui/BrandIcon.astro';
+import Logo from '~/components/ui/Logo.astro';
+import { SITE } from '~/config/site';
+import { url, useT, type Lang } from '~/i18n';
+import type { PublicSettings } from '~/lib/settings';
+
+interface Props {
+  lang: Lang;
+  settings: PublicSettings;
+}
+const { lang, settings } = Astro.props;
+const t = useT(lang);
+
+const socials = [
+  { name: 'discord' as const, label: 'Discord', href: settings.discord_invite.url },
+  { name: 'instagram' as const, label: 'Instagram', href: settings.socials.instagram },
+  { name: 'tiktok' as const, label: 'TikTok', href: settings.socials.tiktok },
+  { name: 'youtube' as const, label: 'YouTube', href: settings.socials.youtube },
+].filter((s): s is { name: 'discord' | 'instagram' | 'tiktok' | 'youtube'; label: string; href: string } => Boolean(s.href));
+
+const sport = [
+  { label: t('nav.calendar'), href: url(lang, 'calendar') },
+  { label: t('nav.standings'), href: url(lang, 'standings') },
+  { label: t('nav.results'), href: url(lang, 'results') },
+  { label: t('nav.drivers'), href: url(lang, 'drivers') },
+  { label: t('nav.teams'), href: url(lang, 'teams') },
+  { label: t('nav.stewards'), href: url(lang, 'stewards') },
+];
+const league = [
+  { label: t('nav.rules'), href: url(lang, 'rules') },
+  { label: t('nav.lobby'), href: url(lang, 'lobby') },
+  { label: t('nav.faq'), href: url(lang, 'faq') },
+  { label: t('nav.about'), href: url(lang, 'about') },
+  { label: t('nav.partners'), href: url(lang, 'partners') },
+  { label: t('nav.hallOfFame'), href: url(lang, 'hallOfFame') },
+  { label: t('nav.archive'), href: url(lang, 'archive') },
+  { label: t('nav.news'), href: url(lang, 'news') },
+];
+const legal = [
+  { label: t('footer.imprint'), href: url(lang, 'imprint') },
+  { label: t('footer.privacy'), href: url(lang, 'privacy') },
+  { label: t('footer.terms'), href: url(lang, 'terms') },
+  { label: t('footer.contact'), href: url(lang, 'contact') },
+];
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer mt-16 border-t border-border bg-surface-1">
+  <div class="container-page grid gap-10 py-12 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+    <div class="max-w-sm">
+      <a href={url(lang, 'home')} class="inline-flex items-center gap-2.5 no-underline" aria-label={t('a11y.logoHome', { league: SITE.name })}>
+        <Logo size={36} />
+        <span class="nav-label text-xl">{SITE.name}</span>
+      </a>
+      <p class="mt-4 text-sm text-muted">{t('footer.tagline')}</p>
+      {
+        socials.length > 0 && (
+          <ul class="mt-6 flex gap-2" aria-label={t('footer.social')}>
+            {socials.map((s) => (
+              <li>
+                <a
+                  href={s.href}
+                  class="btn btn-ghost btn-icon border border-border"
+                  target="_blank"
+                  rel="noopener me"
+                  data-track={s.name === 'discord' ? 'discord_click' : undefined}
+                >
+                  <BrandIcon name={s.name} size={20} />
+                  <span class="sr-only">
+                    {s.label} {t('a11y.externalLink')}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </div>
+
+    <nav aria-label={t('footer.sport')}>
+      <p class="micro mb-3">{t('footer.sport')}</p>
+      <ul class="grid gap-2 text-sm">
+        {sport.map((l) => <li><a href={l.href} class="footer-link">{l.label}</a></li>)}
+      </ul>
+    </nav>
+    <nav aria-label={t('footer.league')}>
+      <p class="micro mb-3">{t('footer.league')}</p>
+      <ul class="grid gap-2 text-sm">
+        {league.map((l) => <li><a href={l.href} class="footer-link">{l.label}</a></li>)}
+      </ul>
+    </nav>
+    <nav aria-label={t('footer.legal')}>
+      <p class="micro mb-3">{t('footer.legal')}</p>
+      <ul class="grid gap-2 text-sm">
+        {legal.map((l) => <li><a href={l.href} class="footer-link">{l.label}</a></li>)}
+        <li>
+          <button type="button" class="footer-link cursor-pointer" data-cc="show-preferencesModal">
+            {t('footer.cookieSettings')}
+          </button>
+        </li>
+      </ul>
+    </nav>
+  </div>
+  <div class="border-t border-border">
+    <div class="container-page flex flex-col gap-3 py-6 text-xs text-muted md:flex-row md:items-center md:justify-between">
+      <p>{t('footer.disclaimer')}</p>
+      <p class="shrink-0">© {year} {SITE.name}</p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .footer-link {
+    color: var(--color-muted);
+    text-decoration: none;
+    transition: color 150ms ease-out;
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    text-align: left;
+  }
+  .footer-link:hover {
+    color: var(--color-fg);
+    text-decoration: underline;
+  }
+</style>

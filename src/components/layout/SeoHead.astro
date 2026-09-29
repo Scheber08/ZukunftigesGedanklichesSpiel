@@ -1,0 +1,70 @@
+---
+/**
+ * Meta-Tags, hreflang, Open Graph und JSON-LD (Plan §10 SEO).
+ */
+import type { Alternates, Lang } from '~/i18n';
+import { SITE } from '~/config/site';
+import { safeJson } from '~/lib/util/html';
+
+interface Props {
+  lang: Lang;
+  title: string;
+  description: string;
+  alternates?: Alternates;
+  ogImage?: string;
+  ogImageAlt?: string;
+  ogType?: 'website' | 'article';
+  noindex?: boolean;
+  jsonLd?: Record<string, unknown> | Array<Record<string, unknown>>;
+  publishedTime?: string;
+  modifiedTime?: string;
+}
+
+const {
+  lang,
+  title,
+  description,
+  alternates,
+  ogImage = '/og-default.png',
+  ogImageAlt = SITE.name,
+  ogType = 'website',
+  noindex = false,
+  jsonLd,
+  publishedTime,
+  modifiedTime,
+} = Astro.props;
+
+const site = Astro.site ?? new URL(Astro.url.origin);
+const canonical = new URL(alternates?.[lang] ?? Astro.url.pathname, site).href;
+const abs = (path: string) => new URL(path, site).href;
+const jsonLdList = jsonLd ? (Array.isArray(jsonLd) ? jsonLd : [jsonLd]) : [];
+---
+
+<title>{title}</title>
+<meta name="description" content={description} />
+<link rel="canonical" href={canonical} />
+{noindex && <meta name="robots" content="noindex, nofollow" />}
+{
+  alternates && (
+    <>
+      <link rel="alternate" hreflang="de" href={abs(alternates.de)} />
+      <link rel="alternate" hreflang="en" href={abs(alternates.en)} />
+      <link rel="alternate" hreflang="x-default" href={abs(alternates.de)} />
+    </>
+  )
+}
+
+<meta property="og:type" content={ogType} />
+<meta property="og:site_name" content={SITE.name} />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonical} />
+<meta property="og:image" content={abs(ogImage)} />
+<meta property="og:image:alt" content={ogImageAlt} />
+<meta property="og:locale" content={lang === 'de' ? 'de_DE' : 'en_GB'} />
+<meta property="og:locale:alternate" content={lang === 'de' ? 'en_GB' : 'de_DE'} />
+{publishedTime && <meta property="article:published_time" content={publishedTime} />}
+{modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
+<meta name="twitter:card" content="summary_large_image" />
+
+{jsonLdList.map((data) => <script type="application/ld+json" set:html={safeJson(data)} />)}

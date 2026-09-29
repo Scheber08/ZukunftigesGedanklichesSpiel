@@ -1,0 +1,357 @@
+---
+/**
+ * Header (Plan §3.5): transparent über dem Hero, beim Scrollen Surface-2 mit Blur.
+ * Links Logo und Name, dann Navigation, rechts Sprachumschalter, LIVE-Badge und CTA.
+ * Auf dem Handy ein Vollbild-Menü.
+ */
+import ChevronDown from '@lucide/astro/icons/chevron-down';
+import Menu from '@lucide/astro/icons/menu';
+import X from '@lucide/astro/icons/x';
+import Logo from '~/components/ui/Logo.astro';
+import { SITE } from '~/config/site';
+import { url, useT, type Alternates, type Lang } from '~/i18n';
+import type { PublicSettings } from '~/lib/settings';
+
+interface Props {
+  lang: Lang;
+  alternates: Alternates;
+  settings: PublicSettings;
+  transparent?: boolean;
+}
+
+const { lang, alternates, settings, transparent = false } = Astro.props;
+const t = useT(lang);
+const path = Astro.url.pathname.replace(/\/$/, '') || '/';
+const otherLang: Lang = lang === 'de' ? 'en' : 'de';
+
+const main = [
+  { label: t('nav.calendar'), href: url(lang, 'calendar'), match: [url(lang, 'calendar'), url(lang, 'race', { season: 'x', round: 'x' }).split('/x')[0]!] },
+  { label: t('nav.standings'), href: url(lang, 'standings'), match: [url(lang, 'standings'), lang === 'de' ? '/saison' : '/en/season'] },
+  { label: t('nav.results'), href: url(lang, 'results'), match: [url(lang, 'results')] },
+  { label: t('nav.driversTeams'), href: url(lang, 'drivers'), match: [url(lang, 'drivers'), url(lang, 'teams')] },
+  { label: t('nav.stewards'), href: url(lang, 'stewards'), match: [url(lang, 'stewards')] },
+  { label: t('nav.news'), href: url(lang, 'news'), match: [url(lang, 'news')] },
+];
+const league = [
+  { label: t('nav.rules'), href: url(lang, 'rules') },
+  { label: t('nav.lobby'), href: url(lang, 'lobby') },
+  { label: t('nav.faq'), href: url(lang, 'faq') },
+  { label: t('nav.about'), href: url(lang, 'about') },
+  { label: t('nav.partners'), href: url(lang, 'partners') },
+  { label: t('nav.hallOfFame'), href: url(lang, 'hallOfFame') },
+  { label: t('nav.archive'), href: url(lang, 'archive') },
+];
+const isActive = (prefixes: string[]) => prefixes.some((p) => path === p || path.startsWith(`${p}/`));
+const leagueActive = league.some((l) => isActive([l.href]));
+const liveEnabled = Boolean(settings.twitch_channel);
+---
+
+<header
+  class:list={['site-header', { 'is-transparent': transparent }]}
+  data-header
+  data-transparent={transparent ? 'true' : undefined}
+>
+  <div class="container-page flex h-(--header-h) items-center gap-4">
+    <a href={url(lang, 'home')} class="flex shrink-0 items-center gap-2.5 no-underline" aria-label={t('a11y.logoHome', { league: SITE.name })}>
+      <Logo size={30} />
+      <span class="nav-label hidden text-lg sm:inline">{SITE.name}</span>
+    </a>
+
+    <nav aria-label={t('a11y.mainNav')} class="ml-4 hidden flex-1 lg:block">
+      <ul class="flex items-center gap-1">
+        {
+          main.map((item) => (
+            <li>
+              <a
+                href={item.href}
+                class="nav-link"
+                aria-current={isActive(item.match) ? 'page' : undefined}
+              >
+                {item.label}
+              </a>
+            </li>
+          ))
+        }
+        <li class="relative">
+          <details class="nav-dropdown" data-dropdown>
+            <summary class="nav-link" aria-current={leagueActive ? 'true' : undefined}>
+              {t('nav.league')}
+              <ChevronDown size={16} aria-hidden="true" />
+            </summary>
+            <ul class="nav-dropdown-panel card">
+              {
+                league.map((item) => (
+                  <li>
+                    <a href={item.href} class="nav-dropdown-link" aria-current={isActive([item.href]) ? 'page' : undefined}>
+                      {item.label}
+                    </a>
+                  </li>
+                ))
+              }
+            </ul>
+          </details>
+        </li>
+      </ul>
+    </nav>
+
+    <div class="ml-auto flex items-center gap-2">
+      {
+        liveEnabled && (
+          <a href={url(lang, 'stream')} class="badge badge-teal" data-live-badge hidden>
+            <span class="live-dot" aria-hidden="true" />
+            {t('common.live')}
+          </a>
+        )
+      }
+      <a
+        href={alternates[otherLang]}
+        hreflang={otherLang}
+        lang={otherLang}
+        class="btn btn-ghost btn-sm"
+        aria-label={`${t('a11y.languageSwitch')}: ${t('lang.switchTo')}`}
+        data-lang-switch
+      >
+        {t('lang.switchToShort')}
+      </a>
+      <a href={url(lang, 'join')} class="btn btn-primary btn-sm hidden sm:inline-flex">{t('nav.join')}</a>
+      <button
+        type="button"
+        class="btn btn-ghost btn-icon lg:hidden"
+        aria-expanded="false"
+        aria-controls="mobile-menu"
+        data-menu-open
+      >
+        <Menu size={24} aria-hidden="true" />
+        <span class="sr-only">{t('a11y.openMenu')}</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="mobile-menu" class="mobile-menu lg:hidden" hidden data-menu>
+    <div class="container-page flex h-(--header-h) items-center justify-between">
+      <a href={url(lang, 'home')} class="flex items-center gap-2.5 no-underline" aria-label={t('a11y.logoHome', { league: SITE.name })}>
+        <Logo size={30} variant="gradient" />
+        <span class="nav-label text-lg">{SITE.name}</span>
+      </a>
+      <button type="button" class="btn btn-ghost btn-icon" data-menu-close>
+        <X size={24} aria-hidden="true" />
+        <span class="sr-only">{t('a11y.closeMenu')}</span>
+      </button>
+    </div>
+    <nav aria-label={t('a11y.mainNav')} class="container-page pb-10">
+      <ul class="grid gap-1 border-b border-border pb-4">
+        {
+          main.map((item) => (
+            <li>
+              <a href={item.href} class="mobile-link" aria-current={isActive(item.match) ? 'page' : undefined}>
+                {item.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="micro mt-6 mb-2">{t('nav.league')}</p>
+      <ul class="grid grid-cols-2 gap-x-4 gap-y-1">
+        {
+          league.map((item) => (
+            <li>
+              <a href={item.href} class="mobile-sublink" aria-current={isActive([item.href]) ? 'page' : undefined}>
+                {item.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a href={url(lang, 'join')} class="btn btn-primary">{t('nav.join')}</a>
+        {settings.discord_invite.url && (
+          <a href={settings.discord_invite.url} class="btn btn-secondary" rel="noopener" target="_blank" data-track="discord_click">
+            {t('common.joinDiscord')}
+          </a>
+        )}
+        <a href={alternates[otherLang]} hreflang={otherLang} lang={otherLang} class="btn btn-ghost">{t('lang.switchTo')}</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    border-bottom: 1px solid var(--color-border);
+    background: rgb(5 5 5 / 0.92);
+    transition:
+      background-color 200ms ease-out,
+      border-color 200ms ease-out,
+      backdrop-filter 200ms ease-out;
+  }
+  .site-header.is-transparent {
+    position: fixed;
+    inset-inline: 0;
+    background: transparent;
+    border-color: transparent;
+  }
+  .site-header.is-scrolled {
+    background: rgb(22 22 26 / 0.82);
+    border-color: var(--color-border);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .nav-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 44px;
+    padding: 0.5rem 0.625rem;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.9375rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--color-muted);
+    cursor: pointer;
+    list-style: none;
+    transition: color 180ms ease-out;
+  }
+  .nav-link::-webkit-details-marker {
+    display: none;
+  }
+  .nav-link:hover,
+  .nav-link[aria-current] {
+    color: var(--color-fg);
+  }
+  .nav-link[aria-current]::after {
+    content: '';
+    position: absolute;
+    inset-inline: 0.625rem;
+    bottom: 6px;
+    height: 1px;
+    background: var(--g-accent);
+  }
+  .nav-dropdown[open] > summary {
+    color: var(--color-fg);
+  }
+  .nav-dropdown-panel {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    min-width: 15rem;
+    padding: 0.5rem;
+    background: var(--color-surface-2);
+    box-shadow: 0 20px 40px rgb(0 0 0 / 0.5);
+  }
+  .nav-dropdown-link {
+    display: block;
+    padding: 0.625rem 0.75rem;
+    border-radius: var(--radius-control);
+    text-decoration: none;
+    color: var(--color-muted);
+  }
+  .nav-dropdown-link:hover,
+  .nav-dropdown-link[aria-current] {
+    background: var(--color-surface-1);
+    color: var(--color-fg);
+  }
+  .mobile-menu {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    overflow-y: auto;
+    background: var(--color-bg);
+  }
+  .mobile-menu[hidden] {
+    display: none;
+  }
+  .mobile-link {
+    display: block;
+    padding: 0.75rem 0;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.5rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+  .mobile-link[aria-current],
+  .mobile-sublink[aria-current] {
+    color: var(--color-teal);
+  }
+  .mobile-sublink {
+    display: block;
+    padding: 0.625rem 0;
+    color: var(--color-muted);
+    text-decoration: none;
+  }
+</style>
+
+<script>
+  const header = document.querySelector<HTMLElement>('[data-header]');
+  if (header) {
+    const onScroll = () => header.classList.toggle('is-scrolled', window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+  }
+
+  // Dropdown „Liga“: bei Klick außerhalb und mit Escape schließen
+  const dropdown = document.querySelector<HTMLDetailsElement>('[data-dropdown]');
+  if (dropdown) {
+    document.addEventListener('click', (e) => {
+      if (dropdown.open && !dropdown.contains(e.target as Node)) dropdown.open = false;
+    });
+    dropdown.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && dropdown.open) {
+        dropdown.open = false;
+        dropdown.querySelector('summary')?.focus();
+      }
+    });
+  }
+
+  // Mobiles Vollbild-Menü
+  const menu = document.querySelector<HTMLElement>('[data-menu]');
+  const openBtn = document.querySelector<HTMLButtonElement>('[data-menu-open]');
+  const closeBtn = document.querySelector<HTMLButtonElement>('[data-menu-close]');
+  if (menu && openBtn && closeBtn) {
+    const setOpen = (open: boolean) => {
+      menu.hidden = !open;
+      openBtn.setAttribute('aria-expanded', String(open));
+      document.documentElement.style.overflow = open ? 'hidden' : '';
+      if (open) closeBtn.focus();
+      else openBtn.focus();
+    };
+    openBtn.addEventListener('click', () => setOpen(true));
+    closeBtn.addEventListener('click', () => setOpen(false));
+    menu.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') setOpen(false);
+      if (e.key !== 'Tab') return;
+      // Fokus im Menü halten
+      const focusables = menu.querySelectorAll<HTMLElement>('a[href], button:not([disabled])');
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last?.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first?.focus();
+      }
+    });
+    window.matchMedia('(min-width: 1024px)').addEventListener('change', (e) => {
+      if (e.matches && !menu.hidden) setOpen(false);
+    });
+  }
+
+  // LIVE-Badge nur, wenn ein Kanal eingetragen ist und gerade gestreamt wird (Plan §8.2)
+  const liveBadge = document.querySelector<HTMLElement>('[data-live-badge]');
+  if (liveBadge) {
+    fetch('/api/live', { headers: { accept: 'application/json' } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { live?: boolean } | null) => {
+        if (data?.live) liveBadge.hidden = false;
+      })
+      .catch(() => {});
+  }
+</script>

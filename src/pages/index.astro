@@ -1,0 +1,12 @@
+---
+import { Font } from 'astro:assets';
+---
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>Test</title>
+    <Font cssVariable="--font-titillium" preload={[{ weight: 700, subset: 'latin' }]} />
+    <Font cssVariable="--font-inter" />
+  </head>
+  <body><h1 style="font-family: var(--font-titillium)">Hallo</h1></body>
+</html>

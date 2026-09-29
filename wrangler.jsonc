@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "liga-web",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    // jede Minute: Twitch-Live-Status, geplante News, gebündelter Rebuild
+    // täglich 03:17 UTC: Supabase-Keep-alive, Löschfristen (Plan §6.7)
+    "crons": ["* * * * *", "17 3 * * *"]
+  }
+}

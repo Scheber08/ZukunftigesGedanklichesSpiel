@@ -1,0 +1,164 @@
+---
+/**
+ * Seitenweite Skripte: Consent-Banner + GA4 (nur nach Einwilligung, Plan §8.3),
+ * Event-Tracking über data-track und das einmalige Einblenden beim Scrollen (§3.6).
+ */
+import { t, type Lang } from '~/i18n';
+import { url } from '~/i18n';
+import { safeJson } from '~/lib/util/html';
+
+interface Props {
+  lang: Lang;
+  gaId: string | null;
+}
+const { lang, gaId } = Astro.props;
+
+const consentTexts = {
+  lang,
+  privacyUrl: url(lang, 'privacy'),
+  title: t(lang, 'consent.title'),
+  description: t(lang, 'consent.description'),
+  acceptAll: t(lang, 'consent.acceptAll'),
+  rejectAll: t(lang, 'consent.rejectAll'),
+  settings: t(lang, 'consent.settings'),
+  save: t(lang, 'consent.save'),
+  close: t(lang, 'consent.close'),
+  necessaryTitle: t(lang, 'consent.necessary.title'),
+  necessaryDescription: t(lang, 'consent.necessary.description'),
+  analyticsTitle: t(lang, 'consent.analytics.title'),
+  analyticsDescription: t(lang, 'consent.analytics.description'),
+  privacyLink: t(lang, 'consent.privacyLink'),
+};
+---
+
+{gaId && <script type="application/json" id="consent-config" set:html={safeJson({ gaId, ...consentTexts })} />}
+
+<script>
+  type ConsentConfig = {
+    gaId: string;
+    lang: 'de' | 'en';
+    privacyUrl: string;
+    title: string;
+    description: string;
+    acceptAll: string;
+    rejectAll: string;
+    settings: string;
+    save: string;
+    close: string;
+    necessaryTitle: string;
+    necessaryDescription: string;
+    analyticsTitle: string;
+    analyticsDescription: string;
+    privacyLink: string;
+  };
+
+  type Gtag = (...args: unknown[]) => void;
+  const w = window as unknown as { dataLayer?: unknown[]; gtag?: Gtag; ligaTrack?: (name: string, params?: Record<string, unknown>) => void };
+
+  /** Ereignis an GA senden – nur wenn GA nach Einwilligung geladen wurde. */
+  w.ligaTrack = (name, params) => {
+    if (typeof w.gtag === 'function') w.gtag('event', name, params ?? {});
+  };
+  document.addEventListener('click', (e) => {
+    const el = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-track]');
+    if (el?.dataset.track) w.ligaTrack?.(el.dataset.track);
+  });
+
+  function loadGa(id: string) {
+    if (typeof w.gtag === 'function') return;
+    w.dataLayer = w.dataLayer ?? [];
+    w.gtag = function gtag() {
+      // eslint-disable-next-line prefer-rest-params
+      w.dataLayer!.push(arguments);
+    };
+    w.gtag('consent', 'default', {
+      analytics_storage: 'granted',
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+    });
+    w.gtag('js', new Date());
+    w.gtag('config', id, { allow_google_signals: false, allow_ad_personalization_signals: false });
+    const s = document.createElement('script');
+    s.async = true;
+    s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`;
+    document.head.appendChild(s);
+  }
+
+  const configEl = document.getElementById('consent-config');
+  if (configEl?.textContent) {
+    const cfg = JSON.parse(configEl.textContent) as ConsentConfig;
+    Promise.all([import('vanilla-cookieconsent'), import('vanilla-cookieconsent/dist/cookieconsent.css')]).then(([cc]) => {
+      cc.run({
+        guiOptions: {
+          consentModal: { layout: 'box', position: 'bottom left', equalWeightButtons: true, flipButtons: false },
+          preferencesModal: { layout: 'box', equalWeightButtons: true },
+        },
+        categories: {
+          necessary: { enabled: true, readOnly: true },
+          analytics: { autoClear: { cookies: [{ name: /^_ga/ }] } },
+        },
+        onConsent: () => {
+          if (cc.acceptedCategory('analytics')) loadGa(cfg.gaId);
+        },
+        onChange: () => {
+          if (cc.acceptedCategory('analytics')) loadGa(cfg.gaId);
+          else if (typeof w.gtag === 'function') window.location.reload();
+        },
+        language: {
+          default: cfg.lang,
+          translations: {
+            [cfg.lang]: {
+              consentModal: {
+                title: cfg.title,
+                description: cfg.description,
+                acceptAllBtn: cfg.acceptAll,
+                acceptNecessaryBtn: cfg.rejectAll,
+                showPreferencesBtn: cfg.settings,
+                footer: `<a href="${cfg.privacyUrl}">${cfg.privacyLink}</a>`,
+              },
+              preferencesModal: {
+                title: cfg.title,
+                acceptAllBtn: cfg.acceptAll,
+                acceptNecessaryBtn: cfg.rejectAll,
+                savePreferencesBtn: cfg.save,
+                closeIconLabel: cfg.close,
+                sections: [
+                  { description: cfg.description },
+                  { title: cfg.necessaryTitle, description: cfg.necessaryDescription, linkedCategory: 'necessary' },
+                  { title: cfg.analyticsTitle, description: cfg.analyticsDescription, linkedCategory: 'analytics' },
+                ],
+              },
+            },
+          },
+        },
+      });
+    });
+  } else {
+    // Ohne GA gibt es keine optionalen Cookies – der Footer-Button hat dann nichts zu tun.
+    document.querySelectorAll<HTMLElement>('[data-cc="show-preferencesModal"]').forEach((el) => {
+      el.closest('li')?.remove();
+    });
+  }
+
+  // Einblenden beim Scrollen: nur Elemente unterhalb des sichtbaren Bereichs, einmalig
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const revealables = document.querySelectorAll<HTMLElement>('[data-reveal]');
+  if (!reduce && 'IntersectionObserver' in window && revealables.length > 0) {
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          entry.target.classList.add('is-visible');
+          io.unobserve(entry.target);
+        }
+      },
+      { rootMargin: '0px 0px -8% 0px' },
+    );
+    document.documentElement.classList.add('js');
+    revealables.forEach((el) => {
+      if (el.getBoundingClientRect().top < window.innerHeight) el.classList.add('is-visible');
+      else io.observe(el);
+    });
+  }
+</script>

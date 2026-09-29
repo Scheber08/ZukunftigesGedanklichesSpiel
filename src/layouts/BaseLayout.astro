@@ -1,0 +1,120 @@
+---
+/**
+ * Grundlayout aller öffentlichen Seiten: Kopf (SEO, Schriften, Icons), Header, Inhalt, Footer.
+ */
+import { Font } from 'astro:assets';
+import '~/styles/global.css';
+import Footer from '~/components/layout/Footer.astro';
+import Header from '~/components/layout/Header.astro';
+import SeoHead from '~/components/layout/SeoHead.astro';
+import SiteScripts from '~/components/layout/SiteScripts.astro';
+import { pageTitle, SITE } from '~/config/site';
+import { alternates as routeAlternates, useT, type Alternates, type Lang } from '~/i18n';
+import { env, isDemoMode } from '~/lib/server/env';
+import { loadPublicSettings } from '~/lib/server/league';
+
+interface Props {
+  lang: Lang;
+  /** Seitentitel ohne Liganame (wird ergänzt: „Seite · [LIGANAME]“) */
+  title?: string;
+  description?: string;
+  /** Pfade der Seite in beiden Sprachen (Sprachumschalter + hreflang) */
+  alternates?: Alternates;
+  ogImage?: string;
+  ogImageAlt?: string;
+  ogType?: 'website' | 'article';
+  noindex?: boolean;
+  jsonLd?: Record<string, unknown> | Array<Record<string, unknown>>;
+  publishedTime?: string;
+  modifiedTime?: string;
+  /** Header transparent über dem Hero (nur Startseite) */
+  heroHeader?: boolean;
+}
+
+const {
+  lang,
+  title,
+  description,
+  alternates = routeAlternates('home'),
+  ogImage,
+  ogImageAlt,
+  ogType,
+  noindex = false,
+  jsonLd,
+  publishedTime,
+  modifiedTime,
+  heroHeader = false,
+} = Astro.props;
+
+const t = useT(lang);
+const settings = await loadPublicSettings();
+const demo = isDemoMode();
+const robotsNoindex = noindex || demo || env.noindex;
+---
+
+<!doctype html>
+<html lang={lang} dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content={SITE.themeColor} />
+    <meta name="color-scheme" content="dark" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="alternate" type="application/rss+xml" title={`${SITE.name} – News`} href={lang === 'de' ? '/news/rss.xml' : '/en/news/rss.xml'} />
+    <Font cssVariable="--font-titillium" preload={[{ weight: 700, subset: 'latin' }]} />
+    <Font cssVariable="--font-inter" />
+    <SeoHead
+      lang={lang}
+      title={pageTitle(title)}
+      description={description ?? t('meta.defaultDescription')}
+      alternates={alternates}
+      ogImage={ogImage}
+      ogImageAlt={ogImageAlt}
+      ogType={ogType}
+      noindex={robotsNoindex}
+      jsonLd={jsonLd}
+      publishedTime={publishedTime}
+      modifiedTime={modifiedTime}
+    />
+    <slot name="head" />
+  </head>
+  <body class="flex min-h-dvh flex-col">
+    <a href="#main" class="skip-link">{t('a11y.skipToContent')}</a>
+    {
+      demo && (
+        <div class="border-b border-warning/40 bg-surface-2 px-4 py-1.5 text-center text-xs text-warning" role="note">
+          {t('meta.demoNotice')}
+        </div>
+      )
+    }
+    <Header lang={lang} alternates={alternates} settings={settings} transparent={heroHeader} />
+    <main id="main" tabindex="-1" class="flex-1 focus:outline-none">
+      <slot />
+    </main>
+    <Footer lang={lang} settings={settings} />
+    <SiteScripts lang={lang} gaId={settings.ga_measurement_id} />
+  </body>
+</html>
+
+<style>
+  .skip-link {
+    position: absolute;
+    left: 1rem;
+    top: -100px;
+    z-index: 100;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-control);
+    background: var(--g-accent);
+    color: #000;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .skip-link:focus {
+    top: 1rem;
+  }
+</style>
