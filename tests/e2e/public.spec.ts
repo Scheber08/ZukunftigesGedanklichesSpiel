@@ -284,4 +284,46 @@ test.describe('Stewards-Register', () => {
     await expect(clip).toBeVisible();
     await expect(clip).toHaveAttribute('required', '');
   });
+
+  test('Vorfall melden (Demo-Modus): Meldung geht ein, fremde Clip-Adressen werden abgelehnt', async ({ page }) => {
+    await page.goto('/stewards/melden');
+    const chooser = page.getByRole('group', { name: 'Zu welcher Runde möchtest du melden?' });
+    if (await chooser.isVisible()) {
+      await chooser.getByRole('radio').first().check();
+      await page.getByRole('button', { name: 'Weiter' }).click();
+    }
+    await waitForIslands(page);
+    const loadedAt = Date.now();
+
+    /** Erste echte Auswahl (ohne Platzhalter) eines Auswahlfelds. */
+    const firstValue = async (label: string) => {
+      const select = page.getByRole('combobox', { name: label, exact: true });
+      const values = await select.evaluate((el) => [...(el as HTMLSelectElement).options].map((o) => o.value));
+      const value = values.find((v) => v !== '');
+      if (!value) throw new Error(`Keine Auswahl in „${label}“: ${values.join(', ')}`);
+      await select.selectOption(value);
+      return value;
+    };
+    await firstValue('Session');
+    const reporter = await firstValue('Dein Gamertag');
+    const involved = page.getByRole('group', { name: /Beteiligte Fahrer/ }).locator(`input[type=checkbox]:not([value="${reporter}"])`).first();
+    await involved.check();
+    await page.getByLabel('Kurve oder Streckenabschnitt').fill('Kurve 1');
+    await page.getByLabel('Was ist passiert?').fill('E2E-Test: Beim Anbremsen von hinten getroffen und in den Kies gedrückt.');
+    await page.getByLabel('Zeitstempel im Clip').fill('01:23');
+    await page.getByLabel('Discord-Name für Rückfragen').fill('e2e_reporter');
+
+    // Nur Clips von YouTube, Twitch & Co. – beliebige Adressen lehnt der Server ab
+    await page.getByRole('textbox', { name: /^Clip-Link/ }).fill('https://evil.example/clip.mp4');
+    await page.waitForTimeout(Math.max(0, 4_000 - (Date.now() - loadedAt)));
+    await page.getByRole('button', { name: 'Meldung absenden' }).click();
+    await expect(page.getByRole('heading', { name: 'Danke – deine Meldung ist eingegangen' })).toHaveCount(0);
+    await expect(page.getByRole('textbox', { name: /^Clip-Link/ })).toHaveAttribute('aria-invalid', 'true');
+
+    await page.getByRole('textbox', { name: /^Clip-Link/ }).fill('https://www.youtube.com/watch?v=e2e-test');
+    await page.waitForTimeout(4_000);
+    await page.getByRole('button', { name: 'Meldung absenden' }).click();
+    await expect(page.getByRole('heading', { name: 'Danke – deine Meldung ist eingegangen' })).toBeVisible();
+    await expectSingleH1(page);
+  });
 });

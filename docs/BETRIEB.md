@@ -306,7 +306,7 @@ schreiben kann.
 | **Abhängigkeiten** | Dependabot | siehe unten |
 | **Domain** | Registrar | Auto-Verlängerung an, Zahlungsmittel gültig, Erinnerung 30 Tage vor Ablauf |
 | **Ablaufende Tokens** | Kalender | `GITHUB_DISPATCH_TOKEN` (fine-grained, läuft ab!), ggf. Cloudflare-API-Token, R2-Token |
-| **Performance / Barrierefreiheit** | Lighthouse und axe in der CI | Job „Lighthouse-Budget“ (warnt nur) und E2E mit axe |
+| **Performance / Barrierefreiheit** | Lighthouse und axe in der CI | Job „Lighthouse-Budget“ (warnt nur; verletzte Budgets stehen als Warnung mit Seite, Messwert und Grenze in der Übersicht des CI-Laufs) und E2E mit axe |
 
 Status-Seiten der Dienste: https://www.cloudflarestatus.com · https://status.supabase.com ·
 https://discordstatus.com · https://www.githubstatus.com

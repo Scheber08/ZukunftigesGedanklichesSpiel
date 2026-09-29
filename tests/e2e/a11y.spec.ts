@@ -89,6 +89,35 @@ test.describe('axe – Admin-Bereich', () => {
 });
 
 test.describe('Tastatur', () => {
+  // Plan §10: Tastaturbedienung auch im Grid-Builder – ohne Drag & Drop, nur Tab/Enter/Leertaste.
+  // R12 (Runde 20) ist geplant; es wird nichts gespeichert.
+  test('Grid-Builder ohne Maus: Cockpit wählen, Fahrer einsetzen, Escape hebt Auswahl auf', async ({ page }) => {
+    await demoLogin(page, 'Admin', '/admin/runden/20/grid');
+    await waitForIslands(page);
+    const status = page.locator('.sr-only[role="status"]').first();
+
+    // Der Knopf heißt nach der Auswahl „Gewählt“ – deshalb über seine Klasse festhalten
+    const seat = page.locator('button.choose').first();
+    await expect(seat).toHaveAccessibleName(/^Cockpit wählen/);
+    await seat.focus();
+    await page.keyboard.press('Enter');
+    await expect(seat).toHaveAttribute('aria-pressed', 'true');
+    await expect(seat).toHaveAccessibleName(/^Gewählt/);
+    await expect(status).toContainText('gewählt – jetzt einen Fahrer');
+    await page.keyboard.press('Escape');
+    await expect(status).toHaveText('Auswahl aufgehoben.');
+    await expect(seat).toHaveAttribute('aria-pressed', 'false');
+
+    await seat.focus();
+    await page.keyboard.press('Enter');
+    const driver = page.locator('.gb-pool .pool-driver:visible:not([disabled])').first();
+    await expect(driver).toBeVisible();
+    const gamertag = ((await driver.locator('.gamertag').textContent()) ?? '').trim();
+    await driver.focus();
+    await page.keyboard.press('Space');
+    await expect(status).toContainText(`${gamertag} sitzt jetzt in`);
+  });
+
   test('sichtbarer Fokus auf Links und Buttons', async ({ page }) => {
     await page.goto('/');
     await page.keyboard.press('Tab'); // Skip-Link

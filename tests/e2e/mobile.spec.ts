@@ -58,6 +58,25 @@ test.describe('320 px ohne horizontales Scrollen', () => {
   });
 });
 
+// Besucher außerhalb Deutschlands sehen zusätzlich ihre Ortszeit („deine Zeit: …“) – die längeren
+// Zeitangaben dürfen am Handy nichts sprengen. (Alle anderen Tests laufen in Europe/Berlin.)
+test.describe('Besucher in einer anderen Zeitzone', () => {
+  test.use({ timezoneId: 'America/New_York' });
+
+  for (const [path, hint] of [
+    ['/kalender', 'deine Zeit'],
+    ['/rennen/2/12', 'deine Zeit'],
+    ['/en/calendar', 'your time'],
+  ] as const) {
+    test(`${path} zeigt die Ortszeit ohne horizontales Scrollen`, async ({ page }) => {
+      await page.goto(path);
+      await waitForIslands(page);
+      await expect(page.locator('.localtime-hint').first()).toContainText(hint);
+      await expectNoHorizontalScroll(page);
+    });
+  }
+});
+
 test.describe('Mobiles Menü', () => {
   test('öffnet als Overlay mit Navigation und schließt wieder', async ({ page }) => {
     await page.goto('/');
