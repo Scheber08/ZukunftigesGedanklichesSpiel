@@ -6,7 +6,8 @@ import TeamName from '~/components/ui/TeamName.astro';
 import { useT, type Lang } from '~/i18n';
 import type { SeasonRow } from '~/lib/db/types';
 import type { League } from '~/lib/league/league';
-import { seasonName, type SeasonChampions } from '~/lib/standings/page';
+import type { SeasonChampions } from '~/lib/standings/page';
+import { seasonLabel } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -26,7 +27,7 @@ const headingId = `champions-${season.id}`;
   <div class="glow-bg" aria-hidden="true"></div>
   <h2 id={headingId} class="flex items-center gap-2 text-xl uppercase">
     <Trophy size={22} aria-hidden="true" class="text-green" />
-    {t('standingsPage.champion.title', { season: seasonName(season, lang) })}
+    {t('standingsPage.champion.title', { season: seasonLabel(season, lang) })}
   </h2>
   <dl class="mt-5 grid gap-5 sm:grid-cols-2">
     {

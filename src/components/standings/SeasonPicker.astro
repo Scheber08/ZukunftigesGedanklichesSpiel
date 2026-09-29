@@ -6,7 +6,7 @@
 import { url, useT, type Lang } from '~/i18n';
 import type { Id } from '~/lib/db/types';
 import type { League } from '~/lib/league/league';
-import { seasonName } from '~/lib/standings/page';
+import { seasonLabel } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -35,7 +35,7 @@ const items = league.archiveSeasons.map((s) => ({
       <div class="segmented flex-wrap">
         {items.map((item) => (
           <a href={item.href} aria-current={item.active ? 'page' : undefined}>
-            {seasonName(item.season, lang)}
+            {seasonLabel(item.season, lang)}
             {item.season.status === 'active' && <span class="running">· {t('standingsPage.seasons.running')}</span>}
           </a>
         ))}

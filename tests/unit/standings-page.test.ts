@@ -1,23 +1,25 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { useT } from '~/i18n';
 import { MemoryStore } from '~/lib/db/memory-store';
+import type { RulesVersionRow } from '~/lib/db/types';
 import type { DriverStanding, TeamStanding } from '~/lib/domain/standings';
 import { League, LEAGUE_TABLES, type LeagueDataset } from '~/lib/league/league';
 import { demoDataset } from '~/lib/seed/demo';
-import { BOM, csvCell, csvDocument, csvFileName, csvRow, driverStandingsCsv } from '~/lib/standings/csv';
+import { BOM, csvCell, csvDocument, csvFileName, csvHref, csvResponse, csvRow, driverStandingsCsv } from '~/lib/standings/csv';
 import {
   movements,
   roundNeighbours,
   ruleNumber,
   schemeSummary,
   seasonChampions,
-  seasonName,
   seasonStandingsPaths,
   standingsAfterPaths,
   standingsNumber,
   standingsNumbersAt,
   TAB_ANCHORS,
+  tieRuleLink,
 } from '~/lib/standings/page';
+import { seasonLabel } from '~/lib/view';
 
 const tally = { wins: 0, podiums: 0, poles: 0, fastestLaps: 0, starts: 0, dnfs: 0, bestFinish: null, raceFinishes: [], sprintFinishes: [] };
 const ds = (driverId: number, position: number, points: number): DriverStanding => ({
@@ -71,10 +73,17 @@ describe('CSV-Felder', () => {
     expect(doc.slice(1)).toBe('x;y\r\n1;2\r\n');
   });
 
-  it('erzeugt sichere Dateinamen', () => {
+  it('erzeugt sichere Dateinamen je Sprache', () => {
     expect(csvFileName('2')).toBe('wertung-saison-2.csv');
     expect(csvFileName('Saison 3/../x')).toBe('wertung-saison-saison-3-x.csv');
     expect(csvFileName('')).toBe('wertung-saison-saison.csv');
+    expect(csvFileName('2', 'en')).toBe('standings-season-2.csv');
+    expect(csvFileName('', 'en')).toBe('standings-season-season.csv');
+  });
+
+  it('verlinkt je Sprache die passende CSV-Datei', () => {
+    expect(csvHref('de', '2')).toBe('/saison/2/wertung.csv');
+    expect(csvHref('en', '2')).toBe('/en/season/2/standings.csv');
   });
 });
 
@@ -104,11 +113,11 @@ describe('Positionsveränderung', () => {
 });
 
 describe('Saisons und Punkteschema', () => {
-  it('übersetzt das Standard-Namensmuster, eigene Namen bleiben', () => {
-    expect(seasonName({ number: 2, name: 'Saison 2' }, 'en')).toBe('Season 2');
-    expect(seasonName({ number: 2, name: 'Saison 2' }, 'de')).toBe('Saison 2');
-    expect(seasonName({ number: 3, name: '' }, 'de')).toBe('Saison 3');
-    expect(seasonName({ number: 4, name: 'Winter Cup 2027' }, 'en')).toBe('Winter Cup 2027');
+  it('nutzt den zentralen Saisonnamen (Standardmuster übersetzt, eigene Namen bleiben)', () => {
+    expect(seasonLabel({ number: 2, name: 'Saison 2' }, 'en')).toBe('Season 2');
+    expect(seasonLabel({ number: 2, name: 'Saison 2' }, 'de')).toBe('Saison 2');
+    expect(seasonLabel({ number: 3, name: '' }, 'de')).toBe('Saison 3');
+    expect(seasonLabel({ number: 4, name: 'Winter Cup 2027' }, 'en')).toBe('Winter Cup 2027');
   });
 
   it('fasst das Punkteschema zusammen (inkl. Bedingung für die schnellste Runde)', () => {
@@ -143,6 +152,32 @@ describe('Saisons und Punkteschema', () => {
     expect(ruleNumber(sections, 2)).toBe('§1.7');
     expect(ruleNumber(sections, 3)).toBeNull();
     expect(ruleNumber(sections, undefined)).toBeNull();
+  });
+
+  it('verlinkt die Gleichstands-Regel in der Fassung der Saison', () => {
+    const v1 = { id: 1, version: '1.0' } as RulesVersionRow;
+    const v2 = { id: 2, version: '2.0' } as RulesVersionRow;
+    const league = {
+      rulesVersion: v2,
+      rulesVersions: [v2, v1],
+      data: {
+        rules_sections: [
+          { version_id: 1, anchor: 'p1-6', number: '§1.6' },
+          { version_id: 2, anchor: 'p1-6', number: '§1.7' },
+        ],
+      },
+    } as unknown as Pick<League, 'rulesVersion' | 'rulesVersions' | 'data'>;
+    // Aktuelle Fassung → /liga/regelwerk
+    expect(tieRuleLink(league, 'de', { rules_version_id: 2 })).toEqual({ href: '/liga/regelwerk#p1-6', number: '§1.7' });
+    expect(tieRuleLink(league, 'en', undefined)).toEqual({ href: '/en/league/rules#p1-6', number: '§1.7' });
+    // Archiv-Saison mit älterer Fassung → versionierte Adresse und deren §-Nummer
+    expect(tieRuleLink(league, 'de', { rules_version_id: 1 })).toEqual({ href: '/liga/regelwerk/v/1.0#p1-6', number: '§1.6' });
+    expect(tieRuleLink(league, 'en', { rules_version_id: 1 })).toEqual({ href: '/en/league/rules/v/1.0#p1-6', number: '§1.6' });
+    // Unbekannte/unveröffentlichte Fassung → gültige Fassung
+    expect(tieRuleLink(league, 'de', { rules_version_id: 99 }).number).toBe('§1.7');
+    // Abschnitt fehlt → Regelwerk ohne Anker
+    const bare = { ...league, data: { rules_sections: [] } } as unknown as typeof league;
+    expect(tieRuleLink(bare, 'de', undefined)).toEqual({ href: '/liga/regelwerk', number: null });
   });
 });
 
@@ -213,13 +248,31 @@ describe('Wertungsseiten mit Demo-Daten', () => {
     expect(csv.charCodeAt(0)).toBe(0xfeff);
     const lines = csv.slice(1).split('\r\n');
     expect(lines.at(-1)).toBe('');
-    expect(lines[0]).toBe('Position;Nummer;Gamertag;Team;Punkte;Siege;Podien;Poles;Schnellste Runden');
+    expect(lines[0]).toBe('Position;Nummer;Gamertag;Team;Punkte;Rückstand;Siege;Podien;Poles;Schnellste Runden;Reserve');
     const standings = league.driverStandings(season.id);
     expect(lines).toHaveLength(standings.length + 2);
-    const firstRow = lines[1]!.split(';');
-    expect(firstRow).toHaveLength(9);
-    expect(firstRow[0]).toBe(String(standings[0]!.position));
-    expect(firstRow[4]).toBe(String(standings[0]!.points));
+    const rows = lines.slice(1, -1).map((l) => l.split(';'));
+    expect(rows.every((r) => r.length === 11)).toBe(true);
+    expect(rows[0]![0]).toBe(String(standings[0]!.position));
+    expect(rows[0]![4]).toBe(String(standings[0]!.points));
+    // Rückstand als positive Zahl (auf der Seite „−29“), der Führende hat 0
+    expect(rows[0]![5]).toBe('0');
+    rows.forEach((r, i) => expect(r[5]).toBe(String(standings[i]!.gapToLeader)));
+    // Reserve-Kennzeichen wie auf der Seite
+    expect(rows.some((r) => r[10] === 'ja')).toBe(true);
+  });
+
+  it('exportiert auf Englisch mit englischen Spaltenköpfen und Dateinamen', async () => {
+    const season = league.archiveSeasons[0]!;
+    const csv = driverStandingsCsv(league, season.id, useT('en'), 'en');
+    expect(csv.slice(1).split('\r\n')[0]).toBe('Position;Number;Gamertag;Team;Points;Points behind;Wins;Podiums;Poles;Fastest laps;Reserve');
+    const res = csvResponse(league, season.slug, 'en');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('text/csv; charset=utf-8');
+    expect(res.headers.get('Content-Disposition')).toBe(`attachment; filename="standings-season-${season.slug}.csv"`);
+    const body = new Uint8Array(await res.arrayBuffer());
+    expect([...body.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    expect(csvResponse(league, 'gibt-es-nicht', 'de').status).toBe(404);
   });
 
   it('nimmt Startnummern im Archiv zum Stand der letzten Runde – auf der Seite wie im CSV', () => {
@@ -241,6 +294,22 @@ describe('Wertungsseiten mit Demo-Daten', () => {
     const historic = standings.filter((s) => league.numberOf(s.driverId) == null && league.numberAt(s.driverId, at!) != null);
     expect(historic.length).toBeGreaterThan(0);
     for (const s of historic) expect(standingsNumber(league, s.driverId, at)).toBe(league.numberAt(s.driverId, at!));
+    // Gewechselte Nummern: im Archiv die damalige
+    const changed = standings.filter((s) => league.numberOf(s.driverId) != null && league.numberAt(s.driverId, at!) !== league.numberOf(s.driverId));
+    expect(changed.length).toBeGreaterThan(0);
+    for (const s of changed) expect(standingsNumber(league, s.driverId, at)).toBe(league.numberAt(s.driverId, at!));
+  });
+
+  it('greift mit Stichtag nie auf eine später vergebene Nummer zurück (wie DriverStandingsTable)', () => {
+    const before = new Date('2026-04-01T00:00:00Z');
+    const late = league.drivers.find((d) => {
+      const first = league.numberHistory(d.id)[0];
+      return first != null && new Date(first.valid_from) > before;
+    });
+    expect(late).toBeDefined();
+    expect(league.numberOf(late!.id)).not.toBeNull();
+    expect(standingsNumber(league, late!.id, before)).toBeNull();
+    expect(standingsNumber(league, late!.id, null)).toBe(league.numberOf(late!.id));
   });
 
   it('hat für jede Sprache eigene Tab-Anker', () => {

@@ -1,22 +1,25 @@
 ---
 /**
  * Erklärung des Gleichstands (Countback, Plan §4.4) mit Link auf die Regel im Regelwerk.
- * Die §-Nummer kommt aus dem gültigen Regelwerk, damit Text und Regel nie auseinanderlaufen.
+ * Die §-Nummer kommt aus der Regelwerk-Fassung der Saison (sonst der gültigen), damit Text
+ * und Regel nie auseinanderlaufen – auch im Archiv.
  */
 import Scale from '@lucide/astro/icons/scale';
-import { url, useT, type Lang } from '~/i18n';
+import { useT, type Lang } from '~/i18n';
+import type { SeasonRow } from '~/lib/db/types';
 import type { League } from '~/lib/league/league';
-import { ruleNumber, TIE_RULE_ANCHOR } from '~/lib/standings/page';
+import { tieRuleLink } from '~/lib/standings/page';
 
 interface Props {
   lang: Lang;
   league: League;
+  /** Saison der Wertung – bestimmt die Regelwerk-Fassung */
+  season?: SeasonRow;
   headingId?: string;
 }
-const { lang, league, headingId = 'tie-break' } = Astro.props;
+const { lang, league, season, headingId = 'tie-break' } = Astro.props;
 const t = useT(lang);
-const ref = ruleNumber(league.data.rules_sections, league.rulesVersion?.id);
-const href = `${url(lang, 'rules')}#${TIE_RULE_ANCHOR}`;
+const { href, number: ref } = tieRuleLink(league, lang, season);
 ---
 
 <section class="card p-5 md:p-6" aria-labelledby={headingId}>

@@ -4,7 +4,7 @@
  * sie bekommen die `League` als Parameter und sind in tests/unit/standings-*.test.ts getestet.
  */
 
-import type { Lang } from '~/i18n/routes';
+import { url, type Lang } from '~/i18n/routes';
 import type { AwardRow, Id, PointsSchemeRow, RoundRow, RulesSectionRow, SeasonRow } from '~/lib/db/types';
 import type { DriverStanding, TeamStanding } from '~/lib/domain/standings';
 import type { League } from '~/lib/league/league';
@@ -26,27 +26,15 @@ export const TAB_ANCHORS: Record<Lang, Record<StandingsTab, string>> = {
 // Saisons
 // ---------------------------------------------------------------------------
 
-/**
- * Anzeigename einer Saison. Der Name in der DB ist meist deutsch („Saison 2“) –
- * für die englische Seite wird das Standardmuster übersetzt, eigene Namen bleiben.
- */
-export function seasonName(season: Pick<SeasonRow, 'number' | 'name'>, lang: Lang): string {
-  const name = season.name?.trim() ?? '';
-  if (name === '' || /^(saison|season)\s+\d+$/i.test(name)) {
-    return lang === 'de' ? `Saison ${season.number}` : `Season ${season.number}`;
-  }
-  return name;
-}
-
 /** Saison per Slug – ohne Slug die aktuelle Saison. */
 export function resolveSeason(league: League, seasonSlug?: string): SeasonRow | undefined {
   return seasonSlug ? league.seasonBySlug(seasonSlug) : league.currentSeason;
 }
 
 /**
- * Stichtag für Startnummern in der Gesamtwertung: Bei abgeschlossenen Saisons gilt die
- * Nummer zum Start der letzten gewerteten Runde (Archiv-genau, auch für ehemalige Fahrer),
- * sonst die aktuelle Nummer (null). Seite und CSV nutzen dieselbe Regel.
+ * Stichtag für Startnummern und Reserve-Kennzeichen in der Gesamtwertung: Bei abgeschlossenen
+ * Saisons gilt der Start der letzten gewerteten Runde (Archiv-genau, auch für ehemalige Fahrer),
+ * sonst die aktuelle Nummer (null). Seite (`DriverStandingsTable numberAt`) und CSV nutzen dieselbe Regel.
  */
 export function standingsNumbersAt(league: League, season: Pick<SeasonRow, 'id' | 'status'>): Date | null {
   if (season.status !== 'finished') return null;
@@ -54,9 +42,12 @@ export function standingsNumbersAt(league: League, season: Pick<SeasonRow, 'id' 
   return last ? new Date(last.start_utc) : null;
 }
 
-/** Startnummer eines Fahrers in der Wertung – zum Stichtag, sonst die aktuelle. */
+/**
+ * Startnummer eines Fahrers in der Wertung – mit Stichtag die damals gültige (ohne Rückgriff auf
+ * eine spätere Nummer, wie `DriverStandingsTable`), sonst die aktuelle.
+ */
 export function standingsNumber(league: League, driverId: Id, at: Date | null): number | null {
-  return (at ? league.numberAt(driverId, at) : null) ?? league.numberOf(driverId);
+  return at ? league.numberAt(driverId, at) : league.numberOf(driverId);
 }
 
 /** getStaticPaths für /saison/[season]/wertung (+ CSV): alle Saisons mit Ergebnissen. */
@@ -192,6 +183,23 @@ export function schemeSummary(scheme: Pick<
 
 /** Anker der Gleichstands-Regel im Regelwerk. */
 export const TIE_RULE_ANCHOR = 'p1-6';
+
+/**
+ * Link auf die Gleichstands-Regel in der Regelwerk-Fassung, die für die Saison galt (veröffentlicht
+ * oder archiviert), sonst in der gültigen Fassung. Die gültige Fassung liegt unter /liga/regelwerk,
+ * ältere unter /liga/regelwerk/v/[version]. Fehlt der Abschnitt, führt der Link zum Regelwerk ohne Anker.
+ */
+export function tieRuleLink(
+  league: Pick<League, 'rulesVersion' | 'rulesVersions' | 'data'>,
+  lang: Lang,
+  season?: Pick<SeasonRow, 'rules_version_id'>,
+): { href: string; number: string | null } {
+  const own = season?.rules_version_id != null ? league.rulesVersions.find((v) => v.id === season.rules_version_id) : undefined;
+  const version = own ?? league.rulesVersion;
+  const base = !version || version.id === league.rulesVersion?.id ? url(lang, 'rules') : url(lang, 'rulesVersion', { version: version.version });
+  const number = ruleNumber(league.data.rules_sections, version?.id);
+  return { href: number != null ? `${base}#${TIE_RULE_ANCHOR}` : base, number };
+}
 
 /** §-Nummer der Regel aus dem gültigen Regelwerk (z. B. „§1.6“), damit Text und Regelwerk nie auseinanderlaufen. */
 export function ruleNumber(

@@ -11,7 +11,6 @@ import ChampionCard from '~/components/standings/ChampionCard.astro';
 import PointsSchemeCard from '~/components/standings/PointsSchemeCard.astro';
 import RoundPicker from '~/components/standings/RoundPicker.astro';
 import SeasonPicker from '~/components/standings/SeasonPicker.astro';
-import SnapshotDriverTable from '~/components/standings/SnapshotDriverTable.astro';
 import StandingsTabs from '~/components/standings/StandingsTabs.astro';
 import TieBreakNote from '~/components/standings/TieBreakNote.astro';
 import DriverStandingsTable from '~/components/sport/DriverStandingsTable.astro';
@@ -29,9 +28,9 @@ import ShareButton from '~/components/ui/ShareButton.astro';
 import { alternates, url, useT, type Lang } from '~/i18n';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { loadLeague } from '~/lib/server/league';
-import { csvFileName } from '~/lib/standings/csv';
-import { resolveSeason, seasonChampions, seasonName, standingsNumbersAt, TAB_ANCHORS } from '~/lib/standings/page';
-import { breadcrumbJsonLd, roundLabel } from '~/lib/view';
+import { csvFileName, csvHref } from '~/lib/standings/csv';
+import { resolveSeason, seasonChampions, standingsNumbersAt, TAB_ANCHORS } from '~/lib/standings/page';
+import { breadcrumbJsonLd, roundLabel, seasonLabel } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -49,7 +48,7 @@ const selfHref = pageAlternates[lang];
 const site = Astro.site ?? new URL(Astro.url.origin);
 
 // ------------------------------------------------------------ Daten der Saison
-const name = season ? seasonName(season, lang) : '';
+const name = season ? seasonLabel(season, lang) : '';
 const drivers = season ? league.driverStandings(season.id) : [];
 const teams = season ? league.teamStandings(season.id) : [];
 const counted = season ? league.countedRounds(season.id) : [];
@@ -58,8 +57,8 @@ const lastRound = counted.at(-1);
 const lastLabel = lastRound ? roundLabel(lastRound, league.track(lastRound.track_id), lang) : '';
 const champions = season ? seasonChampions(season, league.awardsOf(season.id), drivers, teams) : null;
 const finished = season?.status === 'finished';
-// Abgeschlossene Saison: Startnummern/Reserve-Kennzeichen zum Stand der letzten Runde (wie im CSV)
-const numbersAt = season ? standingsNumbersAt(league, season) : null;
+// Abgeschlossene Saison: Startnummern/Reserve-Kennzeichen zum Stand der letzten gewerteten Runde (wie im CSV)
+const numbersAt = season ? (standingsNumbersAt(league, season) ?? undefined) : undefined;
 const anchors = TAB_ANCHORS[lang];
 
 const statusBadge = season
@@ -109,8 +108,8 @@ const updated = lastRound ? (lastRound.final_at ?? lastRound.provisional_at) : n
             <ShareButton lang={lang} class="min-h-11" />
             {drivers.length > 0 && (
               <a
-                href={url(lang, 'standingsCsv', { season: season.slug })}
-                download={csvFileName(season.slug)}
+                href={csvHref(lang, season.slug)}
+                download={csvFileName(season.slug, lang)}
                 class="btn btn-ghost btn-sm min-h-11 border border-border"
                 title={t('standingsPage.csv.hint')}
                 data-track="standings_csv"
@@ -205,11 +204,13 @@ const updated = lastRound ? (lastRound.final_at ?? lastRound.provisional_at) : n
           <!-- Fahrer -->
           <section id={anchors.drivers} class="tab-panel" data-tab-panel aria-labelledby="drivers-title">
             <SectionTitle id="drivers-title" title={t('standingsPage.drivers.title')} />
-            {numbersAt ? (
-              <SnapshotDriverTable lang={lang} league={league} standings={drivers} at={numbersAt} caption={t('standingsPage.drivers.caption', { season: name })} />
-            ) : (
-              <DriverStandingsTable lang={lang} league={league} standings={drivers} caption={t('standingsPage.drivers.caption', { season: name })} />
-            )}
+            <DriverStandingsTable
+              lang={lang}
+              league={league}
+              standings={drivers}
+              numberAt={numbersAt}
+              caption={t('standingsPage.drivers.caption', { season: name })}
+            />
             {drivers.length > 0 && <p class="mt-3 text-sm text-muted">{t('standingsPage.drivers.reserveNote')}</p>}
             {counted.length > 0 && drivers.length > 0 && (
               <div class="mt-10">
@@ -245,7 +246,7 @@ const updated = lastRound ? (lastRound.final_at ?? lastRound.provisional_at) : n
                 <Legend lang={lang} podium />
               </div>
             )}
-            <MatrixTable lang={lang} league={league} seasonId={season.id} />
+            <MatrixTable lang={lang} league={league} seasonId={season.id} caption={t('standingsPage.matrix.caption', { season: name })} />
           </section>
 
           <!-- Stand nach Runde X -->
@@ -260,7 +261,7 @@ const updated = lastRound ? (lastRound.final_at ?? lastRound.provisional_at) : n
             <SectionTitle id="rules-title" title={t('standingsPage.info.title')} />
             <div class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
               <PointsSchemeCard lang={lang} league={league} season={season} />
-              <TieBreakNote lang={lang} league={league} />
+              <TieBreakNote lang={lang} league={league} season={season} />
             </div>
           </section>
         </>
@@ -287,16 +288,6 @@ const updated = lastRound ? (lastRound.final_at ?? lastRound.provisional_at) : n
       overflow-wrap: anywhere;
       hyphens: auto;
     }
-  }
-
-  /* Touch-Ziele ≥ 44 px auch in den gemeinsamen Sport-Komponenten (Diagramm-Tabelle, Matrix-Umschalter) */
-  .standings-main :global(figure details > summary),
-  .standings-main :global(.matrix .segmented label) {
-    min-height: 44px;
-  }
-  .standings-main :global(figure details > summary) {
-    display: flex;
-    align-items: center;
   }
 
   /* Ohne JS stehen alle Panels untereinander – dann mit etwas mehr Luft */

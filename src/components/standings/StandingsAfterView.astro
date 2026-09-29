@@ -20,14 +20,8 @@ import { alternates, url, useT, type Lang } from '~/i18n';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { formatDateLong } from '~/lib/domain/time';
 import { loadLeague } from '~/lib/server/league';
-import {
-  driverPositions,
-  movements,
-  roundNeighbours,
-  seasonName,
-  teamPositions,
-} from '~/lib/standings/page';
-import { breadcrumbJsonLd, roundLabel } from '~/lib/view';
+import { driverPositions, movements, roundNeighbours, teamPositions } from '~/lib/standings/page';
+import { breadcrumbJsonLd, roundLabel, seasonLabel } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -43,7 +37,7 @@ const { previous, current, next } = season ? roundNeighbours(league, season.id, 
 const pageAlternates = alternates('standingsAfter', { season: seasonSlug, round: roundNumber });
 const site = Astro.site ?? new URL(Astro.url.origin);
 
-const name = season ? seasonName(season, lang) : '';
+const name = season ? seasonLabel(season, lang) : '';
 const label = (r: typeof current) => (r ? roundLabel(r, league.track(r.track_id), lang) : '');
 const currentLabel = label(current);
 
