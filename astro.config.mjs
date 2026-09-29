@@ -35,6 +35,10 @@ export default defineConfig({
 
   vite: {
     plugins: [tailwindcss()],
+    // Icons werden einzeln importiert; ohne Vorbündelung löst ein neues Icon im Dev-Server
+    // keine Neu-Optimierung (und damit keine veralteten Chunks) aus.
+    optimizeDeps: { exclude: ['@lucide/astro', '@lucide/svelte'] },
+    ssr: { optimizeDeps: { exclude: ['@lucide/astro', '@lucide/svelte'] } },
   },
 
   i18n: {
