@@ -1,0 +1,13 @@
+---
+/** Hinweis bei fehlender Rolle (Seite liefert Status 403). */
+interface Props {
+  roles: string;
+}
+const { roles } = Astro.props;
+---
+
+<div class="alert alert-danger" role="alert">
+  <p class="font-semibold">Keine Berechtigung</p>
+  <p class="mt-1 text-sm">Dieser Bereich ist nur für {roles} zugänglich. Wenn das nicht stimmt, prüfe deine Rolle auf dem Liga-Discord.</p>
+  <p class="mt-3"><a class="btn btn-secondary btn-sm" href="/admin">Zum Dashboard</a></p>
+</div>

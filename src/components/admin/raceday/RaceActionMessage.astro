@@ -1,0 +1,41 @@
+---
+/**
+ * Ergebnis einer Formular-Action des Renntags: Erfolgsmeldung bzw. Fehler mit Detailzeilen
+ * (Server-Meldungen sind zeilenweise aufgebaut, siehe RacedayError.uiMessage).
+ */
+import { isInputError } from 'astro:actions';
+import { splitErrorMessage } from '~/lib/admin/raceday/errors';
+
+interface Props {
+  result: { data?: unknown; error?: unknown } | undefined;
+  success?: string | null;
+}
+const { result, success } = Astro.props;
+const error = result?.error as { message?: string; fields?: Record<string, string[] | undefined> } | undefined;
+const input = error ? isInputError(error as never) : false;
+const split = error ? splitErrorMessage(input ? 'Bitte prüfe die Eingaben:' : error.message) : null;
+const fieldMessages = input && error?.fields ? Object.values(error.fields).flat().filter((m): m is string => !!m) : [];
+const details = [...(split?.details ?? []), ...fieldMessages];
+---
+
+{
+  result && !result.error && success && (
+    <p class="alert alert-success mb-6" role="status">
+      {success}
+    </p>
+  )
+}
+{
+  split && (
+    <div class="alert alert-danger mb-6" role="alert">
+      <p class="font-semibold">{split.headline}</p>
+      {details.length > 0 && (
+        <ul class="mt-2 list-disc space-y-1 pl-5 text-sm">
+          {details.map((d) => (
+            <li>{d}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}

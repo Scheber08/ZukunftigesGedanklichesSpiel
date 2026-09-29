@@ -1,0 +1,148 @@
+---
+/**
+ * Runden-Hub (Plan §11.1): Status, Termin, Protestfrist und die Schritte des Renntags
+ * (Aufstellung → Ergebnis vorläufig → Stewards → final) als Checkliste mit Links.
+ */
+export const prerender = false;
+
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import Forbidden from '~/components/admin/raceday/Forbidden.astro';
+import StepList from '~/components/admin/raceday/StepList.astro';
+import { url } from '~/i18n/routes';
+import { SESSION_LABEL } from '~/lib/admin/raceday/labels';
+import { roundHub } from '~/lib/admin/raceday/queries';
+import { raceDaySteps } from '~/lib/admin/raceday/steps';
+import { formatDateTime } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { intParam, roundLabel, seasonLabel } from '~/lib/view';
+
+const staff = Astro.locals.staff;
+const allowed = hasRole(staff, 'admin');
+const roundId = intParam(Astro.params.id);
+const hub = allowed && roundId != null ? await roundHub(getServiceStore(), roundId) : null;
+if (!allowed) Astro.response.status = 403;
+else if (!hub) Astro.response.status = 404;
+
+const label = hub ? roundLabel(hub.round, hub.track, 'de') : 'Runde';
+const steps = hub ? raceDaySteps(hub.facts) : [];
+const fmt = (iso: string | null) => (iso ? `${formatDateTime(iso, 'de')} Uhr` : '–');
+const publicUrl = hub ? url('de', 'race', { season: hub.season.slug, round: hub.round.number }) : null;
+const publicVisible = hub != null && hub.round.status !== 'scheduled';
+---
+
+<AdminLayout title={label} breadcrumbs={[{ label: 'Runden', href: '/admin/runden' }, { label }]}>
+  {
+    !allowed ? (
+      <Forbidden roles="Admins" />
+    ) : !hub ? (
+      <p class="alert alert-danger" role="alert">
+        Diese Runde gibt es nicht. <a href="/admin/runden" class="underline">Zur Rundenliste</a>
+      </p>
+    ) : (
+      <>
+        <div class="mb-6 flex flex-wrap items-center gap-3">
+          <RoundStatusBadge status={hub.round.status} lang="de" />
+          <span class="text-muted">{seasonLabel(hub.season, 'de')}</span>
+          {hub.facts.frozen && <span class="badge badge-muted">Saison abgeschlossen – eingefroren</span>}
+          {publicVisible && publicUrl && (
+            <a href={publicUrl} class="text-sm underline hover:text-teal">
+              Öffentliche Rennseite
+            </a>
+          )}
+        </div>
+
+        <section aria-labelledby="facts-title" class="mb-8">
+          <h2 id="facts-title" class="sr-only">
+            Eckdaten
+          </h2>
+          <dl class="facts">
+            <div class="card p-4">
+              <dt class="micro">Start (Berlin)</dt>
+              <dd>{fmt(hub.round.start_utc)}</dd>
+            </div>
+            <div class="card p-4">
+              <dt class="micro">Format</dt>
+              <dd>
+                {hub.round.format === 'sprint' ? 'Sprint-Wochenende' : 'Standard'} ·{' '}
+                {hub.sessions.map((s) => SESSION_LABEL[s.type]).join(', ') || 'keine Sessions'}
+              </dd>
+            </div>
+            <div class="card p-4">
+              <dt class="micro">Vorläufig seit</dt>
+              <dd>{fmt(hub.round.provisional_at)}</dd>
+            </div>
+            <div class="card p-4">
+              <dt class="micro">Protestfrist</dt>
+              <dd>
+                {fmt(hub.round.protest_deadline)}
+                {hub.round.protest_deadline && (
+                  <span class:list={['badge ml-1', hub.facts.protestOpen ? 'badge-warning' : 'badge-muted']}>
+                    {hub.facts.protestOpen ? 'läuft' : 'abgelaufen'}
+                  </span>
+                )}
+              </dd>
+            </div>
+            <div class="card p-4">
+              <dt class="micro">Final seit</dt>
+              <dd>{fmt(hub.round.final_at)}</dd>
+            </div>
+            <div class="card p-4">
+              <dt class="micro">Aufstellung</dt>
+              <dd>
+                {hub.facts.entries} Cockpits · {hub.reserves} Ersatz · {hub.absences} Abmeldungen
+              </dd>
+            </div>
+            <div class="card p-4">
+              <dt class="micro">Stewards</dt>
+              <dd>
+                {hub.incidents} Vorfälle ({hub.facts.openIncidents} offen) · {hub.publishedDecisions} Urteile ·{' '}
+                {hub.facts.draftDecisions} Entwürfe
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section aria-labelledby="steps-title" class="mb-8">
+          <h2 id="steps-title" class="mb-3 text-xl uppercase">
+            Renntag
+          </h2>
+          <StepList steps={steps} />
+          <p class="field-hint mt-3">
+            Ablauf laut Plan: Aufstellung bis T−24 h, Ergebnis bis 2 h nach Rennende, danach 48 h Protestfrist,
+            Entscheidungen bis 72 h nach Fristende, dann final.
+          </p>
+        </section>
+
+        {hub.corrections.length > 0 && (
+          <section aria-labelledby="corr-title">
+            <h2 id="corr-title" class="mb-3 text-xl uppercase">
+              Korrekturen
+            </h2>
+            <ul class="space-y-2">
+              {hub.corrections.map((c) => (
+                <li class="card p-4">
+                  <p class="micro">{fmt(c.created_at)}</p>
+                  <p>{c.reason_de}</p>
+                  {c.reason_en && <p class="text-sm text-muted">EN: {c.reason_en}</p>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .facts {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  }
+  .facts dd {
+    margin-top: 0.25rem;
+  }
+</style>

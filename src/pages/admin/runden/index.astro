@@ -1,0 +1,123 @@
+---
+/**
+ * Runden einer Saison (Plan §5 „Grid-Builder“/„Ergebnisse“, §11.1): Status, Termin,
+ * Stand des Renntags und Links zu Übersicht, Grid-Builder und Ergebnis-Eingabe.
+ */
+export const prerender = false;
+
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import Forbidden from '~/components/admin/raceday/Forbidden.astro';
+import { listSeasons, pickSeason, roundsOverview } from '~/lib/admin/raceday/queries';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { formatDateTime } from '~/lib/domain/time';
+import { roundLabel, seasonLabel } from '~/lib/view';
+
+const staff = Astro.locals.staff;
+const allowed = hasRole(staff, 'admin');
+if (!allowed) Astro.response.status = 403;
+
+const store = getServiceStore();
+const seasons = allowed ? await listSeasons(store) : [];
+const season = pickSeason(seasons, Astro.url.searchParams.get('saison'));
+const rows = allowed && season ? await roundsOverview(store, season) : [];
+const frozen = season?.status === 'finished';
+const seasonStatus = { planned: 'geplant', active: 'aktiv', finished: 'abgeschlossen' } as const;
+---
+
+<AdminLayout title="Runden" breadcrumbs={[{ label: 'Runden' }]} wide>
+  {
+    !allowed ? (
+      <Forbidden roles="Admins" />
+    ) : !season ? (
+      <p class="alert alert-warning">Es gibt noch keine Saison. Lege zuerst unter „Saisons“ eine an.</p>
+    ) : (
+      <>
+        <form method="GET" class="mb-6 flex flex-wrap items-end gap-3" aria-label="Saison wählen">
+          <div class="field">
+            <label for="saison" class="label">Saison</label>
+            <select id="saison" name="saison" class="select min-w-56">
+              {seasons.map((s) => (
+                <option value={s.id} selected={s.id === season.id}>
+                  {seasonLabel(s, 'de')} ({seasonStatus[s.status]})
+                </option>
+              ))}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-secondary">
+            Anzeigen
+          </button>
+        </form>
+
+        {frozen && (
+          <p class="alert alert-warning mb-6">
+            Diese Saison ist abgeschlossen. Aufstellungen und Ergebnisse sind eingefroren und nur noch lesbar.
+          </p>
+        )}
+
+        {rows.length === 0 ? (
+          <p class="alert">Für {seasonLabel(season, 'de')} sind noch keine Runden angelegt (Modul „Kalender“).</p>
+        ) : (
+          <div class="table-wrap">
+            <table class="timing-table">
+              <caption class="sr-only">Runden von {seasonLabel(season, 'de')} mit Status und Renntag-Stand</caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="sticky-col">Runde</th>
+                  <th scope="col">Termin (Berlin)</th>
+                  <th scope="col">Format</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" class="num">Aufstellung</th>
+                  <th scope="col" class="num">Ergebnis</th>
+                  <th scope="col" class="num">Stewards</th>
+                  <th scope="col">Bearbeiten</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ round, track, facts }) => (
+                  <tr>
+                    <th scope="row" class="sticky-col">
+                      <a href={`/admin/runden/${round.id}`} class="font-semibold hover:text-teal">
+                        {roundLabel(round, track, 'de')}
+                      </a>
+                    </th>
+                    <td>{formatDateTime(round.start_utc, 'de')}</td>
+                    <td>{round.format === 'sprint' ? 'Sprint' : 'Standard'}</td>
+                    <td>
+                      <RoundStatusBadge status={round.status} lang="de" />
+                    </td>
+                    <td class="num">{facts.entries > 0 ? `${facts.entries} Cockpits` : <span class="muted">–</span>}</td>
+                    <td class="num">
+                      {facts.sessionsEntered}/{facts.sessionsTotal}
+                      <span class="sr-only"> Sessions eingetragen</span>
+                    </td>
+                    <td class="num">
+                      {facts.openIncidents + facts.draftDecisions > 0 ? (
+                        <span class="text-warning">
+                          {facts.openIncidents} offen, {facts.draftDecisions} Entwurf
+                        </span>
+                      ) : (
+                        <span class="muted">–</span>
+                      )}
+                    </td>
+                    <td>
+                      <div class="flex gap-1">
+                        <a class="btn btn-ghost btn-sm" href={`/admin/runden/${round.id}/grid`}>
+                          Grid
+                        </a>
+                        <a class="btn btn-ghost btn-sm" href={`/admin/runden/${round.id}/ergebnisse`}>
+                          Ergebnisse
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </>
+    )
+  }
+</AdminLayout>

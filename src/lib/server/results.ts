@@ -38,11 +38,11 @@ import type {
   TrackRow,
 } from '../db/types';
 import { RESULT_VISIBLE_STATUSES } from '../db/types';
-import { penaltiesForSession, raceBansFromPreviousRound } from '../domain/decisions';
+import { gridPenaltiesFromPreviousRound, penaltiesForSession, raceBansFromPreviousRound } from '../domain/decisions';
 import { checkGrid, hasBlockingIssues, seatsForRound, type GridEntry, type GridIssue } from '../domain/grid';
 import { formatLapTime } from '../domain/laptime';
 import { numberAt } from '../domain/numbers';
-import { computeSession, type ComputeWarningCode } from '../domain/points';
+import { computeGrid, computeSession, type ComputeWarningCode } from '../domain/points';
 import { driverStandings, teamStandings, type StandingsInput, type StandingsResult } from '../domain/standings';
 import { formatDateTime } from '../domain/time';
 import { roundLabel, seasonLabel } from '../view';
@@ -524,6 +524,87 @@ export async function correctRound(
   const discord = await postResultsEmbed(store, roundId, 'corrected', reason);
   await requestRebuild(store, `Ergebnis korrigiert: ${roundText(b)}`);
   return { round, warnings, snapshots, discord };
+}
+
+// ---------------------------------------------------------------------------- Ergebnis-Eingabe (Seite)
+
+export interface EditorEntry {
+  id: Id | null;
+  driver_id: Id;
+  team_id: Id;
+  role: RoundEntryRow['role'];
+  race_number: number | null;
+}
+
+export interface ResultsEditorContext {
+  basics: RoundBasics;
+  /** Aufstellung (veröffentlicht oder Entwurf), sonst Saisonaufstellung. */
+  entries: EditorEntry[];
+  lineupSource: 'round' | 'season';
+  results: ResultRow[];
+  drivers: DriverRow[];
+  teams: TeamRow[];
+  /** Veröffentlichte Entscheidungen der Runde (für die Strafen-Vorschau). */
+  decisions: DecisionRow[];
+  /** Grid-Strafen aus der Vorrunde. */
+  gridPenalties: Array<{ driverId: Id; positions: number }>;
+  /** Startplätze aus gespeicherter Quali + Grid-Strafen (falls vorhanden). */
+  grid: Map<Id, number> | null;
+  work: OpenStewardWork;
+}
+
+export async function loadResultsEditorContext(store: Store, roundId: Id): Promise<ResultsEditorContext> {
+  const basics = await loadRoundBasics(store, roundId);
+  const { round, season } = basics;
+  const sessionIds = basics.sessions.map((s) => s.id);
+  const [roundEntries, results, drivers, seasonTeams, decisions, rounds, seats, numbers, work] = await Promise.all([
+    store.select('round_entries', { eq: { round_id: roundId } }),
+    sessionIds.length > 0 ? store.select('results', { in: { session_id: sessionIds } }) : Promise.resolve([] as ResultRow[]),
+    store.select('drivers'),
+    store.select('season_teams', { eq: { season_id: season.id } }),
+    store.select('decisions', { eq: { round_id: roundId, status: 'published' } }),
+    store.select('rounds', { eq: { season_id: season.id } }),
+    store.select('seats', { eq: { season_id: season.id } }),
+    store.select('driver_numbers'),
+    openStewardWork(store, round),
+  ]);
+  const teamOrder = seasonTeams.sort((a, b) => a.sort_order - b.sort_order).map((t) => t.team_id);
+  const teamRows = teamOrder.length > 0 ? await store.select('teams', { in: { id: [...new Set([...teamOrder, ...results.map((r) => r.team_id)])] } }) : [];
+  const teams = [...teamRows].sort((a, b) => (teamOrder.indexOf(a.id) + 1 || 99) - (teamOrder.indexOf(b.id) + 1 || 99));
+  const orderOf = (teamId: Id) => teamOrder.indexOf(teamId) + 1 || 99;
+
+  let entries: EditorEntry[];
+  let lineupSource: 'round' | 'season' = 'round';
+  if (roundEntries.length > 0) {
+    entries = roundEntries
+      .sort((a, b) => orderOf(a.team_id) - orderOf(b.team_id) || a.seat_no - b.seat_no)
+      .map((e) => ({ id: e.id, driver_id: e.driver_id, team_id: e.team_id, role: e.role, race_number: e.race_number }));
+  } else {
+    lineupSource = 'season';
+    const start = new Date(round.start_utc);
+    entries = seatsForRound(seats, round.number)
+      .sort((a, b) => orderOf(a.team_id) - orderOf(b.team_id) || a.seat_no - b.seat_no)
+      .map((s) => ({ id: null, driver_id: s.driver_id, team_id: s.team_id, role: 'regular' as const, race_number: numberAt(s.driver_id, numbers, start) }));
+  }
+
+  const previousRound =
+    rounds
+      .filter((r) => r.number < round.number && r.status !== 'cancelled')
+      .sort((a, b) => a.number - b.number)
+      .at(-1) ?? null;
+  const prevDecisions = previousRound ? await store.select('decisions', { eq: { round_id: previousRound.id } }) : [];
+  const gridPenalties = gridPenaltiesFromPreviousRound(prevDecisions, previousRound?.id ?? null);
+
+  const quali = basics.sessions.find((s) => s.type === 'qualifying');
+  const qualiOrder = quali
+    ? results
+        .filter((r) => r.session_id === quali.id && r.position != null)
+        .sort((a, b) => a.position! - b.position!)
+        .map((r) => r.driver_id)
+    : [];
+  const grid = qualiOrder.length > 0 ? computeGrid(qualiOrder, gridPenalties) : null;
+
+  return { basics, entries, lineupSource, results, drivers, teams, decisions, gridPenalties, grid, work };
 }
 
 // ---------------------------------------------------------------------------- Aufstellung

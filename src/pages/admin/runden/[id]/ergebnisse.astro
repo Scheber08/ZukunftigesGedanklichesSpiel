@@ -1,0 +1,148 @@
+---
+/**
+ * Ergebnis-Eingabe pro Runde (Plan §5.2): Tabs je Session, vorbefüllt mit der Aufstellung bzw. den
+ * gespeicherten Ergebnissen; speichern → vorläufig → final → Korrektur mit Pflicht-Grund.
+ */
+export const prerender = false;
+
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import Forbidden from '~/components/admin/raceday/Forbidden.astro';
+import ResultsEditor from '~/components/admin/raceday/ResultsEditor.svelte';
+import { url } from '~/i18n/routes';
+import { RacedayError } from '~/lib/admin/raceday/errors';
+import { prefillRows, resultRowToEditor } from '~/lib/admin/raceday/results-map';
+import { formatDateTime } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { isFrozen, loadResultsEditorContext, type ResultsEditorContext } from '~/lib/server/results';
+import { intParam, roundLabel, seasonLabel } from '~/lib/view';
+
+const staff = Astro.locals.staff;
+const allowed = hasRole(staff, 'admin');
+const roundId = intParam(Astro.params.id);
+
+let ctx: ResultsEditorContext | null = null;
+if (allowed && roundId != null) {
+  try {
+    ctx = await loadResultsEditorContext(getServiceStore(), roundId);
+  } catch (err) {
+    if (!(err instanceof RacedayError)) throw err;
+  }
+}
+if (!allowed) Astro.response.status = 403;
+else if (!ctx) Astro.response.status = 404;
+
+const label = ctx ? roundLabel(ctx.basics.round, ctx.basics.track, 'de') : 'Runde';
+const frozen = ctx ? isFrozen(ctx.basics.season) : false;
+const cancelled = ctx?.basics.round.status === 'cancelled';
+
+const props = ctx && {
+  roundId: ctx.basics.round.id,
+  roundStatus: ctx.basics.round.status,
+  readOnly: frozen || cancelled,
+  readOnlyReason: frozen
+    ? 'Die Saison ist abgeschlossen – das Ergebnis ist eingefroren und nur noch lesbar.'
+    : cancelled
+      ? 'Die Runde ist abgesagt.'
+      : null,
+  reservePointsForConstructors: ctx.basics.season.reserve_points_for_constructors,
+  scheme: {
+    race_points: ctx.basics.scheme.race_points,
+    sprint_points: ctx.basics.scheme.sprint_points,
+    fastest_lap_bonus: ctx.basics.scheme.fastest_lap_bonus,
+    fastest_lap_max_pos: ctx.basics.scheme.fastest_lap_max_pos,
+    pole_bonus: ctx.basics.scheme.pole_bonus,
+  },
+  sessions: ctx.basics.sessions.map((s) => {
+    const saved = ctx!.results.filter((r) => r.session_id === s.id).sort((a, b) => a.entered_position - b.entered_position);
+    return {
+      id: s.id,
+      type: s.type,
+      entered: saved.length > 0,
+      rows: saved.length > 0 ? saved.map(resultRowToEditor) : prefillRows(ctx!.entries, s.type === 'qualifying' ? null : ctx!.grid),
+    };
+  }),
+  drivers: ctx.drivers.map((d) => ({ id: d.id, gamertag: d.anonymized ? `Ehemaliger Fahrer #${d.id}` : d.gamertag })),
+  teams: ctx.teams.map((t) => ({ id: t.id, name: t.name, color: t.color_hex })),
+  entries: ctx.entries,
+  decisions: ctx.decisions.map((d) => ({
+    id: d.id,
+    driver_id: d.driver_id,
+    verdict: d.verdict,
+    time_seconds: d.time_seconds,
+    positions: d.positions,
+    status: d.status,
+    published_at: d.published_at,
+    session_id: d.session_id,
+    round_id: d.round_id,
+  })),
+  gridPenalties: ctx.gridPenalties,
+  openIncidents: ctx.work.openIncidents,
+  draftDecisions: ctx.work.draftDecisions,
+  protestOpen: ctx.work.protestOpen,
+  protestDeadline: ctx.basics.round.protest_deadline ? `${formatDateTime(ctx.basics.round.protest_deadline, 'de')} Uhr` : null,
+  stewardsUrl: `/admin/stewards?runde=${ctx.basics.round.id}`,
+};
+const publicUrl = ctx ? url('de', 'race', { season: ctx.basics.season.slug, round: ctx.basics.round.number }) : null;
+---
+
+<AdminLayout
+  title={`Ergebnisse · ${label}`}
+  breadcrumbs={[
+    { label: 'Runden', href: '/admin/runden' },
+    { label, href: roundId != null ? `/admin/runden/${roundId}` : undefined },
+    { label: 'Ergebnisse' },
+  ]}
+  wide
+>
+  {
+    !allowed ? (
+      <Forbidden roles="Admins" />
+    ) : !ctx || !props ? (
+      <p class="alert alert-danger" role="alert">
+        Diese Runde gibt es nicht. <a href="/admin/runden" class="underline">Zur Rundenliste</a>
+      </p>
+    ) : (
+      <>
+        <div class="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+          <RoundStatusBadge status={ctx.basics.round.status} lang="de" />
+          <span class="text-muted">
+            {seasonLabel(ctx.basics.season, 'de')} · Start {formatDateTime(ctx.basics.round.start_utc, 'de')} Uhr ·{' '}
+            {ctx.basics.scheme.name}
+            {ctx.basics.season.reserve_points_for_constructors ? ' · Reservepunkte zählen für Teams' : ' · Reservepunkte zählen nicht für Teams'}
+          </span>
+          <a href={`/admin/runden/${ctx.basics.round.id}/grid`} class="underline hover:text-teal">
+            Zum Grid-Builder
+          </a>
+          {ctx.basics.round.status !== 'scheduled' && publicUrl && (
+            <a href={publicUrl} class="underline hover:text-teal">
+              Öffentliche Rennseite
+            </a>
+          )}
+        </div>
+        {ctx.lineupSource === 'season' && (
+          <p class="alert alert-warning mb-4">
+            Für diese Runde ist noch keine Aufstellung gespeichert – die Eingabe ist mit der Saisonaufstellung vorbefüllt. Ersatzfahrer
+            bitte zuerst im Grid-Builder eintragen.
+          </p>
+        )}
+        {ctx.gridPenalties.length > 0 && (
+          <p class="alert mb-4">
+            Grid-Strafen aus der Vorrunde: {ctx.gridPenalties.length}. Sie sind in „Startplätze aus Quali“ bereits eingerechnet.
+          </p>
+        )}
+        {ctx.basics.sessions.length === 0 ? (
+          <p class="alert alert-warning">Diese Runde hat keine Sessions. Bitte im Kalender das Format prüfen.</p>
+        ) : (
+          <>
+            <noscript>
+              <p class="alert alert-warning mb-4">Die Ergebnis-Eingabe braucht JavaScript.</p>
+            </noscript>
+            <ResultsEditor client:load {...props} />
+          </>
+        )}
+      </>
+    )
+  }
+</AdminLayout>

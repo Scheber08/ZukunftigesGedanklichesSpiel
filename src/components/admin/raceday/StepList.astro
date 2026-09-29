@@ -1,0 +1,85 @@
+---
+/** Renntag-Checkliste (Plan §11.1) als geordnete Liste mit Status in Text und Symbol. */
+import Check from '@lucide/astro/icons/check';
+import CircleDot from '@lucide/astro/icons/circle-dot';
+import Circle from '@lucide/astro/icons/circle';
+import Lock from '@lucide/astro/icons/lock';
+import type { RaceDayStep } from '~/lib/admin/raceday/steps';
+
+interface Props {
+  steps: RaceDayStep[];
+}
+const { steps } = Astro.props;
+const stateText = { done: 'erledigt', current: 'als Nächstes', open: 'offen', blocked: 'noch nicht möglich' } as const;
+---
+
+<ol class="steps">
+  {
+    steps.map((s, i) => (
+      <li class="step" data-state={s.state}>
+        <span class="marker" aria-hidden="true">
+          {s.state === 'done' ? <Check size={18} /> : s.state === 'current' ? <CircleDot size={18} /> : s.state === 'blocked' ? <Lock size={16} /> : <Circle size={18} />}
+        </span>
+        <div class="min-w-0 flex-1">
+          <p class="font-semibold">
+            <span class="sr-only">Schritt {i + 1}: </span>
+            {s.title}
+            <span class="state">({stateText[s.state]})</span>
+          </p>
+          <p class="text-sm text-muted">{s.detail}</p>
+        </div>
+        <a href={s.href} class:list={['btn btn-sm', s.state === 'current' ? 'btn-primary' : 'btn-ghost']}>
+          {s.linkLabel}
+        </a>
+      </li>
+    ))
+  }
+</ol>
+
+<style>
+  .steps {
+    display: grid;
+    gap: 0.5rem;
+  }
+  .step {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface-1);
+  }
+  .step[data-state='current'] {
+    border-color: rgb(52 196 208 / 0.6);
+  }
+  .marker {
+    display: inline-flex;
+    width: 2rem;
+    height: 2rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    color: var(--color-muted);
+  }
+  .step[data-state='done'] .marker {
+    color: var(--color-green);
+    border-color: rgb(55 190 137 / 0.5);
+  }
+  .step[data-state='current'] .marker {
+    color: var(--color-teal);
+    border-color: rgb(52 196 208 / 0.6);
+  }
+  .state {
+    margin-left: 0.375rem;
+    font-weight: 400;
+    font-size: var(--fs-small);
+    color: var(--color-muted);
+  }
+  .step[data-state='blocked'] {
+    opacity: 0.75;
+  }
+</style>
