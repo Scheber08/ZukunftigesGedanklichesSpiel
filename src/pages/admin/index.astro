@@ -13,7 +13,7 @@ import Badge from '~/components/ui/Badge.astro';
 import NoAccess from '~/components/admin/core/NoAccess.astro';
 import Section from '~/components/admin/core/Section.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
-import { formatHoursLeft, missingTranslations, protestDeadlines } from '~/lib/admin/league/dashboard';
+import { formatHoursLeft, formatTimeUntil, missingTranslations, protestDeadlines } from '~/lib/admin/league/dashboard';
 import { ROUND_STATUS_BADGE, ROUND_STATUS_LABELS, ROUND_FORMAT_SHORT, SEASON_STATUS_LABELS } from '~/lib/admin/league/labels';
 import { formatDateLong, formatDateTime, formatTime, timeZoneName } from '~/lib/domain/time';
 import { url } from '~/i18n';
@@ -166,7 +166,7 @@ if (isEditor) {
             </p>
             <p class="mt-3">
               {formatDateLong(next.start_utc, 'de')}, {formatTime(next.start_utc, 'de')} {timeZoneName(next.start_utc, 'de')}
-              {hoursToNext != null && hoursToNext > 0 && <span class="text-muted"> · {formatHoursLeft(hoursToNext).replace('noch ', 'in ')}</span>}
+              {hoursToNext != null && hoursToNext > 0 && <span class="text-muted"> · {formatTimeUntil(hoursToNext)}</span>}
             </p>
             <p class="mt-2">
               <Badge variant={ROUND_STATUS_BADGE[next.status]}>{ROUND_STATUS_LABELS[next.status]}</Badge>
@@ -306,7 +306,7 @@ if (isEditor) {
                   </td>
                   {isAdmin && (
                     <td>
-                      <a class="underline" href={`/admin/runden/${p.round.id}`}>
+                      <a class="inline-flex min-h-[44px] items-center underline" href={`/admin/runden/${p.round.id}`}>
                         Zur Runde
                       </a>
                     </td>

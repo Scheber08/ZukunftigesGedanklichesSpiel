@@ -139,7 +139,7 @@ const weekdayOrder = [1, 2, 3, 4, 5, 6, 0];
                     return (
                       <tr>
                         <th scope="row" class="sticky-col">
-                          <a class="font-semibold underline" href={`/admin/kalender/${r.id}`}>
+                          <a class="inline-flex min-h-[44px] items-center font-semibold underline" href={`/admin/kalender/${r.id}`}>
                             {roundLabel(r, trackOf(r.track_id), 'de')}
                           </a>
                         </th>
@@ -158,7 +158,7 @@ const weekdayOrder = [1, 2, 3, 4, 5, 6, 0];
                             .join(' · ') || '–'}
                         </td>
                         <td>
-                          <a class="underline" href={`/admin/runden/${r.id}`}>
+                          <a class="inline-flex min-h-[44px] items-center underline" href={`/admin/runden/${r.id}`}>
                             Renntag
                           </a>
                         </td>
@@ -305,7 +305,7 @@ const weekdayOrder = [1, 2, 3, 4, 5, 6, 0];
                     <textarea id="batch-skip" name="skip_dates" class="textarea font-mono" rows="3" {...fieldAria('batch-skip', true, batchPosted.err('skip_dates'))}>{batch.skip_dates}</textarea>
                   </Field>
                   <details class="text-sm">
-                    <summary class="cursor-pointer py-2 text-muted">Verfügbare Strecken ({tracks.length})</summary>
+                    <summary class="cursor-pointer py-3 text-muted">Verfügbare Strecken ({tracks.length})</summary>
                     <p class="mt-2 font-mono text-xs leading-6 text-muted">{[...tracks].sort((a, b) => a.slug.localeCompare(b.slug)).map((t) => t.slug).join(', ')}</p>
                   </details>
                 </div>

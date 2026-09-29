@@ -36,13 +36,13 @@ const ids = { color: `${idPrefix}-color`, text: `${idPrefix}-text-color` };
         maxlength="7"
         autocomplete="off"
         spellcheck="false"
-        aria-describedby={`${ids.color}-hint`}
+        aria-describedby={errors.color?.length ? `${ids.color}-hint ${ids.color}-error` : `${ids.color}-hint`}
         aria-invalid={errors.color?.length ? 'true' : undefined}
         data-hex="color"
       />
     </div>
     <p class="field-hint" id={`${ids.color}-hint`}>Hex-Wert, z. B. #FF8000. Erscheint nur als schmaler Streifen.</p>
-    {errors.color?.map((e) => <p class="field-error" role="alert">{e}</p>)}
+    {errors.color?.length ? <p class="field-error" id={`${ids.color}-error`} role="alert">{errors.color.join(' ')}</p> : null}
   </div>
   <div class="field">
     <label class="label" for={ids.text}>Textfarbe auf Teamfarbe</label>
@@ -58,13 +58,13 @@ const ids = { color: `${idPrefix}-color`, text: `${idPrefix}-text-color` };
         maxlength="7"
         autocomplete="off"
         spellcheck="false"
-        aria-describedby={`${ids.text}-hint`}
+        aria-describedby={errors.text?.length ? `${ids.text}-hint ${ids.text}-error` : `${ids.text}-hint`}
         aria-invalid={errors.text?.length ? 'true' : undefined}
         data-hex="text"
       />
     </div>
     <p class="field-hint" id={`${ids.text}-hint`}>Für Grafiken/Overlays (Phase 2). Meist Schwarz oder Weiß.</p>
-    {errors.text?.map((e) => <p class="field-error" role="alert">{e}</p>)}
+    {errors.text?.length ? <p class="field-error" id={`${ids.text}-error`} role="alert">{errors.text.join(' ')}</p> : null}
   </div>
 
   <div class="sm:col-span-2 flex flex-wrap items-center gap-4 rounded-lg border border-border bg-bg p-3" aria-live="polite">

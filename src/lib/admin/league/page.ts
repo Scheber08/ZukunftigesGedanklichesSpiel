@@ -7,6 +7,9 @@
  */
 import type { AstroGlobal } from 'astro';
 import { isInputError } from 'astro:actions';
+import { sameAction } from './forms';
+
+export { sameAction };
 
 /** Rückgabe aller Admin-Kern-Actions. */
 export interface AdminActionData {
@@ -74,7 +77,7 @@ export async function actionOutcome(Astro: AstroGlobal, list: readonly AnyAction
  */
 export function formValues(outcome: ActionOutcome, action: unknown, formKey?: string) {
   const own =
-    outcome.action === action &&
+    sameAction(outcome.action, action) &&
     outcome.posted != null &&
     (formKey == null || outcome.posted.get('_form') === formKey);
   const posted = own ? outcome.posted : null;

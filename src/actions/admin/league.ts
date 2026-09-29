@@ -1123,7 +1123,11 @@ const driverSave = defineAction({
       let numberOps: ReturnType<typeof planNumberAssign> | null = null;
       if (input.number != null) {
         const numbers = await store.select('driver_numbers');
-        numberOps = planNumberAssign(-1, input.number, numbers, new Date(), 'Bei der Anlage vergeben');
+        const holderName = (x: Id) => {
+          const d = drivers.find((y) => y.id === x);
+          return d ? (d.anonymized ? `Ehemaliger Fahrer #${d.id}` : d.gamertag) : `Fahrer #${x}`;
+        };
+        numberOps = planNumberAssign(-1, input.number, numbers, new Date(), 'Bei der Anlage vergeben', holderName);
         if (numberOps.error) throw fieldError({ number: numberOps.error });
       }
       const created = await insertOne(store, 'drivers', { ...row, anonymized: false });
@@ -1320,7 +1324,8 @@ const registrationDelete = defineAction({
       const before = await selectOne(store, 'registrations', { id: input.id });
       if (!before) throw notFound('Anmeldung');
       await store.remove('registrations', { id: input.id });
-      // Datenschutz: keine Kontaktdaten im Protokoll
+      // Datenschutz: keine Kontaktdaten im Protokoll – auch frühere Einträge (Notizen) leeren
+      await store.update('audit_log', { entity: 'registrations', entity_id: String(input.id) }, { diff: null });
       await audit(store, staff, 'delete', 'registrations', input.id, null, { status: before.status });
       return done('deleted', '/admin/anmeldungen');
     } catch (err) {
@@ -1521,7 +1526,7 @@ const settingsRoles = defineAction({
       };
       const errors: Record<string, string> = {};
       for (const [k, v] of Object.entries(parsed)) {
-        if (v.invalid.length > 0) errors[k] = `Keine gültigen Rollen-IDs: ${v.invalid.join(', ')} (nur Ziffern).`;
+        if (v.invalid.length > 0) errors[k] = `Keine gültigen Rollen-IDs: ${v.invalid.join(', ')} (je 15–21 Ziffern)`;
       }
       if (Object.keys(errors).length > 0) throw fieldError(errors);
       if (!isDemoMode() && parsed.admin.ids.length === 0) {

@@ -161,3 +161,14 @@ export function paginate<T>(list: readonly T[], page: number, perPage: number): 
   const p = Math.min(Math.max(1, Math.floor(page) || 1), pages);
   return { items: list.slice((p - 1) * perPage, p * perPage), page: p, pages, total };
 }
+
+/**
+ * Gleiche Action? `actions.admin.x` liefert bei jedem Zugriff ein neues Proxy-Objekt,
+ * ein Vergleich per `===` schlägt deshalb immer fehl. Maßgeblich ist der Query-String
+ * (`?_action=admin.x`), den `toString()` liefert.
+ */
+export function sameAction(a: unknown, b: unknown): boolean {
+  if (a == null || b == null) return false;
+  if (a === b) return true;
+  return (typeof a === 'function' || typeof a === 'object') && String(a) === String(b) && String(a).startsWith('?_action=');
+}

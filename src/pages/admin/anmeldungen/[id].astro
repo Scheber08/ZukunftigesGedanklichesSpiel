@@ -61,6 +61,9 @@ const joinSeason = plan ? seasons.find((s) => s.id === plan.driver.joined_season
 
 const f = formValues(outcome, A.registrationUpdate);
 const statusOptions = selectableStatuses(reg);
+// Ein abgelehnter Wert (z. B. „Angenommen“ ohne Fahrer) steht nicht in der Auswahl → aktueller Status
+const postedStatus = f.str('status', reg.status);
+const statusValue = (statusOptions as readonly string[]).includes(postedStatus) ? postedStatus : reg.status;
 const yes = (v: boolean | undefined) => (v ? 'Ja' : 'Nein');
 ---
 
@@ -173,7 +176,7 @@ const yes = (v: boolean | undefined) => (v ? 'Ja' : 'Nein');
         <select id="reg-status" name="status" class="select" required {...fieldAria('reg-status', reg.driver_id == null, f.err('status'))}>
           {
             statusOptions.map((s) => (
-              <option value={s} selected={f.str('status', reg.status) === s}>
+              <option value={s} selected={statusValue === s}>
                 {REGISTRATION_STATUS_LABELS[s]}
               </option>
             ))

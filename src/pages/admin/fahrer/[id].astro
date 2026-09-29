@@ -84,7 +84,8 @@ const teamOf = (id: number) => teams.find((t) => t.id === id);
 <AdminLayout title={displayName} breadcrumbs={[{ label: 'Fahrer', href: '/admin/fahrer' }, { label: displayName }]}>
   <div slot="actions" class="flex flex-wrap gap-2">
     <a class="btn whitespace-normal btn-ghost" href={`/admin/audit?entitaet=drivers&id=${driver.id}`}>Änderungsverlauf</a>
-    <a class="btn whitespace-normal btn-ghost" href={url('de', 'driver', { slug: driver.slug })}>Öffentliches Profil</a>
+    {/* Pseudonymisierte Fahrer haben keine Profilseite (Plan §6.7) */}
+    {!driver.anonymized && <a class="btn whitespace-normal btn-ghost" href={url('de', 'driver', { slug: driver.slug })}>Öffentliches Profil</a>}
   </div>
 
   <Notice
@@ -253,7 +254,7 @@ const teamOf = (id: number) => teams.find((t) => t.id === id);
                   <span class="text-muted">
                     · Cockpit {s.seat_no} · {seasonName(s.season_id)} · {roundRangeLabel(s)}
                   </span>
-                  <a class="underline" href={`/admin/teams/aufstellung?saison=${s.season_id}#team-${s.team_id}`}>
+                  <a class="inline-flex min-h-[44px] items-center underline" href={`/admin/teams/aufstellung?saison=${s.season_id}#team-${s.team_id}`}>
                     Aufstellung
                   </a>
                 </li>
@@ -270,7 +271,7 @@ const teamOf = (id: number) => teams.find((t) => t.id === id);
         <ul class="grid gap-2">
           {registrations.map((r) => (
             <li>
-              <a class="underline" href={`/admin/anmeldungen/${r.id}`}>
+              <a class="inline-flex min-h-[44px] items-center underline" href={`/admin/anmeldungen/${r.id}`}>
                 Anmeldung #{r.id}
               </a>{' '}
               <span class="text-muted">

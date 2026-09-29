@@ -119,3 +119,11 @@ export function formatHoursLeft(hours: number): string {
         : `${Math.round(abs / 24)} ${future ? 'Tage' : 'Tagen'}`;
   return future ? `noch ${span}` : `seit ${span} abgelaufen`;
 }
+
+/** „in 5 Std.“, „in 13 Tagen“ (Dativ) – für Termine in der Zukunft. */
+export function formatTimeUntil(hours: number): string {
+  const abs = Math.max(0, hours);
+  if (abs < 1) return `in ${Math.max(1, Math.round(abs * 60))} Min.`;
+  if (abs < 48) return `in ${Math.round(abs)} Std.`;
+  return `in ${Math.round(abs / 24)} Tagen`;
+}

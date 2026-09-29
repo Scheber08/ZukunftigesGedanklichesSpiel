@@ -114,7 +114,7 @@ const title = filter.status ? `${REGISTRATION_STATUS_LABELS[filter.status]} (${l
                     <th scope="row" class="sticky-col">
                       <span class="inline-flex items-center gap-2">
                         <Flag code={r.nationality} lang="de" />
-                        <a class="gamertag underline" href={`/admin/anmeldungen/${r.id}`}>
+                        <a class="inline-flex min-h-[44px] items-center gamertag underline" href={`/admin/anmeldungen/${r.id}`}>
                           {r.gamertag}
                         </a>
                       </span>

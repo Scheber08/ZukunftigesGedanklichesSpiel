@@ -85,14 +85,14 @@ const yesNo = (v: boolean) => (v ? 'eingerichtet' : 'fehlt');
 
   <nav aria-label="Abschnitte" class="mb-6">
     <ul class="flex flex-wrap gap-2 text-sm">
-      <li><a class="btn btn-ghost btn-sm" href="#discord">Discord</a></li>
-      <li><a class="btn btn-ghost btn-sm" href="#webhooks">Webhooks</a></li>
-      <li><a class="btn btn-ghost btn-sm" href="#social">Social & Twitch</a></li>
-      <li><a class="btn btn-ghost btn-sm" href="#analytics">Analytics</a></li>
-      <li><a class="btn btn-ghost btn-sm" href="#rollen">Rollen</a></li>
-      <li><a class="btn btn-ghost btn-sm" href="#anmeldung">Anmeldestatus</a></li>
-      <li><a class="btn btn-ghost btn-sm" href="#startseite">Startseite</a></li>
-      <li><a class="btn btn-ghost btn-sm" href="#rebuild">Neubau</a></li>
+      <li><a class="btn btn-ghost" href="#discord">Discord</a></li>
+      <li><a class="btn btn-ghost" href="#webhooks">Webhooks</a></li>
+      <li><a class="btn btn-ghost" href="#social">Social & Twitch</a></li>
+      <li><a class="btn btn-ghost" href="#analytics">Analytics</a></li>
+      <li><a class="btn btn-ghost" href="#rollen">Rollen</a></li>
+      <li><a class="btn btn-ghost" href="#anmeldung">Anmeldestatus</a></li>
+      <li><a class="btn btn-ghost" href="#startseite">Startseite</a></li>
+      <li><a class="btn btn-ghost" href="#rebuild">Neubau</a></li>
     </ul>
   </nav>
 
@@ -215,7 +215,7 @@ const yesNo = (v: boolean) => (v ? 'eingerichtet' : 'fehlt');
                 <li>
                   <form method="POST" action={A.settingsWebhookTest}>
                     <input type="hidden" name="channel" value={ch} />
-                    <button type="submit" class="btn whitespace-normal btn-secondary btn-sm">
+                    <button type="submit" class="btn whitespace-normal btn-secondary">
                       <span class="sr-only">Test an </span>
                       {WEBHOOK_CHANNEL_LABELS[ch].label}
                     </button>

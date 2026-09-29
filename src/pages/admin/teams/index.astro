@@ -78,7 +78,7 @@ const f = formValues(outcome, actions.admin.teamSave);
                   <th scope="row" class="sticky-col">
                     <span class="inline-flex items-center gap-2" style={`--team-color:${t.color_hex}`}>
                       <span class="team-stripe" aria-hidden="true" />
-                      <a class="font-semibold underline" href={`/admin/teams/${t.id}`}>
+                      <a class="inline-flex min-h-[44px] items-center font-semibold underline" href={`/admin/teams/${t.id}`}>
                         {t.name}
                       </a>
                     </span>

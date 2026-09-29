@@ -18,7 +18,7 @@ import { url } from '~/i18n';
 import { SEASON_STATUS_BADGE, SEASON_STATUS_LABELS } from '~/lib/admin/league/labels';
 import { lobbyStats } from '~/lib/admin/league/lobby';
 import { leagueFromStore } from '~/lib/admin/league/ops';
-import { actionOutcome, formValues } from '~/lib/admin/league/page';
+import { actionOutcome, formValues, sameAction } from '~/lib/admin/league/page';
 import { FROZEN_MESSAGE, isSeasonFrozen, openRoundsBeforeFinish, seasonChangeChecklist } from '~/lib/admin/league/season';
 import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
@@ -76,9 +76,10 @@ const values = {
   ends_on: edit.str('ends_on', season.ends_on ?? ''),
 };
 
-const lobbyMode = Astro.url.searchParams.get('lobby') === 'json' || (outcome.action === A.seasonLobbySave && outcome.posted?.get('mode') === 'json') ? 'json' : 'form';
-const lobbyErrors = outcome.action === A.seasonLobbySave ? { lobby: outcome.error?.fields.lobby, json: outcome.error?.fields.json } : {};
-const postedJson = outcome.action === A.seasonLobbySave && outcome.posted?.get('mode') === 'json' ? String(outcome.posted.get('json') ?? '') : null;
+const lobbyPosted = sameAction(outcome.action, A.seasonLobbySave);
+const lobbyMode = Astro.url.searchParams.get('lobby') === 'json' || (lobbyPosted && outcome.posted?.get('mode') === 'json') ? 'json' : 'form';
+const lobbyErrors = lobbyPosted ? { lobby: outcome.error?.fields.lobby, json: outcome.error?.fields.json } : {};
+const postedJson = lobbyPosted && outcome.posted?.get('mode') === 'json' ? String(outcome.posted.get('json') ?? '') : null;
 const stats = lobbyStats(season.lobby_settings);
 
 const finishForm = formValues(outcome, A.seasonFinish);

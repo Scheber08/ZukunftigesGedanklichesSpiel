@@ -134,7 +134,7 @@ const filterHref = (s: string | null) => {
                     <th scope="row" class="sticky-col">
                       <span class="inline-flex items-center gap-2">
                         <Flag code={d.nationality_code} lang="de" />
-                        <a class="gamertag underline" href={`/admin/fahrer/${d.id}`}>
+                        <a class="inline-flex min-h-[44px] items-center gamertag underline" href={`/admin/fahrer/${d.id}`}>
                           {d.anonymized ? `Ehemaliger Fahrer #${d.id}` : d.gamertag}
                         </a>
                       </span>

@@ -156,7 +156,7 @@ const postedSlot = seatForm.active ? `${seatForm.str('team_id')}:${seatForm.str(
                         {cur ? (
                           <>
                             <span class="tabular text-muted">#{num(cur.driver_id) ?? '–'}</span>
-                            <a class="font-semibold uppercase underline" href={`/admin/fahrer/${cur.driver_id}`}>
+                            <a class="inline-flex min-h-[44px] items-center font-semibold uppercase underline" href={`/admin/fahrer/${cur.driver_id}`}>
                               {name(cur.driver_id)}
                             </a>
                             <Flag code={driverById.get(cur.driver_id)?.nationality_code} lang="de" />
@@ -275,7 +275,7 @@ const postedSlot = seatForm.active ? `${seatForm.str('team_id')}:${seatForm.str(
                 {reserves.map((d, i) => (
                   <li class="flex items-center gap-2">
                     <span class="w-6 text-right tabular text-muted">{i + 1}.</span>
-                    <a class="underline" href={`/admin/fahrer/${d.id}`}>
+                    <a class="inline-flex min-h-[44px] items-center underline" href={`/admin/fahrer/${d.id}`}>
                       {d.gamertag}
                     </a>
                     <span class="text-sm text-muted">#{num(d.id) ?? '–'}</span>

@@ -59,7 +59,7 @@ const fmtKm = (n: number | null) => (n == null ? '–' : new Intl.NumberFormat('
             sorted.map((t) => (
               <tr>
                 <th scope="row" class="sticky-col">
-                  <a class="font-semibold underline" href={`/admin/kalender/strecken/${t.id}`}>
+                  <a class="inline-flex min-h-[44px] items-center font-semibold underline" href={`/admin/kalender/strecken/${t.id}`}>
                     {t.name_de}
                   </a>
                   {t.name_en !== t.name_de && <span class="muted"> / {t.name_en}</span>}
