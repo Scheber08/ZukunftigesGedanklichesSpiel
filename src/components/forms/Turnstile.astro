@@ -1,0 +1,31 @@
+---
+/**
+ * Cloudflare Turnstile (Plan §8.4): unsichtbare Bot-Prüfung, erscheint nur bei Bedarf.
+ * Nur aktiv, wenn PUBLIC_TURNSTILE_SITE_KEY gesetzt ist; das Widget legt das Feld
+ * `cf-turnstile-response` im Formular an. Das externe Skript ist per CSP erlaubt.
+ */
+import { PUBLIC_TURNSTILE_SITE_KEY } from 'astro:env/client';
+import { useT, type Lang } from '~/i18n';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const siteKey = PUBLIC_TURNSTILE_SITE_KEY;
+---
+
+{
+  siteKey && (
+    <div class="turnstile" role="group" aria-label={t('forms.turnstile.label')}>
+      <div class="cf-turnstile" data-sitekey={siteKey} data-language={lang} data-theme="dark" data-size="flexible" data-appearance="interaction-only" />
+      <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    </div>
+  )
+}
+
+<style>
+  .turnstile:has(iframe) {
+    min-height: 65px;
+  }
+</style>

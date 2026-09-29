@@ -1,0 +1,106 @@
+---
+/** Auswahlfeld mit Label, Hinweis und Fehlertext; optional mit Optionsgruppen. */
+import CircleAlert from '@lucide/astro/icons/circle-alert';
+import { useT, type Lang } from '~/i18n';
+
+export interface SelectOption {
+  value: string | number;
+  label: string;
+  disabled?: boolean;
+}
+
+interface Props {
+  lang: Lang;
+  name: string;
+  label: string;
+  options?: SelectOption[];
+  groups?: Array<{ label: string; options: SelectOption[] }>;
+  id?: string;
+  value?: string | number | null;
+  required?: boolean;
+  hint?: string;
+  error?: string | null;
+  /** Leere erste Option („Bitte wählen“ bzw. „Keine Angabe“); null = keine */
+  placeholder?: string | null;
+  autocomplete?: string;
+  attrs?: Record<string, string | number | boolean | undefined>;
+  class?: string;
+}
+
+const {
+  lang,
+  name,
+  label,
+  options = [],
+  groups,
+  id = `f-${name}`,
+  value,
+  required = false,
+  hint,
+  error,
+  placeholder,
+  autocomplete,
+  attrs = {},
+  class: className,
+} = Astro.props;
+const t = useT(lang);
+const hintId = hint ? `${id}-hint` : undefined;
+const errorId = error ? `${id}-error` : undefined;
+const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
+const empty = placeholder === undefined ? t('forms.choose') : placeholder;
+const selected = value == null ? '' : String(value);
+---
+
+<div class:list={['field', className]}>
+  <label for={id} class="label">
+    {label}
+    {
+      required ? (
+        <span class="req" aria-hidden="true">
+          {' '}*
+        </span>
+      ) : (
+        <span class="font-normal text-muted"> ({t('forms.optional')})</span>
+      )
+    }
+  </label>
+  <select
+    id={id}
+    name={name}
+    class="select"
+    required={required}
+    autocomplete={autocomplete}
+    aria-invalid={error ? 'true' : undefined}
+    aria-describedby={describedBy}
+    {...attrs}
+  >
+    {empty !== null && <option value="" selected={selected === ''}>{empty}</option>}
+    {
+      options.map((o) => (
+        <option value={String(o.value)} selected={String(o.value) === selected} disabled={o.disabled}>
+          {o.label}
+        </option>
+      ))
+    }
+    {
+      groups?.map((g) => (
+        <optgroup label={g.label}>
+          {g.options.map((o) => (
+            <option value={String(o.value)} selected={String(o.value) === selected} disabled={o.disabled}>
+              {o.label}
+            </option>
+          ))}
+        </optgroup>
+      ))
+    }
+  </select>
+  {hint && <p id={hintId} class="field-hint">{hint}</p>}
+  {
+    error && (
+      <p id={errorId} class="field-error flex items-start gap-1.5">
+        <CircleAlert size={16} class="mt-0.5 shrink-0" aria-hidden="true" />
+        <span>{error}</span>
+      </p>
+    )
+  }
+</div>

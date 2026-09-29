@@ -1,0 +1,39 @@
+---
+/** Absende-Button; verhindert Doppel-Absenden (Button wird nach dem Absenden gesperrt). */
+import { useT, type Lang } from '~/i18n';
+
+interface Props {
+  lang: Lang;
+  label: string;
+  class?: string;
+}
+const { lang, label, class: className } = Astro.props;
+const t = useT(lang);
+---
+
+<button type="submit" class:list={['btn btn-primary', className]} data-submit data-sending-label={t('forms.sending')}>
+  <span data-submit-label>{label}</span>
+</button>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('button[data-submit]').forEach((btn) => {
+    const form = btn.form;
+    const label = btn.querySelector<HTMLElement>('[data-submit-label]');
+    if (!form || !label) return;
+    const original = label.textContent ?? '';
+    form.addEventListener('submit', () => {
+      // Erst nach dem Absenden sperren, sonst würde der Button-Wert fehlen
+      setTimeout(() => {
+        btn.setAttribute('aria-disabled', 'true');
+        btn.disabled = true;
+        label.textContent = btn.dataset.sendingLabel ?? original;
+      }, 0);
+    });
+    // Zurück-Navigation (bfcache): Button wieder freigeben
+    window.addEventListener('pageshow', () => {
+      btn.disabled = false;
+      btn.removeAttribute('aria-disabled');
+      label.textContent = original;
+    });
+  });
+</script>

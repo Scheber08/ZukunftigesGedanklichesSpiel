@@ -1,0 +1,23 @@
+---
+/**
+ * Spam-Schutz ohne Hürde für Menschen (Plan §4.6, §4.9): ein für Menschen und Screenreader
+ * unsichtbares Feld (Honeypot) plus signierter Zeitstempel für die Zeitfalle.
+ * Der Zeitstempel wird beim Rendern erzeugt – die Seite muss dynamisch sein.
+ */
+import { useT, type Lang } from '~/i18n';
+import { createFormToken, HONEYPOT_FIELD, TIMESTAMP_FIELD } from '~/lib/server/spam';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const token = await createFormToken();
+const id = `hp-${HONEYPOT_FIELD}`;
+---
+
+<div class="hp-field" aria-hidden="true">
+  <label for={id}>{t('forms.honeypot.label')}</label>
+  <input type="text" id={id} name={HONEYPOT_FIELD} value="" tabindex="-1" autocomplete="off" />
+</div>
+<input type="hidden" name={TIMESTAMP_FIELD} value={token} />

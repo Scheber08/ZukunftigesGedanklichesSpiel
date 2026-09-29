@@ -1,0 +1,63 @@
+---
+/** Einzelne Checkbox (z. B. Einwilligung); der Label-Inhalt kommt als Slot (mit Links). */
+import CircleAlert from '@lucide/astro/icons/circle-alert';
+import type { Lang } from '~/i18n';
+
+interface Props {
+  lang: Lang;
+  name: string;
+  id?: string;
+  value?: string;
+  checked?: boolean;
+  required?: boolean;
+  error?: string | null;
+  class?: string;
+}
+
+const { name, id = `f-${name}`, value = 'on', checked = false, required = false, error, class: className } = Astro.props;
+const errorId = error ? `${id}-error` : undefined;
+---
+
+<div class:list={['field', className]}>
+  <div class="checkbox consent">
+    <input type="checkbox" id={id} name={name} value={value} checked={checked} required={required} aria-invalid={error ? 'true' : undefined} aria-describedby={errorId} />
+    <label for={id}>
+      <slot />
+      {
+        required && (
+          <span class="req" aria-hidden="true">
+            {' '}*
+          </span>
+        )
+      }
+    </label>
+  </div>
+  {
+    error && (
+      <p id={errorId} class="field-error flex items-start gap-1.5">
+        <CircleAlert size={16} class="mt-0.5 shrink-0" aria-hidden="true" />
+        <span>{error}</span>
+      </p>
+    )
+  }
+</div>
+
+<style>
+  .consent label {
+    cursor: pointer;
+  }
+  .consent :global(a) {
+    color: var(--color-green);
+    text-decoration: underline;
+  }
+  .consent :global(a:hover) {
+    color: var(--color-teal);
+  }
+  .consent .req {
+    color: var(--color-teal);
+  }
+  .consent input[aria-invalid='true'] {
+    outline: 2px solid var(--color-danger);
+    outline-offset: 2px;
+  }
+</style>

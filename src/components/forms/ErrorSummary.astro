@@ -1,0 +1,54 @@
+---
+/**
+ * Fehlerübersicht oberhalb des Formulars (WCAG 3.3.1): wird beim Laden angesagt,
+ * jeder Eintrag springt zum Feld. Allgemeine Fehler (Spam-Schutz, Server) stehen oben.
+ */
+import { useT, type Lang } from '~/i18n';
+
+interface Props {
+  lang: Lang;
+  /** Feldname → übersetzte Meldung */
+  errors: Record<string, string>;
+  /** Feldname → Label (Reihenfolge = Reihenfolge im Formular) */
+  labels: Record<string, string>;
+  formError?: string | null;
+}
+const { lang, errors, labels, formError } = Astro.props;
+const t = useT(lang);
+const order = Object.keys(labels);
+const entries = Object.entries(errors).sort(([a], [b]) => (order.indexOf(a) + 1 || 999) - (order.indexOf(b) + 1 || 999));
+const count = entries.length;
+---
+
+{
+  (count > 0 || formError) && (
+    <div class="alert alert-danger" role="alert" tabindex="-1" data-error-summary>
+      <p class="font-semibold">{t('forms.summary.title')}</p>
+      {formError && <p class="mt-1 text-sm">{formError}</p>}
+      {count > 0 && (
+        <>
+          <p class="mt-1 text-sm text-muted">{count === 1 ? t('forms.summary.one') : t('forms.summary.count', { n: count })}</p>
+          <ul class="mt-2 grid gap-1 text-sm">
+            {entries.map(([name, message]) => (
+              <li>
+                <a href={`#f-${name}`} class="underline hover:text-teal">
+                  {labels[name] ?? name}
+                </a>
+                : {message}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  )
+}
+
+<script>
+  // Fokus auf die Fehlerübersicht, damit Tastatur- und Screenreader-Nutzer direkt dort landen
+  const summary = document.querySelector<HTMLElement>('[data-error-summary]');
+  if (summary) {
+    summary.focus({ preventScroll: true });
+    summary.scrollIntoView({ block: 'center' });
+  }
+</script>

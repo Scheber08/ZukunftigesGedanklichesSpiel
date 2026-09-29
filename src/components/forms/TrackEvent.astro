@@ -1,0 +1,32 @@
+---
+/**
+ * GA4-Ereignis beim Anzeigen einer Erfolgsseite (Plan §8.3), z. B. 'registration_submitted'.
+ * Sendet nur, wenn GA nach Einwilligung geladen ist (window.ligaTrack aus SiteScripts);
+ * GA lädt asynchron, daher wird kurz gewartet. Ohne Einwilligung passiert nichts.
+ */
+interface Props {
+  name: 'registration_submitted' | 'incident_reported' | 'contact_submitted';
+}
+const { name } = Astro.props;
+---
+
+<span hidden data-ga-event={name}></span>
+
+<script>
+  type W = { gtag?: unknown; ligaTrack?: (name: string, params?: Record<string, unknown>) => void };
+  const w = window as unknown as W;
+  document.querySelectorAll<HTMLElement>('[data-ga-event]').forEach((el) => {
+    const name = el.dataset.gaEvent;
+    if (!name) return;
+    let tries = 0;
+    const send = () => {
+      if (typeof w.gtag === 'function' && typeof w.ligaTrack === 'function') {
+        w.ligaTrack(name);
+        return;
+      }
+      // bis zu ~8 s auf GA warten (Consent-Bibliothek und gtag laden nachgelagert)
+      if (++tries < 16) setTimeout(send, 500);
+    };
+    send();
+  });
+</script>

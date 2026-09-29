@@ -1,0 +1,117 @@
+---
+/**
+ * Gruppe aus Radio-Buttons oder Checkboxen in einem fieldset mit legend.
+ * Die erste Option trägt die Feld-ID (Sprungziel der Fehlerübersicht).
+ */
+import CircleAlert from '@lucide/astro/icons/circle-alert';
+import { useT, type Lang } from '~/i18n';
+
+export interface ChoiceOption {
+  value: string | number;
+  label: string;
+  /** Zusatz in kleinerer Schrift (z. B. Startnummer) */
+  meta?: string;
+}
+
+interface Props {
+  lang: Lang;
+  name: string;
+  legend: string;
+  options: ChoiceOption[];
+  type?: 'radio' | 'checkbox';
+  id?: string;
+  /** Ausgewählter Wert (Radio) bzw. ausgewählte Werte (Checkboxen) */
+  value?: string | number | null | Array<string | number>;
+  required?: boolean;
+  hint?: string;
+  error?: string | null;
+  /** Spalten ab sm/md-Breite */
+  columns?: 1 | 2 | 3;
+  class?: string;
+}
+
+const {
+  lang,
+  name,
+  legend,
+  options,
+  type = 'radio',
+  id = `f-${name}`,
+  value,
+  required = false,
+  hint,
+  error,
+  columns = 1,
+  class: className,
+} = Astro.props;
+const t = useT(lang);
+const hintId = hint ? `${id}-hint` : undefined;
+const errorId = error ? `${id}-error` : undefined;
+const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
+const selected = new Set((Array.isArray(value) ? value : value == null ? [] : [value]).map(String));
+const grid = columns === 3 ? 'sm:grid-cols-2 lg:grid-cols-3' : columns === 2 ? 'sm:grid-cols-2' : '';
+---
+
+<fieldset class:list={['field choice-group', className]} aria-describedby={describedBy} data-invalid={error ? 'true' : undefined}>
+  <legend class="label mb-1.5">
+    {legend}
+    {
+      required ? (
+        <span class="req" aria-hidden="true">
+          {' '}*
+        </span>
+      ) : (
+        <span class="font-normal text-muted"> ({t('forms.optional')})</span>
+      )
+    }
+  </legend>
+  {hint && <p id={hintId} class="field-hint -mt-1 mb-1">{hint}</p>}
+  <div class:list={['grid gap-x-4', grid]}>
+    {
+      options.map((o, i) => (
+        <label class="checkbox choice">
+          <input
+            type={type}
+            name={name}
+            value={String(o.value)}
+            id={i === 0 ? id : `${id}-${i}`}
+            checked={selected.has(String(o.value))}
+            required={type === 'radio' && required}
+          />
+          <span>
+            {o.label}
+            {o.meta && <span class="text-sm text-muted"> {o.meta}</span>}
+          </span>
+        </label>
+      ))
+    }
+  </div>
+  {
+    error && (
+      <p id={errorId} class="field-error mt-1 flex items-start gap-1.5">
+        <CircleAlert size={16} class="mt-0.5 shrink-0" aria-hidden="true" />
+        <span>{error}</span>
+      </p>
+    )
+  }
+</fieldset>
+
+<style>
+  .choice-group {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+  }
+  .choice {
+    align-items: center;
+    padding-block: 0.25rem;
+  }
+  .choice input {
+    margin-top: 0;
+  }
+  .choice-group[data-invalid='true'] .choice input {
+    outline: 1px solid var(--color-danger);
+    outline-offset: 1px;
+  }
+</style>
