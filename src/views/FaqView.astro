@@ -1,0 +1,481 @@
+---
+/**
+ * FAQ & Einsteiger-Guide (Plan §4.8): Voraussetzungen, Ablauf eines Renntags (Zeitleiste),
+ * Abmeldung über Discord, Lags/Disconnects, Setup-Tipps und die FAQ als Akkordeon.
+ * Guide-Inhalte aus src/lib/seed/content/guide.ts, FAQ aus der Datenbank.
+ */
+import CircleCheck from '@lucide/astro/icons/circle-check';
+import Gamepad2 from '@lucide/astro/icons/gamepad-2';
+import Globe from '@lucide/astro/icons/globe';
+import IdCard from '@lucide/astro/icons/id-card';
+import Joystick from '@lucide/astro/icons/joystick';
+import UserCheck from '@lucide/astro/icons/user-check';
+import Wifi from '@lucide/astro/icons/wifi';
+import Wrench from '@lucide/astro/icons/wrench';
+import BrandIcon from '~/components/ui/BrandIcon.astro';
+import Markdown from '~/components/ui/Markdown.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import TranslationNotice from '~/components/ui/TranslationNotice.astro';
+import { SITE } from '~/config/site';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { FAQ_CATEGORIES } from '~/lib/db/types';
+import { localized } from '~/lib/league/league';
+import { LAG_DISCONNECT, RACEDAY_TIMELINE, REQUIREMENTS, SETUP_TIPS } from '~/lib/seed/content/guide';
+import { loadLeague } from '~/lib/server/league';
+import { markdownToText } from '~/lib/util/markdown';
+import { breadcrumbJsonLd } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const faq = league.faq;
+const discordUrl = league.settings.discord_invite.url;
+
+// Guide-Texte haben immer DE und EN
+const pick = <T extends object>(row: T, field: string) => localized(row, field, lang).text;
+
+const REQUIREMENT_ICONS: Record<string, 'discord' | typeof Gamepad2> = {
+  game: Gamepad2,
+  crossplay: Globe,
+  ea_id: IdCard,
+  discord: 'discord',
+  age: UserCheck,
+  input: Joystick,
+};
+
+const ids =
+  lang === 'de'
+    ? { requirements: 'voraussetzungen', raceday: 'renntag', signoff: 'abmeldung', lag: 'lags-disconnects', setup: 'setup-tipps', faq: 'fragen' }
+    : { requirements: 'requirements', raceday: 'race-day', signoff: 'signing-off', lag: 'lag-disconnects', setup: 'setup-tips', faq: 'questions' };
+
+const sections = [
+  { id: ids.requirements, label: t('content.faq.requirements.title') },
+  { id: ids.raceday, label: t('content.faq.raceday.title') },
+  { id: ids.signoff, label: t('content.faq.signoff.title') },
+  { id: ids.lag, label: t('content.faq.lag.title') },
+  { id: ids.setup, label: t('content.faq.setup.title') },
+  { id: ids.faq, label: t('content.faq.faq.title') },
+];
+
+const faqGroups = FAQ_CATEGORIES.map((category) => ({ category, items: faq.filter((f) => f.category === category) })).filter((g) => g.items.length > 0);
+const faqFallback = faq.some((f) => localized(f, 'question', lang).fallback || localized(f, 'answer', lang).fallback);
+const signoffSteps = [t('content.faq.signoff.step1'), t('content.faq.signoff.step2'), t('content.faq.signoff.step3'), t('content.faq.signoff.step4')];
+
+const site = Astro.site ?? new URL(Astro.url.origin);
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('content.faq.title'), href: url(lang, 'faq') },
+];
+const jsonLd = [
+  breadcrumbJsonLd(
+    site,
+    crumbs.map((c) => ({ name: c.label, href: c.href })),
+  ),
+  ...(faq.length > 0
+    ? [
+        {
+          '@context': 'https://schema.org',
+          '@type': 'FAQPage',
+          name: `${t('content.faq.title')} · ${SITE.name}`,
+          inLanguage: lang === 'de' ? 'de-DE' : 'en-GB',
+          mainEntity: faq.map((f) => ({
+            '@type': 'Question',
+            name: localized(f, 'question', lang).text,
+            acceptedAnswer: { '@type': 'Answer', text: markdownToText(localized(f, 'answer', lang).text, 2000) },
+          })),
+        },
+      ]
+    : []),
+];
+---
+
+<BaseLayout lang={lang} title={t('content.faq.title')} description={t('content.faq.description')} alternates={alternates('faq')} jsonLd={jsonLd}>
+  <PageHeader lang={lang} title={t('content.faq.title')} lead={t('content.faq.lead')} breadcrumbs={crumbs} updated={league.lastUpdated(faq)}>
+    <nav aria-label={t('content.faq.nav')} class="no-print mt-6">
+      <ul class="flex flex-wrap gap-2">
+        {
+          sections.map((s) => (
+            <li>
+              <a href={`#${s.id}`} class="jump">
+                {s.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+  </PageHeader>
+
+  <div class="container-page">
+    <!-- Voraussetzungen -->
+    <section id={ids.requirements} class="section anchor-target" aria-labelledby={`${ids.requirements}-title`}>
+      <SectionTitle id={`${ids.requirements}-title`} title={t('content.faq.requirements.title')} />
+      <p class="-mt-3 mb-6 max-w-2xl text-muted">{t('content.faq.requirements.lead')}</p>
+      <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {
+          REQUIREMENTS.map((r) => {
+            const Icon = REQUIREMENT_ICONS[r.key];
+            return (
+              <li class="card card-hover p-5">
+                <div class="flex items-center gap-3">
+                  <span class="icon-bubble" aria-hidden="true">
+                    {Icon === 'discord' ? <BrandIcon name="discord" size={20} /> : Icon ? <Icon size={20} /> : <CircleCheck size={20} />}
+                  </span>
+                  <h3 class="text-lg uppercase">{pick(r, 'title')}</h3>
+                </div>
+                <Markdown source={pick(r, 'body')} class="mt-3 text-sm text-muted" />
+              </li>
+            );
+          })
+        }
+      </ul>
+      <p class="mt-6">
+        <a href={url(lang, 'join')} class="btn btn-primary">{t('content.faq.more.join')}</a>
+      </p>
+    </section>
+
+    <!-- Ablauf eines Renntags -->
+    <section id={ids.raceday} class="section anchor-target border-t border-border" aria-labelledby={`${ids.raceday}-title`}>
+      <SectionTitle id={`${ids.raceday}-title`} title={t('content.faq.raceday.title')} />
+      <p class="-mt-3 mb-8 max-w-2xl text-muted">{t('content.faq.raceday.lead')}</p>
+      <ol class="timeline">
+        {
+          RACEDAY_TIMELINE.map((step) => (
+            <li class="timeline-item">
+              <p class="timeline-time">{pick(step, 'time')}</p>
+              <div class="timeline-body">
+                <h3 class="text-lg uppercase">{pick(step, 'title')}</h3>
+                <Markdown source={pick(step, 'body')} class="mt-1 text-sm text-muted" />
+              </div>
+            </li>
+          ))
+        }
+      </ol>
+      <p class="mt-6 text-sm">
+        <a href={url(lang, 'lobby')} class="font-semibold text-green underline hover:text-teal">{t('nav.lobby')}</a>
+        <span class="text-muted" aria-hidden="true"> · </span>
+        <a href={url(lang, 'calendar')} class="font-semibold text-green underline hover:text-teal">{t('nav.calendar')}</a>
+      </p>
+    </section>
+
+    <!-- Abmeldung über Discord -->
+    <section id={ids.signoff} class="section anchor-target border-t border-border" aria-labelledby={`${ids.signoff}-title`}>
+      <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
+        <div>
+          <SectionTitle id={`${ids.signoff}-title`} title={t('content.faq.signoff.title')} />
+          <p class="-mt-3 max-w-xl text-muted">{t('content.faq.signoff.lead')}</p>
+          <div class="mt-6 flex flex-wrap gap-3">
+            {
+              discordUrl && (
+                <a href={discordUrl} class="btn btn-secondary" target="_blank" rel="noopener" data-track="discord_click">
+                  <BrandIcon name="discord" size={18} />
+                  {t('common.joinDiscord')}
+                  <span class="sr-only">{t('a11y.externalLink')}</span>
+                </a>
+              )
+            }
+            <a href={`${url(lang, 'rules')}#p2-5`} class="btn btn-ghost">
+              {t('content.faq.signoff.rules')}
+            </a>
+          </div>
+        </div>
+        <ol class="card steps p-5 md:p-6">
+          {signoffSteps.map((s) => <li class="step text-sm">{s}</li>)}
+        </ol>
+      </div>
+    </section>
+
+    <!-- Lags & Disconnects -->
+    <section id={ids.lag} class="section anchor-target border-t border-border" aria-labelledby={`${ids.lag}-title`}>
+      <SectionTitle id={`${ids.lag}-title`} title={t('content.faq.lag.title')} />
+      <p class="-mt-3 mb-6 max-w-2xl text-muted">{t('content.faq.lag.lead')}</p>
+      <ul class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {
+          LAG_DISCONNECT.map((item) => (
+            <li class="card p-5">
+              <div class="flex items-center gap-3">
+                <span class="icon-bubble" aria-hidden="true">
+                  <Wifi size={18} />
+                </span>
+                <h3 class="text-lg uppercase">{pick(item, 'title')}</h3>
+              </div>
+              <Markdown source={pick(item, 'body')} class="mt-3 text-sm text-muted" />
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <!-- Setup-Tipps -->
+    <section id={ids.setup} class="section anchor-target border-t border-border" aria-labelledby={`${ids.setup}-title`}>
+      <SectionTitle id={`${ids.setup}-title`} title={t('content.faq.setup.title')} />
+      <p class="-mt-3 mb-6 max-w-2xl text-muted">{t('content.faq.setup.lead')}</p>
+      <ul class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {
+          SETUP_TIPS.map((tip) => (
+            <li class="card card-hover p-5">
+              <div class="flex items-center gap-3">
+                <span class="icon-bubble" aria-hidden="true">
+                  <Wrench size={18} />
+                </span>
+                <h3 class="text-lg uppercase">{pick(tip, 'title')}</h3>
+              </div>
+              <Markdown source={pick(tip, 'body')} class="mt-3 text-sm text-muted" />
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <!-- FAQ -->
+    <section id={ids.faq} class="section anchor-target border-t border-border" aria-labelledby={`${ids.faq}-title`}>
+      <SectionTitle id={`${ids.faq}-title`} title={t('content.faq.faq.title')} />
+      <TranslationNotice lang={lang} show={faqFallback} />
+      {
+        faqGroups.length === 0 ? (
+          <p class="text-muted">{t('content.faq.empty')}</p>
+        ) : (
+          <div class="grid gap-10 lg:grid-cols-[14rem_minmax(0,1fr)]">
+            <nav aria-label={t('content.faq.faq.title')} class="no-print hidden lg:block">
+              <ul class="sticky top-[calc(var(--header-h)+1.5rem)] grid gap-1">
+                {faqGroups.map((g) => (
+                  <li>
+                    <a href={`#${ids.faq}-${g.category}`} class="faq-cat-link">
+                      {t(`content.faq.category.${g.category}`)}
+                      <span class="text-muted">({g.items.length})</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+            <div class="grid gap-10">
+              {faqGroups.map((g) => (
+                <div id={`${ids.faq}-${g.category}`} class="anchor-target">
+                  <h3 class="micro mb-2 text-teal!">{t(`content.faq.category.${g.category}`)}</h3>
+                  <div class="accordion border-t border-border">
+                    {g.items.map((item) => {
+                      const q = localized(item, 'question', lang);
+                      const a = localized(item, 'answer', lang);
+                      return (
+                        <details id={`${ids.faq}-${item.id}`} class="faq-item anchor-target">
+                          <summary lang={q.fallback ? 'de' : undefined}>{q.text}</summary>
+                          <Markdown source={a.text} class="pb-5 text-sm" lang={a.fallback ? 'de' : undefined} />
+                        </details>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      }
+    </section>
+
+    <!-- Noch Fragen? -->
+    <section class="section border-t border-border" aria-labelledby="faq-more">
+      <div class="card more-card flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between md:p-8">
+        <div>
+          <h2 id="faq-more" class="text-2xl uppercase">{t('content.faq.more.title')}</h2>
+          <p class="mt-2 max-w-xl text-sm text-muted">{t('content.faq.more.text')}</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          {
+            discordUrl && (
+              <a href={discordUrl} class="btn btn-secondary" target="_blank" rel="noopener" data-track="discord_click">
+                <BrandIcon name="discord" size={18} />
+                {t('common.discord')}
+                <span class="sr-only">{t('a11y.externalLink')}</span>
+              </a>
+            )
+          }
+          <a href={url(lang, 'contact')} class="btn btn-ghost">{t('content.faq.more.contact')}</a>
+          <a href={url(lang, 'join')} class="btn btn-primary">{t('content.faq.more.join')}</a>
+        </div>
+      </div>
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .anchor-target {
+    scroll-margin-top: calc(var(--header-h) + 1rem);
+  }
+  .jump {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0.375rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-surface-1);
+    font-size: var(--fs-small);
+    font-weight: 600;
+    text-decoration: none;
+    transition:
+      border-color 150ms ease-out,
+      color 150ms ease-out;
+  }
+  .jump:hover {
+    border-color: var(--color-teal);
+    color: var(--color-teal);
+  }
+  .icon-bubble {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.75rem;
+    background: var(--color-surface-2);
+    color: var(--color-teal);
+  }
+
+  /* Zeitleiste Renntag */
+  .timeline {
+    position: relative;
+    display: grid;
+    gap: 0;
+    list-style: none;
+    padding: 0;
+  }
+  .timeline-item {
+    position: relative;
+    display: grid;
+    gap: 0.25rem 1.5rem;
+    padding: 0 0 1.75rem 2rem;
+  }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: 0.4375rem;
+    top: 0.5rem;
+    bottom: 0;
+    width: 2px;
+    background: var(--color-border);
+  }
+  .timeline-item:last-child::before {
+    display: none;
+  }
+  .timeline-item::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.3rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 999px;
+    background: var(--color-bg);
+    border: 2px solid var(--color-teal);
+    box-shadow: 0 0 10px rgb(52 196 208 / 0.35);
+  }
+  .timeline-time {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-teal);
+  }
+  @media (min-width: 768px) {
+    .timeline-item {
+      grid-template-columns: 11rem minmax(0, 1fr);
+      padding-left: 0;
+    }
+    .timeline-item::before {
+      left: 12.4375rem;
+    }
+    .timeline-item::after {
+      left: 12rem;
+    }
+    .timeline-time {
+      text-align: right;
+      padding-right: 1.5rem;
+    }
+    .timeline-body {
+      padding-left: 2rem;
+    }
+  }
+
+  /* Nummerierte Schritte (Abmeldung) */
+  .steps {
+    counter-reset: step;
+    display: grid;
+    gap: 1rem;
+    list-style: none;
+  }
+  .step {
+    counter-increment: step;
+    position: relative;
+    padding-left: 2.75rem;
+    line-height: 1.55;
+  }
+  .step::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: -0.1rem;
+    display: grid;
+    place-items: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 999px;
+    background: var(--g-accent);
+    color: #000;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 0.9rem;
+  }
+
+  .faq-cat-link {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 2.5rem;
+    align-items: center;
+    padding: 0.375rem 0.75rem;
+    border-radius: 6px;
+    font-size: var(--fs-small);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .faq-cat-link:hover {
+    background: var(--color-surface-2);
+    color: var(--color-teal);
+  }
+  .faq-item[open] > summary {
+    color: var(--color-teal);
+  }
+  .more-card {
+    background:
+      radial-gradient(60% 120% at 100% 0%, rgb(14 90 97 / 0.35), transparent 70%),
+      var(--color-surface-1);
+  }
+  @media print {
+    .faq-item > :global(:not(summary)) {
+      display: block;
+    }
+  }
+</style>
+
+<script>
+  // Direktlink auf eine Frage (#fragen-12) klappt sie auf
+  const openFromHash = () => {
+    const id = decodeURIComponent(window.location.hash.slice(1));
+    if (!id) return;
+    const target = document.getElementById(id);
+    if (target instanceof HTMLDetailsElement) {
+      target.open = true;
+      target.scrollIntoView();
+    }
+  };
+  openFromHash();
+  window.addEventListener('hashchange', openFromHash);
+  // Beim Drucken alle Antworten zeigen
+  window.addEventListener('beforeprint', () => {
+    document.querySelectorAll<HTMLDetailsElement>('details.faq-item').forEach((d) => (d.open = true));
+  });
+</script>

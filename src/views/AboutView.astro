@@ -1,0 +1,258 @@
+---
+/**
+ * Über uns & Team-Suche (Plan §4.8): Orga-Team als Karten (Gamertag, Rolle, seit wann,
+ * optional Avatar) und offene Rollen mit Aufgabe, Zeitaufwand und Kontakt per Discord-Ticket.
+ */
+import Clock from '@lucide/astro/icons/clock';
+import Mail from '@lucide/astro/icons/mail';
+import Scale from '@lucide/astro/icons/scale';
+import ShieldCheck from '@lucide/astro/icons/shield-check';
+import Users from '@lucide/astro/icons/users';
+import BrandIcon from '~/components/ui/BrandIcon.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import Markdown from '~/components/ui/Markdown.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import TranslationNotice from '~/components/ui/TranslationNotice.astro';
+import { SITE } from '~/config/site';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { initials } from '~/lib/content/text';
+import { localized } from '~/lib/league/league';
+import { loadLeague } from '~/lib/server/league';
+import { breadcrumbJsonLd } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const staff = league.staff;
+const positions = league.openPositions;
+const discordUrl = league.settings.discord_invite.url;
+
+const hasFallback =
+  staff.some((s) => localized(s, 'role', lang).fallback) ||
+  positions.some((p) => localized(p, 'title', lang).fallback || localized(p, 'description', lang).fallback);
+
+const values = [
+  { key: 'fair', icon: Scale },
+  { key: 'open', icon: Users },
+  { key: 'reliable', icon: ShieldCheck },
+] as const;
+
+const site = Astro.site ?? new URL(Astro.url.origin);
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('content.about.title'), href: url(lang, 'about') },
+];
+const jsonLd = [
+  breadcrumbJsonLd(
+    site,
+    crumbs.map((c) => ({ name: c.label, href: c.href })),
+  ),
+  {
+    '@context': 'https://schema.org',
+    '@type': 'AboutPage',
+    name: `${t('content.about.title')} · ${SITE.name}`,
+    url: new URL(url(lang, 'about'), site).href,
+    inLanguage: lang === 'de' ? 'de-DE' : 'en-GB',
+    about: {
+      '@type': 'SportsOrganization',
+      name: SITE.name,
+      sport: 'Sim Racing',
+      foundingDate: String(SITE.foundingYear),
+      url: new URL(url(lang, 'home'), site).href,
+    },
+  },
+];
+---
+
+<BaseLayout lang={lang} title={t('content.about.title')} description={t('content.about.description')} alternates={alternates('about')} jsonLd={jsonLd}>
+  <PageHeader
+    lang={lang}
+    title={t('content.about.title')}
+    lead={t('content.about.lead')}
+    breadcrumbs={crumbs}
+    updated={league.lastUpdated([...staff, ...positions])}
+  />
+
+  <div class="container-page">
+    <TranslationNotice lang={lang} show={hasFallback} />
+
+    <!-- Wer wir sind -->
+    <section class="section" aria-labelledby="about-intro">
+      <div class="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-start">
+        <div>
+          <SectionTitle id="about-intro" title={t('content.about.intro.title')} />
+          <div class="grid max-w-2xl gap-4 text-muted">
+            <p>{t('content.about.intro.text1')}</p>
+            <p>{t('content.about.intro.text2')}</p>
+          </div>
+        </div>
+        <ul class="grid gap-3">
+          {
+            values.map(({ key, icon: Icon }) => (
+              <li class="card flex gap-4 p-5">
+                <span class="icon-bubble" aria-hidden="true">
+                  <Icon size={20} />
+                </span>
+                <div>
+                  <h3 class="text-lg uppercase">{t(`content.about.values.${key}.title`)}</h3>
+                  <p class="mt-1 text-sm text-muted">{t(`content.about.values.${key}.text`)}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </section>
+
+    <!-- Orga-Team -->
+    <section class="section border-t border-border" aria-labelledby="about-team">
+      <SectionTitle id="about-team" title={t('content.about.team.title')} />
+      <p class="-mt-3 mb-6 max-w-2xl text-muted">{t('content.about.team.lead')}</p>
+      {
+        staff.length === 0 ? (
+          <EmptyState title={t('content.about.team.empty')} />
+        ) : (
+          <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {staff.map((member) => {
+              const role = localized(member, 'role', lang);
+              return (
+                <li class="card card-hover staff-card">
+                  {member.avatar ? (
+                    <img src={member.avatar} alt="" width="96" height="96" loading="lazy" decoding="async" class="avatar" />
+                  ) : (
+                    <span class="avatar avatar-initials" aria-hidden="true">
+                      {initials(member.gamertag)}
+                    </span>
+                  )}
+                  <div class="min-w-0">
+                    <h3 class="gamertag">{member.gamertag}</h3>
+                    <p class="mt-1 text-sm font-semibold text-teal" lang={role.fallback ? 'de' : undefined}>
+                      {role.text}
+                    </p>
+                    {member.since_season != null && <p class="mt-1 text-xs text-muted">{t('content.about.team.since', { n: member.since_season })}</p>}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )
+      }
+    </section>
+
+    <!-- Offene Rollen -->
+    <section class="section border-t border-border" aria-labelledby="about-positions">
+      <SectionTitle id="about-positions" title={t('content.about.positions.title')} />
+      <p class="-mt-3 mb-6 max-w-2xl text-muted">{t('content.about.positions.lead')}</p>
+      {
+        positions.length === 0 ? (
+          <EmptyState title={t('content.about.positions.empty.title')} text={t('content.about.positions.empty.text')}>
+            <a href={url(lang, 'contact')} class="btn btn-secondary btn-sm mt-4">
+              {t('content.about.positions.contact.form')}
+            </a>
+          </EmptyState>
+        ) : (
+          <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+            <ul class="grid gap-4 md:grid-cols-2">
+              {positions.map((p) => {
+                const title = localized(p, 'title', lang);
+                const description = localized(p, 'description', lang);
+                return (
+                  <li class="card card-hover flex flex-col p-5">
+                    <h3 class="text-xl uppercase" lang={title.fallback ? 'de' : undefined}>
+                      {title.text}
+                    </h3>
+                    <Markdown source={description.text} class="mt-3 flex-1 text-sm text-muted" lang={description.fallback ? 'de' : undefined} />
+                    {p.effort && (
+                      <p class="mt-4 flex items-start gap-2 border-t border-border pt-4 text-sm">
+                        <Clock size={16} aria-hidden="true" class="mt-0.5 shrink-0 text-teal" />
+                        <span>
+                          <span class="font-semibold">{t('content.about.positions.effort')}:</span>{' '}
+                          <span lang={lang === 'en' ? 'de' : undefined}>{p.effort}</span>
+                        </span>
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            <aside class="card apply-card p-5 md:p-6 lg:sticky lg:top-[calc(var(--header-h)+1.5rem)]" aria-labelledby="about-apply">
+              <h3 id="about-apply" class="text-xl uppercase">
+                {t('content.about.positions.contact.title')}
+              </h3>
+              <p class="mt-2 text-sm text-muted">{t('content.about.positions.contact.text')}</p>
+              <div class="mt-5 grid gap-3">
+                {discordUrl && (
+                  <a href={discordUrl} class="btn btn-primary" target="_blank" rel="noopener" data-track="discord_click">
+                    <BrandIcon name="discord" size={18} />
+                    {t('content.about.positions.contact.discord')}
+                    <span class="sr-only">{t('a11y.externalLink')}</span>
+                  </a>
+                )}
+                <a href={url(lang, 'contact')} class:list={['btn', discordUrl ? 'btn-ghost' : 'btn-primary']}>
+                  <Mail size={16} aria-hidden="true" />
+                  {t('content.about.positions.contact.form')}
+                </a>
+              </div>
+            </aside>
+          </div>
+        )
+      }
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .icon-bubble {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+    background: var(--color-surface-2);
+    color: var(--color-teal);
+  }
+  .staff-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem;
+  }
+  .avatar {
+    flex: none;
+    width: 4rem;
+    height: 4rem;
+    border-radius: 999px;
+    object-fit: cover;
+    box-shadow:
+      0 0 0 2px var(--color-surface-1),
+      0 0 0 4px var(--color-teal);
+  }
+  .avatar-initials {
+    display: grid;
+    place-items: center;
+    background: var(--g-accent);
+    color: #000;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 1.25rem;
+    letter-spacing: 0.02em;
+  }
+  .gamertag {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+  .apply-card {
+    background:
+      radial-gradient(80% 60% at 100% 0%, rgb(11 96 67 / 0.35), transparent 70%),
+      var(--color-surface-1);
+  }
+</style>

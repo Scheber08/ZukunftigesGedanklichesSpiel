@@ -1,0 +1,286 @@
+---
+/**
+ * Lobby-Einstellungen der aktuellen Saison (Plan §4.8): aus `lobby_settings` der Saison
+ * erzeugt, als Karten gruppiert, dazu „So kommst du in die Lobby“ und die Spielversion.
+ */
+import BookOpen from '@lucide/astro/icons/book-open';
+import MessageCircle from '@lucide/astro/icons/message-circle';
+import BrandIcon from '~/components/ui/BrandIcon.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import TranslationNotice from '~/components/ui/TranslationNotice.astro';
+import { SITE } from '~/config/site';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { splitStep } from '~/lib/content/text';
+import { localized } from '~/lib/league/league';
+import { loadLeague } from '~/lib/server/league';
+import { breadcrumbJsonLd } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const season = league.currentSeason;
+const lobby = season?.lobby_settings ?? {};
+const groups = (lobby.groups ?? []).filter((g) => g.items.length > 0);
+
+// Schritte: EN-Liste, sonst DE (mit Hinweis)
+const stepsEn = lobby.join_steps_en ?? [];
+const stepsFallback = lang === 'en' && stepsEn.length === 0 && (lobby.join_steps_de?.length ?? 0) > 0;
+const steps = lang === 'en' && stepsEn.length > 0 ? stepsEn : (lobby.join_steps_de ?? []);
+
+const cells = groups.flatMap((g) => [localized(g, 'title', lang), ...g.items.flatMap((i) => [localized(i, 'label', lang), localized(i, 'value', lang)])]);
+const hasFallback = stepsFallback || cells.some((c) => c.fallback);
+const seasonName = season ? t('common.seasonN', { n: season.number }) : '';
+const discordUrl = league.settings.discord_invite.url;
+
+const site = Astro.site ?? new URL(Astro.url.origin);
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('content.lobby.title'), href: url(lang, 'lobby') },
+];
+const jsonLd = [
+  breadcrumbJsonLd(
+    site,
+    crumbs.map((c) => ({ name: c.label, href: c.href })),
+  ),
+  ...(steps.length > 0
+    ? [
+        {
+          '@context': 'https://schema.org',
+          '@type': 'HowTo',
+          name: `${t('content.lobby.join.title')} · ${SITE.name}`,
+          inLanguage: stepsFallback || lang === 'de' ? 'de-DE' : 'en-GB',
+          step: steps.map((s, i) => ({ '@type': 'HowToStep', position: i + 1, text: s })),
+        },
+      ]
+    : []),
+];
+---
+
+<BaseLayout lang={lang} title={t('content.lobby.title')} description={t('content.lobby.description')} alternates={alternates('lobby')} jsonLd={jsonLd}>
+  <PageHeader
+    lang={lang}
+    title={t('content.lobby.title')}
+    eyebrow={seasonName || undefined}
+    lead={season ? t('content.lobby.lead', { season: seasonName }) : t('content.lobby.leadNoSeason')}
+    breadcrumbs={crumbs}
+    updated={season?.updated_at}
+  />
+
+  <div class="container-page section">
+    {
+      !season || (groups.length === 0 && steps.length === 0) ? (
+        <EmptyState title={t('content.lobby.none.title')} text={t('content.lobby.none.text')} />
+      ) : (
+        <>
+          <TranslationNotice lang={lang} show={hasFallback} />
+
+          {/* Auf einen Blick */}
+          <section aria-labelledby="lobby-overview" class="mb-12">
+            <h2 id="lobby-overview" class="sr-only">
+              {t('content.lobby.overview')}
+            </h2>
+            <dl class="overview grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div class="overview-item card">
+                <dt>{t('content.lobby.season')}</dt>
+                <dd>{seasonName}</dd>
+              </div>
+              <div class="overview-item card">
+                <dt>{t('content.lobby.gameVersion')}</dt>
+                <dd>{season.game_version || SITE.gameName}</dd>
+              </div>
+              <div class="overview-item card">
+                <dt>{t('content.lobby.platforms')}</dt>
+                <dd>{t('content.lobby.platformsValue')}</dd>
+              </div>
+              <div class="overview-item card">
+                <dt>{t('content.lobby.gridSize')}</dt>
+                <dd>{t('content.lobby.gridSizeValue', { n: SITE.gridSize })}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <div class="grid gap-12 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-10">
+            {/* Einstellungen im Spiel */}
+            <section aria-labelledby="lobby-settings">
+              <SectionTitle id="lobby-settings" title={t('content.lobby.settingsTitle')} />
+              <div class="grid gap-5 md:grid-cols-2">
+                {groups.map((group) => {
+                  const title = localized(group, 'title', lang);
+                  return (
+                    <section class="card group-card" id={`lobby-${group.key}`} aria-labelledby={`lobby-${group.key}-title`}>
+                      <h3 id={`lobby-${group.key}-title`} class="group-title" lang={title.fallback ? 'de' : undefined}>
+                        {title.text}
+                      </h3>
+                      <dl class="settings-list">
+                        {group.items.map((item) => {
+                          const label = localized(item, 'label', lang);
+                          const value = localized(item, 'value', lang);
+                          return (
+                            <div class="setting">
+                              <dt lang={label.fallback ? 'de' : undefined}>{label.text}</dt>
+                              <dd lang={value.fallback ? 'de' : undefined}>{value.text}</dd>
+                            </div>
+                          );
+                        })}
+                      </dl>
+                    </section>
+                  );
+                })}
+              </div>
+              <p class="mt-6 max-w-3xl text-sm text-muted">
+                {t('content.lobby.binding')}{' '}
+                <a href={`${url(lang, 'rules')}#p10-2`} class="font-semibold text-green underline hover:text-teal">
+                  {t('content.lobby.rulesLink')}
+                </a>
+              </p>
+            </section>
+
+            {/* So kommst du in die Lobby */}
+            {steps.length > 0 && (
+              <section aria-labelledby="lobby-join" class="lg:sticky lg:top-[calc(var(--header-h)+1.5rem)] lg:self-start">
+                <div class="card join-card p-5 md:p-6">
+                  <h2 id="lobby-join" class="section-title text-2xl uppercase">
+                    {t('content.lobby.join.title')}
+                  </h2>
+                  <p class="mt-2 text-sm text-muted">{t('content.lobby.join.lead')}</p>
+                  <ol class="steps mt-5" lang={stepsFallback ? 'de' : undefined}>
+                    {steps.map((step) => {
+                      const { head, rest } = splitStep(step);
+                      return (
+                        <li class="step">
+                          <p>
+                            {head && <strong>{head}</strong>}
+                            {head && ' '}
+                            {rest}
+                          </p>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  <p class="mt-5 flex gap-2 text-sm text-muted">
+                    <MessageCircle size={18} aria-hidden="true" class="mt-0.5 shrink-0 text-teal" />
+                    <span>{t('content.lobby.join.help')}</span>
+                  </p>
+                  <div class="mt-5 flex flex-wrap gap-3">
+                    {discordUrl && (
+                      <a href={discordUrl} class="btn btn-secondary btn-sm" target="_blank" rel="noopener" data-track="discord_click">
+                        <BrandIcon name="discord" size={16} />
+                        {t('common.joinDiscord')}
+                        <span class="sr-only">{t('a11y.externalLink')}</span>
+                      </a>
+                    )}
+                    <a href={url(lang, 'faq')} class="btn btn-ghost btn-sm">
+                      <BookOpen size={16} aria-hidden="true" />
+                      {t('content.lobby.guideLink')}
+                    </a>
+                  </div>
+                </div>
+              </section>
+            )}
+          </div>
+        </>
+      )
+    }
+  </div>
+</BaseLayout>
+
+<style>
+  .overview-item {
+    padding: 1rem 1.25rem;
+  }
+  .overview-item dt,
+  .setting dt {
+    font-size: var(--fs-micro);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+  .overview-item dd {
+    margin-top: 0.25rem;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.125rem;
+    line-height: 1.3;
+  }
+  .group-card {
+    padding: 1.25rem;
+  }
+  .group-title {
+    font-size: var(--fs-h3);
+    text-transform: uppercase;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.25rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .settings-list {
+    display: grid;
+  }
+  .setting {
+    display: grid;
+    gap: 0.125rem;
+    padding: 0.625rem 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .setting:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+  .setting dd {
+    font-weight: 600;
+  }
+  @media (min-width: 480px) {
+    .setting {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+      gap: 1rem;
+      align-items: baseline;
+    }
+    .setting dd {
+      text-align: right;
+    }
+  }
+  .steps {
+    counter-reset: step;
+    display: grid;
+    gap: 1rem;
+    list-style: none;
+    padding: 0;
+  }
+  .step {
+    counter-increment: step;
+    position: relative;
+    padding-left: 2.75rem;
+    font-size: var(--fs-small);
+    line-height: 1.55;
+  }
+  .step::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: -0.1rem;
+    display: grid;
+    place-items: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 999px;
+    background: var(--g-accent);
+    color: #000;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 0.9rem;
+  }
+  .step strong {
+    color: var(--color-fg);
+  }
+  @media print {
+    .join-card {
+      position: static;
+    }
+  }
+</style>
