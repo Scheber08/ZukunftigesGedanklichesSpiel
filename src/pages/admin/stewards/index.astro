@@ -6,11 +6,13 @@
  */
 export const prerender = false;
 
+import ExternalLink from '@lucide/astro/icons/external-link';
 import Plus from '@lucide/astro/icons/plus';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import Badge from '~/components/ui/Badge.astro';
 import Forbidden from '~/components/admin/raceday/Forbidden.astro';
 import { flashText } from '~/lib/admin/raceday/flash';
+import { isHttpsUrl } from '~/lib/admin/raceday/decision-input';
 import {
   DECISION_STATUS_LABEL,
   DECISION_STATUS_VARIANT,
@@ -144,6 +146,7 @@ const newHref = `/admin/stewards/neu${roundFromParam ? `?runde=${roundFromParam.
                   <th scope="col">Rennen</th>
                   <th scope="col">Beteiligte</th>
                   <th scope="col">Gemeldet von</th>
+                  <th scope="col">Clip</th>
                   <th scope="col">Eingang</th>
                   <th scope="col">Status</th>
                   <th scope="col">Entscheidungen</th>
@@ -174,6 +177,17 @@ const newHref = `/admin/stewards/neu${roundFromParam ? `?runde=${roundFromParam.
                         : incident.reporter_driver_id != null
                           ? driverLabel(incident.reporter_driver_id)
                           : '–'}
+                    </td>
+                    <td>
+                      {isHttpsUrl(incident.clip_url) ? (
+                        <a href={incident.clip_url!} target="_blank" rel="noopener noreferrer nofollow" class="clip-link underline hover:text-teal">
+                          Clip<span class="sr-only"> zu Vorfall #{incident.id} (öffnet in neuem Tab)</span>
+                          <ExternalLink size={14} aria-hidden="true" />
+                        </a>
+                      ) : (
+                        <span class="muted">–</span>
+                      )}
+                      {incident.clip_timestamp && <span class="muted"> ab {incident.clip_timestamp}</span>}
                     </td>
                     <td>{formatDateTime(incident.submitted_at, 'de')}</td>
                     <td>
@@ -238,6 +252,12 @@ const newHref = `/admin/stewards/neu${roundFromParam ? `?runde=${roundFromParam.
   }
   .muted {
     color: var(--color-muted);
+  }
+  .clip-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 44px;
   }
   .segmented > a {
     min-height: 44px;

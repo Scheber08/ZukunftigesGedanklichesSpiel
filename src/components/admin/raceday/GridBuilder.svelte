@@ -113,6 +113,8 @@
     ),
   );
   const filled = $derived(lineup.seats.filter((s) => s.driverId != null).length);
+  /** Nach der ersten Veröffentlichung gibt es keinen Entwurf mehr: Speichern = sofort öffentlich. */
+  const isPublic = $derived(status !== 'scheduled');
   const dirty = $derived(JSON.stringify(payload(lineup)) !== savedJson);
   const names = { driver: name, team: (id: number) => teamById.get(id)?.name ?? `Team #${id}` };
   const issueText = (i: GridIssue) => gridIssueText(i, names);
@@ -249,8 +251,8 @@
     busy = null;
     if (res.error) {
       error = splitErrorMessage(res.error.message);
-      // Beim blockierten Veröffentlichen ist der Entwurf trotzdem gespeichert
-      if (publish && res.error.code === 'PRECONDITION_FAILED') savedJson = snapshot;
+      // Vor der ersten Veröffentlichung ist der Entwurf beim blockierten Veröffentlichen trotzdem gespeichert
+      if (publish && !isPublic && res.error.code === 'PRECONDITION_FAILED') savedJson = snapshot;
       announce = error.headline;
       return;
     }
@@ -416,6 +418,30 @@
         </ol>
       {/if}
 
+      {#if pool.regulars.length > 0}
+        <h3 class="mt-4 font-semibold">Stammfahrer ohne Cockpit ({pool.regulars.length})</h3>
+        <ul class="pool">
+          {#each pool.regulars as d (d.id)}
+            <li>
+              <button
+                type="button"
+                class="pool-driver"
+                draggable={!readOnly}
+                disabled={readOnly}
+                aria-pressed={selectedDriver === d.id}
+                ondragstart={(e) => dragStart(e, d.id)}
+                onclick={() => chooseDriver(d.id)}
+              >
+                <span class="num">#{numberOf(d.id) ?? '–'}</span>
+                <span class="gamertag">{d.gamertag}</span>
+                {#if banned.has(d.id)}<span class="badge badge-danger">Sperre</span>{/if}
+                {#if selectedSeat != null}<span class="sr-only"> in das gewählte Cockpit setzen</span>{/if}
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+
       {#if pool.others.length > 0}
         <details class="others">
           <summary>Weitere Fahrer ({pool.others.length})</summary>
@@ -484,7 +510,11 @@
         {/each}
       </ul>
       {#if errors.length > 0}
-        <p class="small muted mt-2">Fehler blockieren das Veröffentlichen. Als Entwurf speichern geht trotzdem.</p>
+        <p class="small muted mt-2">
+          {isPublic
+            ? 'Fehler blockieren das Speichern, weil die Aufstellung schon öffentlich ist.'
+            : 'Fehler blockieren das Veröffentlichen. Als Entwurf speichern geht trotzdem.'}
+        </p>
       {/if}
     {/if}
   </section>
@@ -512,9 +542,11 @@
     {#if !readOnly}
       <div class="buttons">
         <button type="button" class="btn btn-ghost" onclick={reset} disabled={busy != null}>Saisonaufstellung</button>
-        <button type="button" class="btn btn-secondary" onclick={() => save(false)} disabled={busy != null}>
-          {busy === 'save' ? 'Speichert …' : 'Entwurf speichern'}
-        </button>
+        {#if !isPublic}
+          <button type="button" class="btn btn-secondary" onclick={() => save(false)} disabled={busy != null}>
+            {busy === 'save' ? 'Speichert …' : 'Entwurf speichern'}
+          </button>
+        {/if}
         <label class="checkbox discord">
           <input type="checkbox" bind:checked={discord} />
           <span>Discord-Post (#aufstellung)</span>
@@ -526,11 +558,13 @@
           disabled={busy != null || errors.length > 0}
           aria-describedby={errors.length > 0 ? 'gb-publish-hint' : undefined}
         >
-          {busy === 'publish' ? 'Veröffentlicht …' : status === 'scheduled' ? 'Veröffentlichen' : 'Änderungen veröffentlichen'}
+          {busy === 'publish' ? 'Veröffentlicht …' : isPublic ? 'Änderungen veröffentlichen' : 'Veröffentlichen'}
         </button>
       </div>
       {#if errors.length > 0}
         <p id="gb-publish-hint" class="small text-danger">Veröffentlichen ist gesperrt, solange Fehler bestehen ({errors.length}).</p>
+      {:else if isPublic}
+        <p class="small muted">Die Aufstellung ist schon öffentlich – Änderungen erscheinen sofort auf der Rennseite.</p>
       {/if}
     {/if}
   </div>

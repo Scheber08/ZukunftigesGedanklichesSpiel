@@ -110,8 +110,8 @@ const publicVisible = hub != null && hub.round.status !== 'scheduled';
           </h2>
           <StepList steps={steps} />
           <p class="field-hint mt-3">
-            Ablauf laut Plan: Aufstellung bis T−24 h, Ergebnis bis 2 h nach Rennende, danach 48 h Protestfrist,
-            Entscheidungen bis 72 h nach Fristende, dann final.
+            Ablauf: Aufstellung bis T−24 h, Ergebnis bis 2 h nach Rennende, danach {hub.season.protest_window_hours} h
+            Protestfrist, Entscheidungen bis 72 h nach Fristende, dann final.
           </p>
         </section>
 

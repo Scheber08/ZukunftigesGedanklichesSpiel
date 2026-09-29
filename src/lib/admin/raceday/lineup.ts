@@ -140,21 +140,23 @@ export interface PoolDriver {
 }
 
 /**
- * Reservepool: Reservefahrer (nach Warteliste), danach weitere Fahrer ohne Cockpit
- * (aktiv ohne Platz in dieser Runde, inaktiv). Bereits gesetzte Fahrer fehlen.
+ * Reservepool: Reservefahrer (nach Warteliste), Stammfahrer, die gerade kein Cockpit haben
+ * (z. B. versehentlich entfernt), und weitere Fahrer ohne Cockpit (aktiv ohne Platz in dieser
+ * Runde, inaktiv). Gesetzte und abgemeldete Fahrer fehlen.
  */
 export function reservePool<D extends PoolDriver>(
   drivers: readonly D[],
   state: LineupState,
-): { reserves: D[]; others: D[] } {
+): { reserves: D[]; regulars: D[]; others: D[] } {
   const seated = new Set(state.seats.map((s) => s.driverId).filter((id): id is Id => id != null));
-  const regulars = new Set(state.seats.map((s) => s.regularId).filter((id): id is Id => id != null));
-  const free = drivers.filter((d) => !seated.has(d.id));
+  const regularIds = new Set(state.seats.map((s) => s.regularId).filter((id): id is Id => id != null));
+  const absent = new Set(state.absences.map((a) => a.driverId));
+  const byName = (a: D, b: D) => a.gamertag.localeCompare(b.gamertag, 'de');
+  const free = drivers.filter((d) => !seated.has(d.id) && !absent.has(d.id));
   const reserves = free
     .filter((d) => d.status === 'reserve')
-    .sort((a, b) => (a.reserve_order ?? 999) - (b.reserve_order ?? 999) || a.gamertag.localeCompare(b.gamertag, 'de'));
-  const others = free
-    .filter((d) => d.status !== 'reserve' && !regulars.has(d.id))
-    .sort((a, b) => a.gamertag.localeCompare(b.gamertag, 'de'));
-  return { reserves, others };
+    .sort((a, b) => (a.reserve_order ?? 999) - (b.reserve_order ?? 999) || byName(a, b));
+  const regulars = free.filter((d) => d.status !== 'reserve' && regularIds.has(d.id)).sort(byName);
+  const others = free.filter((d) => d.status !== 'reserve' && !regularIds.has(d.id)).sort(byName);
+  return { reserves, regulars, others };
 }

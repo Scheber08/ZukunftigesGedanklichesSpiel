@@ -8,6 +8,7 @@ export const prerender = false;
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
 import Forbidden from '~/components/admin/raceday/Forbidden.astro';
+import { countText } from '~/lib/admin/raceday/labels';
 import { listSeasons, pickSeason, roundsOverview } from '~/lib/admin/raceday/queries';
 import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
@@ -95,7 +96,7 @@ const seasonStatus = { planned: 'geplant', active: 'aktiv', finished: 'abgeschlo
                     <td class="num">
                       {facts.openIncidents + facts.draftDecisions > 0 ? (
                         <span class="text-warning">
-                          {facts.openIncidents} offen, {facts.draftDecisions} Entwurf
+                          {facts.openIncidents} offen · {countText(facts.draftDecisions, 'Entwurf', 'Entwürfe')}
                         </span>
                       ) : (
                         <span class="muted">–</span>
@@ -103,10 +104,10 @@ const seasonStatus = { planned: 'geplant', active: 'aktiv', finished: 'abgeschlo
                     </td>
                     <td>
                       <div class="flex gap-1">
-                        <a class="btn btn-ghost btn-sm" href={`/admin/runden/${round.id}/grid`}>
+                        <a class="btn btn-ghost compact" href={`/admin/runden/${round.id}/grid`}>
                           Grid
                         </a>
-                        <a class="btn btn-ghost btn-sm" href={`/admin/runden/${round.id}/ergebnisse`}>
+                        <a class="btn btn-ghost compact" href={`/admin/runden/${round.id}/ergebnisse`}>
                           Ergebnisse
                         </a>
                       </div>
@@ -121,3 +122,10 @@ const seasonStatus = { planned: 'geplant', active: 'aktiv', finished: 'abgeschlo
     )
   }
 </AdminLayout>
+
+<style>
+  .compact {
+    padding-inline: 0.75rem;
+    font-size: 0.8125rem;
+  }
+</style>

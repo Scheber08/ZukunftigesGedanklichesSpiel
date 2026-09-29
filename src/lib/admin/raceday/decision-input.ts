@@ -39,6 +39,11 @@ export type DecisionFields = Pick<
 export const MAX_TIME_PENALTY_S = 120;
 export const MAX_POSITIONS = 22;
 
+/** Nur https-Links ohne Leerzeichen werden als Link gezeigt bzw. gespeichert (kein javascript: o. Ä.). */
+export function isHttpsUrl(value: string | null | undefined): value is string {
+  return typeof value === 'string' && /^https:\/\/[^\s]+$/i.test(value.trim());
+}
+
 const clean = (s: string | null | undefined): string | null => {
   const t = (s ?? '').trim();
   return t === '' ? null : t;
@@ -74,7 +79,7 @@ export function normalizeDecision(
   }
 
   const clipUrl = clean(input.clipUrl);
-  if (clipUrl && !/^https:\/\/[^\s]+$/i.test(clipUrl)) errors.clipUrl = 'Bitte einen https-Link angeben.';
+  if (clipUrl && !isHttpsUrl(clipUrl)) errors.clipUrl = 'Bitte einen https-Link angeben.';
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {

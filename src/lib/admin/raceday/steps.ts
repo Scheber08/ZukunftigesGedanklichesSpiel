@@ -3,6 +3,7 @@
  * Reine Ableitung aus dem Zustand einer Runde.
  */
 import type { Id, RoundStatus } from '../../db/types';
+import { countText, openIncidentsText } from './labels';
 
 export type StepState = 'done' | 'current' | 'open' | 'blocked';
 
@@ -75,9 +76,9 @@ export function raceDaySteps(f: RoundFacts): RaceDayStep[] {
       detail: !provisionalDone
         ? 'Nach der vorläufigen Veröffentlichung'
         : f.protestOpen
-          ? `Protestfrist läuft · ${f.openIncidents} offene Vorfälle`
+          ? `Protestfrist läuft · ${openIncidentsText(f.openIncidents)}`
           : f.openIncidents + f.draftDecisions > 0
-            ? `${f.openIncidents} offene Vorfälle, ${f.draftDecisions} Entwürfe`
+            ? `${openIncidentsText(f.openIncidents)}, ${countText(f.draftDecisions, 'Entwurf', 'Entwürfe')}`
             : 'Alle Vorfälle bearbeitet',
       state: stewardsDone ? 'done' : provisionalDone ? 'open' : 'blocked',
       href: `/admin/stewards?runde=${f.roundId}`,

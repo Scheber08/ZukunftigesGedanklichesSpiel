@@ -15,6 +15,7 @@ import DecisionCard from '~/components/admin/raceday/DecisionCard.astro';
 import DecisionForm, { type DecisionFormValues } from '~/components/admin/raceday/DecisionForm.astro';
 import Forbidden from '~/components/admin/raceday/Forbidden.astro';
 import RaceActionMessage from '~/components/admin/raceday/RaceActionMessage.astro';
+import { isHttpsUrl } from '~/lib/admin/raceday/decision-input';
 import { flashQuery, flashText } from '~/lib/admin/raceday/flash';
 import { INCIDENT_STATUS_LABEL, INCIDENT_STATUS_VARIANT, SESSION_LABEL } from '~/lib/admin/raceday/labels';
 import { stewardContext } from '~/lib/admin/raceday/queries';
@@ -202,8 +203,8 @@ const actionUrls = {
             <div>
               <dt class="micro">Clip</dt>
               <dd>
-                {incident.clip_url ? (
-                  <a href={incident.clip_url} target="_blank" rel="noopener noreferrer nofollow" class="inline-flex items-center gap-1 underline hover:text-teal">
+                {isHttpsUrl(incident.clip_url) ? (
+                  <a href={incident.clip_url!} target="_blank" rel="noopener noreferrer nofollow" class="inline-flex items-center gap-1 underline hover:text-teal">
                     Clip öffnen
                     <ExternalLink size={14} aria-hidden="true" />
                     <span class="sr-only">(öffnet in neuem Tab)</span>

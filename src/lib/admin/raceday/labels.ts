@@ -13,6 +13,14 @@ import type {
 import type { ComputeWarningCode } from '../../domain/points';
 import type { GridIssue, GridIssueCode } from '../../domain/grid';
 
+/** Anzahl mit passender Einzahl/Mehrzahl, z. B. „1 offener Vorfall“, „2 offene Vorfälle“. */
+export function countText(n: number, singular: string, plural: string): string {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
+export const openIncidentsText = (n: number) => countText(n, 'offener Vorfall', 'offene Vorfälle');
+export const draftDecisionsText = (n: number) => countText(n, 'Entscheidungs-Entwurf', 'Entscheidungs-Entwürfe');
+
 export const ROUND_STATUS_LABEL: Record<RoundStatus, string> = {
   scheduled: 'geplant',
   lineup_published: 'Aufstellung veröffentlicht',

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { catalogSnippet, CATALOG_ANCHOR, parsePenaltyCatalog, suggestVerdict } from '~/lib/admin/raceday/catalog';
 import { decisionEmbed, lineupEmbed, plainShort, resultsEmbed } from '~/lib/admin/raceday/embeds';
-import { verdictText } from '~/lib/admin/raceday/labels';
+import { isHttpsUrl } from '~/lib/admin/raceday/decision-input';
+import { countText, draftDecisionsText, openIncidentsText, verdictText } from '~/lib/admin/raceday/labels';
 import { standingsPreview } from '~/lib/admin/raceday/preview';
 import { raceDaySteps, type RoundFacts } from '~/lib/admin/raceday/steps';
 import type { StandingsInput, StandingsResult } from '~/lib/domain/standings';
@@ -125,6 +126,9 @@ describe('Renntag-Checkliste', () => {
     const steps = raceDaySteps({ ...facts, status: 'provisional', entries: 22, sessionsEntered: 2, openIncidents: 2, draftDecisions: 1, protestOpen: true });
     expect(steps.map((s) => s.state)).toEqual(['done', 'done', 'done', 'current', 'open']);
     expect(steps[3]!.href).toBe('/admin/stewards?runde=7');
+    expect(steps[3]!.detail).toBe('Protestfrist läuft · 2 offene Vorfälle');
+    const late = raceDaySteps({ ...facts, status: 'provisional', entries: 22, sessionsEntered: 2, openIncidents: 1, draftDecisions: 1 });
+    expect(late[3]!.detail).toBe('1 offener Vorfall, 1 Entwurf');
   });
 
   it('ist nach final erledigt und bei gesperrter Saison blockiert', () => {
@@ -165,5 +169,24 @@ describe('Wertungsvorschau', () => {
       [1, 2, 25, 0, -1],
       [3, 3, 18, 18, null],
     ]);
+  });
+});
+
+describe('Texte und Links', () => {
+  it('wählt Einzahl oder Mehrzahl', () => {
+    expect(countText(1, 'Entwurf', 'Entwürfe')).toBe('1 Entwurf');
+    expect(countText(0, 'Entwurf', 'Entwürfe')).toBe('0 Entwürfe');
+    expect(openIncidentsText(1)).toBe('1 offener Vorfall');
+    expect(openIncidentsText(3)).toBe('3 offene Vorfälle');
+    expect(draftDecisionsText(2)).toBe('2 Entscheidungs-Entwürfe');
+  });
+
+  it('lässt nur https-Links als Clip zu', () => {
+    expect(isHttpsUrl('https://youtu.be/abc?t=12')).toBe(true);
+    expect(isHttpsUrl(' https://medal.tv/x ')).toBe(true);
+    expect(isHttpsUrl('http://youtu.be/abc')).toBe(false);
+    expect(isHttpsUrl('javascript:alert(1)')).toBe(false);
+    expect(isHttpsUrl('https://a b')).toBe(false);
+    expect(isHttpsUrl(null)).toBe(false);
   });
 });

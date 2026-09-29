@@ -238,6 +238,9 @@ describe('Stewards', () => {
     await revokeDecision(store, stewardA, draft!.id, 'Irrtum');
     const reverted = (await raceRows(r4.id)).find((r) => r.driver_id === draft!.driver_id)!;
     expect(reverted.steward_penalty_s).toBe(0);
+    // Ohne weiteres Urteil ist der Vorfall wieder offen
+    const [reopened] = await store.select('incidents', { eq: { id: draft!.incident_id! } });
+    expect(reopened!.status).toBe('in_review');
   });
 
   it('DSQ auf finaler Runde korrigiert automatisch, Zurücknehmen stellt wieder her', async () => {

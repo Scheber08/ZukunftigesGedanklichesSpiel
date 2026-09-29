@@ -28,7 +28,7 @@ const stateText = { done: 'erledigt', current: 'als Nächstes', open: 'offen', b
           </p>
           <p class="text-sm text-muted">{s.detail}</p>
         </div>
-        <a href={s.href} class:list={['btn btn-sm', s.state === 'current' ? 'btn-primary' : 'btn-ghost']}>
+        <a href={s.href} class:list={['btn compact', s.state === 'current' ? 'btn-primary' : 'btn-ghost']}>
           {s.linkLabel}
         </a>
       </li>
@@ -52,7 +52,7 @@ const stateText = { done: 'erledigt', current: 'als Nächstes', open: 'offen', b
     background: var(--color-surface-1);
   }
   .step[data-state='current'] {
-    border-color: rgb(52 196 208 / 0.6);
+    border-color: color-mix(in srgb, var(--color-teal) 60%, transparent);
   }
   .marker {
     display: inline-flex;
@@ -67,17 +67,21 @@ const stateText = { done: 'erledigt', current: 'als Nächstes', open: 'offen', b
   }
   .step[data-state='done'] .marker {
     color: var(--color-green);
-    border-color: rgb(55 190 137 / 0.5);
+    border-color: color-mix(in srgb, var(--color-green) 50%, transparent);
   }
   .step[data-state='current'] .marker {
     color: var(--color-teal);
-    border-color: rgb(52 196 208 / 0.6);
+    border-color: color-mix(in srgb, var(--color-teal) 60%, transparent);
   }
   .state {
     margin-left: 0.375rem;
     font-weight: 400;
     font-size: var(--fs-small);
     color: var(--color-muted);
+  }
+  .compact {
+    padding-inline: 0.875rem;
+    font-size: 0.8125rem;
   }
   .step[data-state='blocked'] {
     opacity: 0.75;

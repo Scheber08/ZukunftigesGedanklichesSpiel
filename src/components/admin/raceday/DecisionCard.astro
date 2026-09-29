@@ -29,6 +29,10 @@ const { decision: d, driverLabel, sessionLabel, voters, twoStewardRule, canDecid
 const needed = twoStewardRule ? 2 : 1;
 const votes = new Set(d.decided_by).size;
 const idp = `dec-${d.id}`;
+// Vier-Augen-Prinzip: Veröffentlichen nur, wenn die eigene Stimme die nötige Zahl erreicht
+const canPublish = votes + (hasVoted ? 0 : 1) >= needed;
+// Eigene Stimme abgegeben, es fehlt aber noch eine weitere → nichts zu tun außer warten
+const waitingForOthers = d.status === 'draft' && hasVoted && !canPublish;
 ---
 
 <article class="card p-4" aria-labelledby={`${idp}-title`}>
@@ -48,7 +52,7 @@ const idp = `dec-${d.id}`;
   {d.reasoning_en && <details class="mt-2 text-sm"><summary class="cursor-pointer text-muted">Englische Fassung</summary><Markdown source={d.reasoning_en} lang="en" class="mt-1" /></details>}
 
   <p class="mt-3 text-sm text-muted">
-    Stimmen: {votes} von {needed}{voters.length > 0 && ` (${voters.join(', ')})`}
+    Stimmen: {d.status === 'draft' ? `${votes} von ${needed}` : votes}{voters.length > 0 && ` (${voters.join(', ')})`}
     {d.published_at && ` · veröffentlicht ${formatDateTime(d.published_at, 'de')} Uhr`}
     {d.status === 'published' && (
       <>
@@ -66,22 +70,31 @@ const idp = `dec-${d.id}`;
   }
 
   {
+    canDecide && waitingForOthers && (
+      <p class="mt-3 text-sm text-warning">
+        Deine Stimme ist abgegeben. Veröffentlichen kann erst ein zweiter Steward (Vier-Augen-Prinzip).
+      </p>
+    )
+  }
+  {
     canDecide && d.status === 'draft' && (
       <div class="mt-4 flex flex-wrap gap-2">
         {!hasVoted && (
           <form method="POST" action={actions.vote}>
             <input type="hidden" name="decisionId" value={d.id} />
-            <button type="submit" class="btn btn-secondary">
+            <button type="submit" class={canPublish ? 'btn btn-secondary' : 'btn btn-primary'}>
               Zustimmen
             </button>
           </form>
         )}
-        <form method="POST" action={actions.publish}>
-          <input type="hidden" name="decisionId" value={d.id} />
-          <button type="submit" class="btn btn-primary">
-            {twoStewardRule && votes + (hasVoted ? 0 : 1) < needed ? 'Zustimmen & zur Veröffentlichung vormerken' : 'Veröffentlichen'}
-          </button>
-        </form>
+        {canPublish && (
+          <form method="POST" action={actions.publish}>
+            <input type="hidden" name="decisionId" value={d.id} />
+            <button type="submit" class="btn btn-primary">
+              Veröffentlichen
+            </button>
+          </form>
+        )}
         <form method="POST" action={actions.discard}>
           <input type="hidden" name="decisionId" value={d.id} />
           <button type="submit" class="btn btn-danger">

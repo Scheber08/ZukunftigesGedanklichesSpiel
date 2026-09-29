@@ -41,7 +41,8 @@ const [decision] = allowed && decisionId != null ? await store.select('decisions
 
 if (allowed && decisionId != null) {
   if (r.discard?.data) {
-    const back = decision?.incident_id != null ? `/admin/stewards/${decision.incident_id}` : '/admin/stewards';
+    const incidentId = r.discard.data.incidentId ?? decision?.incident_id ?? null;
+    const back = incidentId != null ? `/admin/stewards/${incidentId}` : '/admin/stewards';
     return Astro.redirect(back + flashQuery('discarded'), 303);
   }
   if (r.save?.data) return Astro.redirect(here + flashQuery('saved', { ref: r.save.data.ref }), 303);

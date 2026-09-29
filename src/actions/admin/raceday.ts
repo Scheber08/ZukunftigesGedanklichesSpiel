@@ -316,8 +316,8 @@ export const racedayActions = {
     handler: async (input, context) => {
       const staff = staffFrom(context, 'steward');
       return run(async () => {
-        await discardDecision(getServiceStore(), staff, input.decisionId);
-        return { decisionId: input.decisionId, message: 'Entwurf verworfen.' };
+        const d = await discardDecision(getServiceStore(), staff, input.decisionId);
+        return { decisionId: input.decisionId, incidentId: d.incident_id, message: 'Entwurf verworfen.' };
       });
     },
   }),

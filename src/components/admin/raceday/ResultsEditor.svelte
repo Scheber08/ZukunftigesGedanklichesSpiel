@@ -24,7 +24,15 @@
     type EditorRow,
     type ResultInput,
   } from '~/lib/admin/raceday/results-map';
-  import { COMPUTE_WARNING_TEXT, RESULT_STATUS_HINT, RESULT_STATUS_LABEL, ROUND_STATUS_LABEL, SESSION_LABEL } from '~/lib/admin/raceday/labels';
+  import {
+    COMPUTE_WARNING_TEXT,
+    draftDecisionsText,
+    openIncidentsText,
+    RESULT_STATUS_HINT,
+    RESULT_STATUS_LABEL,
+    ROUND_STATUS_LABEL,
+    SESSION_LABEL,
+  } from '~/lib/admin/raceday/labels';
   import { splitErrorMessage } from '~/lib/admin/raceday/errors';
 
   type DecisionLite = Pick<
@@ -84,8 +92,8 @@
     gridPenalties,
     openIncidents,
     draftDecisions,
-    protestOpen,
-    protestDeadline,
+    protestOpen: protestOpenInitial,
+    protestDeadline: protestDeadlineInitial,
     stewardsUrl,
   }: Props = $props();
 
@@ -118,6 +126,12 @@
   let reasonEn = $state('');
   let dragFrom = $state<{ sessionId: number; index: number } | null>(null);
   let dragOverIndex = $state<number | null>(null);
+  // Nach „Vorläufig veröffentlichen“ läuft die Protestfrist – lokal nachführen, damit „Final“ die Bestätigung verlangt
+  let protestOpen = $state(protestOpenInitial);
+  let protestDeadline = $state(protestDeadlineInitial);
+
+  const formatBerlin = (iso: string) =>
+    new Date(iso).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'medium', timeStyle: 'short' });
 
   const isFinal = $derived(status === 'final' || status === 'corrected');
   const isPublic = $derived(status === 'provisional' || isFinal);
@@ -127,14 +141,13 @@
     edit.map((s) => {
       const parsed = s.rows.map(parseEditorRow);
       const inputs = parsed.map((p) => p.input);
-      const out = computeSession(
-        inputs.map(inputToEntered),
-        penaltiesForSession(decisions, { id: s.id, round_id: roundId, type: s.type }),
-        { type: s.type, scheme, reservePointsForConstructors },
-      );
+      const penalties = penaltiesForSession(decisions, { id: s.id, round_id: roundId, type: s.type });
+      const out = computeSession(inputs.map(inputToEntered), penalties, { type: s.type, scheme, reservePointsForConstructors });
       return {
         parsed,
         inputs,
+        /** Fahrer mit veröffentlichter DSQ-Entscheidung in dieser Session */
+        dsqByDecision: new Set(penalties.filter((p) => p.kind === 'dsq').map((p) => p.driverId)),
         byDriver: new Map<number, ComputedResult>(out.results.map((c) => [c.driverId, c])),
         warnings: out.warnings,
         issues: validateSessionInput(inputs, name),
@@ -329,9 +342,13 @@
     if (res.error) return fail(res.error.message);
     status = res.data.status;
     serverWarnings = res.data.warnings;
+    if (!res.data.alreadyPublic && res.data.protestDeadline) {
+      protestDeadline = `${formatBerlin(res.data.protestDeadline)} Uhr`;
+      protestOpen = new Date(res.data.protestDeadline) > new Date();
+    }
     success = res.data.alreadyPublic
       ? 'Das Ergebnis war schon vorläufig veröffentlicht – Änderungen sind übernommen.'
-      : `Vorläufig veröffentlicht. Die Protestfrist läuft${res.data.protestDeadline ? ` bis ${new Date(res.data.protestDeadline).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'short', timeStyle: 'short' })} Uhr` : ''}.${res.data.discord ? ' Discord-Post gesendet.' : ''}`;
+      : `Vorläufig veröffentlicht. Die Protestfrist läuft${protestDeadline ? ` bis ${protestDeadline}` : ''}.${res.data.discord ? ' Discord-Post gesendet.' : ''}`;
     say(success);
   }
 
@@ -515,7 +532,16 @@
                         max={s.rows.length}
                         value={i + 1}
                         aria-label={`Position von ${name(row.driverId)}`}
-                        onchange={(e) => move(s, i, Number(e.currentTarget.value) - 1)}
+                        onchange={(e) => {
+                          const target = Number(e.currentTarget.value);
+                          if (!Number.isInteger(target) || target < 1 || target > s.rows.length) {
+                            // Ungültige Position: Anzeige zurücksetzen statt stillschweigend nichts zu tun
+                            e.currentTarget.value = String(i + 1);
+                            say(`Ungültige Position – bitte eine Zahl von 1 bis ${s.rows.length} eingeben.`);
+                            return;
+                          }
+                          move(s, i, target - 1);
+                        }}
                       />
                       <button type="button" class="icon-btn" disabled={i === 0} onclick={() => move(s, i, i - 1)} aria-label={`${name(row.driverId)} nach oben`}>
                         <ArrowUp size={16} aria-hidden="true" />
@@ -553,7 +579,7 @@
                       <option value={st}>{RESULT_STATUS_LABEL[st]} – {RESULT_STATUS_HINT[st]}</option>
                     {/each}
                   </select>
-                  {#if res && res.status === 'dsq' && row.status !== 'dsq'}
+                  {#if c.dsqByDecision.has(row.driverId)}
                     <p class="small text-danger">DSQ durch Urteil</p>
                   {/if}
                 </td>
@@ -797,7 +823,7 @@
                 <p>
                   Noch offen:
                   {#if protestOpen}Protestfrist läuft{protestDeadline ? ` bis ${protestDeadline}` : ''}.{/if}
-                  {openIncidents} offene Vorfälle, {draftDecisions} Entscheidungs-Entwürfe.
+                  {openIncidentsText(openIncidents)}, {draftDecisionsText(draftDecisions)}.
                   <a href={stewardsUrl} class="underline">Zum Steward-Werkzeug</a>
                 </p>
                 <label class="checkbox mt-2">

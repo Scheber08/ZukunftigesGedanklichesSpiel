@@ -9,7 +9,7 @@
 import { url } from '~/i18n/routes';
 import { lineupEmbed, resultsEmbed, type EmbedDriver, type ResultsEmbedKind } from '../admin/raceday/embeds';
 import { notFound, RacedayError } from '../admin/raceday/errors';
-import { COMPUTE_WARNING_TEXT, gridIssueText, SESSION_LABEL } from '../admin/raceday/labels';
+import { COMPUTE_WARNING_TEXT, draftDecisionsText, gridIssueText, openIncidentsText, SESSION_LABEL } from '../admin/raceday/labels';
 import { standingsPreview } from '../admin/raceday/preview';
 import {
   computedToPatch,
@@ -477,8 +477,8 @@ export async function finalizeRound(
   const open = await openStewardWork(store, b.round);
   const blockers: string[] = [];
   if (open.protestOpen && b.round.protest_deadline) blockers.push(`Protestfrist läuft bis ${formatDateTime(b.round.protest_deadline, 'de')} Uhr`);
-  if (open.openIncidents > 0) blockers.push(`${open.openIncidents} offene Vorfälle`);
-  if (open.draftDecisions > 0) blockers.push(`${open.draftDecisions} Entscheidungs-Entwürfe`);
+  if (open.openIncidents > 0) blockers.push(openIncidentsText(open.openIncidents));
+  if (open.draftDecisions > 0) blockers.push(draftDecisionsText(open.draftDecisions));
   if (blockers.length > 0 && !opts.force) {
     throw new RacedayError('PRECONDITION_FAILED', 'Noch nicht alles erledigt – bitte bestätigen:', blockers);
   }
@@ -710,7 +710,19 @@ export function gridIssueMessages(ctx: LineupContext, issues: readonly GridIssue
 
 const DB_BLOCKING: readonly GridIssue['code'][] = ['duplicate_driver', 'duplicate_seat', 'too_many_drivers'];
 
-/** Aufstellung als Entwurf speichern (Einträge + Abmeldungen ersetzen). */
+/**
+ * Ist die Aufstellung schon öffentlich? Dann gibt es keinen Entwurf mehr – jede gespeicherte
+ * Änderung erscheint sofort auf der Rennseite.
+ */
+export function isLineupPublic(status: RoundRow['status']): boolean {
+  return status !== 'scheduled';
+}
+
+/**
+ * Aufstellung speichern (Einträge + Abmeldungen ersetzen). Vor der Veröffentlichung ist das ein
+ * Entwurf; danach ist sie öffentlich, deshalb werden Fehler (z. B. abgemeldeter Fahrer eingetragen)
+ * dann gar nicht erst gespeichert.
+ */
 export async function saveLineup(
   store: Store,
   roundId: Id,
@@ -723,6 +735,16 @@ export async function saveLineup(
   const hard = issues.filter((i) => DB_BLOCKING.includes(i.code));
   if (hard.length > 0) {
     throw new RacedayError('BAD_REQUEST', 'Die Aufstellung kann so nicht gespeichert werden:', gridIssueMessages(ctx, hard));
+  }
+  if (isLineupPublic(ctx.basics.round.status) && hasBlockingIssues(issues)) {
+    throw new RacedayError(
+      'PRECONDITION_FAILED',
+      'Nicht gespeichert: Die Aufstellung ist schon öffentlich, Änderungen erscheinen sofort auf der Rennseite. Bitte zuerst die Fehler beheben:',
+      gridIssueMessages(
+        ctx,
+        issues.filter((i) => i.severity === 'error'),
+      ),
+    );
   }
 
   const before = ctx.entries.map((e) => `${e.team_id}/${e.seat_no}:${e.driver_id}`).sort();
@@ -777,7 +799,7 @@ export async function saveLineup(
     { entries: before, absences: ctx.absences.map((a) => a.driver_id) },
     { entries: after, absences: input.absences.map((a) => a.driverId) },
   );
-  if (ctx.basics.round.status !== 'scheduled') await requestRebuild(store, `Aufstellung geändert: ${roundText(ctx.basics)}`);
+  if (isLineupPublic(ctx.basics.round.status)) await requestRebuild(store, `Aufstellung geändert: ${roundText(ctx.basics)}`);
   return { issues, messages: gridIssueMessages(ctx, issues), ctx, entries };
 }
 

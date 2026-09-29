@@ -10,6 +10,7 @@ import {
   addVote,
   decisionContentChanged,
   enoughVotes,
+  isHttpsUrl,
   normalizeDecision,
   type DecisionInput,
 } from '../admin/raceday/decision-input';
@@ -91,7 +92,7 @@ export async function openInvestigation(store: Store, staff: StewardActor, input
   if (drivers.length !== involved.length) throw new RacedayError('BAD_REQUEST', 'Unbekannter Fahrer ausgewählt.');
   if (staff.driverId != null && involved.includes(staff.driverId)) throw new RacedayError('FORBIDDEN', CONFLICT_MESSAGE);
   const clipUrl = input.clipUrl?.trim() || null;
-  if (clipUrl && !/^https:\/\/\S+$/i.test(clipUrl)) throw new RacedayError('BAD_REQUEST', 'Der Clip-Link muss mit https:// beginnen.');
+  if (clipUrl && !isHttpsUrl(clipUrl)) throw new RacedayError('BAD_REQUEST', 'Der Clip-Link muss mit https:// beginnen.');
   const session = input.sessionType
     ? await selectOne(store, 'sessions', { round_id: round.id, type: input.sessionType })
     : null;
@@ -186,12 +187,14 @@ export async function voteDecision(store: Store, staff: StewardActor, decisionId
   return updated ?? { ...d, decided_by };
 }
 
-export async function discardDecision(store: Store, staff: StewardActor, decisionId: Id): Promise<void> {
+/** Entwurf verwerfen; liefert die gelöschte Zeile (z. B. für den Rücksprung zum Vorfall). */
+export async function discardDecision(store: Store, staff: StewardActor, decisionId: Id): Promise<DecisionRow> {
   const d = await loadDecision(store, decisionId);
   if (d.status !== 'draft') throw new RacedayError('CONFLICT', 'Nur Entwürfe können verworfen werden.');
   assertNotConflicted(staff, await incidentOf(store, d), d.driver_id);
   await store.remove('decisions', { id: decisionId });
   await audit(store, staff, 'delete', 'decisions', decisionId, d, null);
+  return d;
 }
 
 export type DecisionEffect = 'none' | 'recomputed' | 'corrected';
@@ -308,7 +311,8 @@ export async function publishDecision(store: Store, staff: StewardActor, decisio
 export async function revokeDecision(store: Store, staff: StewardActor, decisionId: Id, note: string | null): Promise<PublishOutcome> {
   const d = await loadDecision(store, decisionId);
   if (d.status !== 'published') throw new RacedayError('CONFLICT', 'Nur veröffentlichte Entscheidungen können zurückgenommen werden.');
-  assertNotConflicted(staff, await incidentOf(store, d), d.driver_id);
+  const incident = await incidentOf(store, d);
+  assertNotConflicted(staff, incident, d.driver_id);
   const { season } = await roundAndSeason(store, d.round_id);
   if (isFrozen(season) && RESULT_AFFECTING_VERDICTS.includes(d.verdict)) {
     throw new RacedayError('PRECONDITION_FAILED', 'Die Saison ist abgeschlossen – das Ergebnis ist eingefroren.');
@@ -316,6 +320,11 @@ export async function revokeDecision(store: Store, staff: StewardActor, decision
   const [updated] = await store.update('decisions', { id: decisionId }, { status: 'revoked' });
   const decision = updated ?? { ...d, status: 'revoked' as const };
   await audit(store, staff, 'unpublish', 'decisions', decisionId, { status: 'published' }, { status: 'revoked', note: note?.trim() || null });
+  // Ohne weitere veröffentlichte Entscheidung ist der Vorfall wieder offen (neu entscheiden oder ablehnen)
+  if (incident && incident.status === 'decided') {
+    const others = await store.select('decisions', { eq: { incident_id: incident.id, status: 'published' } });
+    if (others.every((x) => x.id === decisionId)) await store.update('incidents', { id: incident.id }, { status: 'in_review' });
+  }
   const effect = await applyDecisionEffect(store, staff, decision, 'revoke');
   const discord = await postDecision(store, decision, true);
   await requestRebuild(store, `Urteil ${d.public_ref} zurückgenommen`);
@@ -327,5 +336,5 @@ export async function voterNames(store: Store, userIds: readonly string[], curre
   if (userIds.length === 0) return [];
   const accounts = await store.select('staff_accounts', { in: { user_id: [...userIds] } });
   const byId = new Map(accounts.map((a) => [a.user_id, a.display_name]));
-  return userIds.map((id) => byId.get(id) ?? (current && current.userId === id ? current.name : `Steward ${id.slice(0, 8)}`));
+  return userIds.map((id) => byId.get(id) ?? (current && current.userId === id ? current.name : `Steward …${id.slice(-4)}`));
 }

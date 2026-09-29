@@ -94,6 +94,21 @@ describe('Grid-Builder-Zustand', () => {
     const pool = reservePool(drivers, s);
     expect(pool.reserves.map((d) => d.id)).toEqual([51]);
     expect(pool.others.map((d) => d.id)).toEqual([52]);
+    expect(pool.regulars).toEqual([]);
+  });
+
+  it('bietet versehentlich entfernte Stammfahrer wieder an, abgemeldete nicht', () => {
+    const drivers = [
+      { id: 11, gamertag: 'Stamm', status: 'active' as const, reserve_order: null },
+      { id: 12, gamertag: 'Abwesend', status: 'active' as const, reserve_order: null },
+    ];
+    let s = markAbsent(initialLineup(teamIds, seats, [], []), 12, true);
+    s = clearSeat(s, 1, 1);
+    const pool = reservePool(drivers, s);
+    expect(pool.regulars.map((d) => d.id)).toEqual([11]);
+    expect(pool.others).toEqual([]);
+    s = assignSeat(s, 1, 1, 11);
+    expect(reservePool(drivers, s).regulars).toEqual([]);
   });
 
   it('liefert prüfbare Einträge für checkGrid mit verständlichen Meldungen', () => {
