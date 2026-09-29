@@ -166,7 +166,18 @@ export function moveSection(sections: readonly SectionLike[], id: number, direct
   const pos = siblings.findIndex((s) => s.id === id);
   const target = direction === 'up' ? pos - 1 : pos + 1;
   if (pos < 0 || target < 0 || target >= siblings.length) return null;
-  [siblings[pos], siblings[target]] = [siblings[target]!, siblings[pos]!];
+  const a = siblings[pos]!;
+  const b = siblings[target]!;
+  // Normalfall: Sort-Werte der beiden Nachbarn tauschen – nur zwei Zeilen ändern sich
+  const tie = siblings.some((s) => s.id !== a.id && s.id !== b.id && (s.sort === a.sort || s.sort === b.sort));
+  if (a.sort !== b.sort && !tie) {
+    return [
+      { id: a.id, sort: b.sort },
+      { id: b.id, sort: a.sort },
+    ];
+  }
+  // Gleiche Sort-Werte (Altbestand): ganze Version in Baum-Reihenfolge normalisieren
+  [siblings[pos], siblings[target]] = [b, a];
   children.set(key, siblings);
   const original = new Map(sections.map((s) => [s.id, s.sort]));
   return dfsOrder(children)

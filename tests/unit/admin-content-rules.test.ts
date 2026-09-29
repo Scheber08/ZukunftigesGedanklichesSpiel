@@ -93,8 +93,11 @@ describe('Baum und Struktur', () => {
   it('verschiebt Kapitel samt Unterabschnitten', () => {
     const updates = moveSection(SECTIONS, 4, 'up')!;
     expect(order(apply(SECTIONS, updates))).toEqual(['§2', '§2.1', '§1', '§1.1', '§1.2', '§3']);
-    // Normalisiert auf 10er-Schritte
-    expect(apply(SECTIONS, updates).map((s) => s.sort).sort((a, b) => a - b)).toEqual([10, 20, 30, 40, 50, 60]);
+    // Nur die beiden Nachbarn tauschen ihre Sort-Werte
+    expect(updates).toEqual([
+      { id: 4, sort: 0 },
+      { id: 1, sort: 3 },
+    ]);
   });
 
   it('verschiebt nur innerhalb der Geschwister', () => {
@@ -110,6 +113,8 @@ describe('Baum und Struktur', () => {
     const same = SECTIONS.map((s) => ({ ...s, sort: 0 }));
     const updates = moveSection(same, 6, 'up')!;
     expect(order(apply(same, updates))).toEqual(['§1', '§1.1', '§1.2', '§3', '§2', '§2.1']);
+    // normalisiert auf 10er-Schritte
+    expect(apply(same, updates).map((s) => s.sort).sort((a, b) => a - b)).toEqual([10, 20, 30, 40, 50, 60]);
   });
 
   it('normalisiert Sort-Werte und hängt neue Abschnitte hinten an', () => {
