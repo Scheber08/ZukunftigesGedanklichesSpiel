@@ -72,7 +72,7 @@ const robotsNoindex = noindex || demo || env.noindex;
       cssVariable="--font-titillium"
       preload={heroHeader ? [{ weight: 700, subset: 'latin' }, { weight: 900, subset: 'latin' }] : [{ weight: 700, subset: 'latin' }]}
     />
-    <Font cssVariable="--font-inter" />
+    <Font cssVariable="--font-inter" preload={[{ subset: 'latin' }]} />
     <SeoHead
       lang={lang}
       title={pageTitle(title, lang)}
