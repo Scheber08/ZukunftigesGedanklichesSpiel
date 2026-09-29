@@ -74,13 +74,15 @@ const subline = [countryName(track?.country_code, lang), round.format === 'sprin
         </div>
 
         <div class="mt-5 flex flex-wrap gap-3">
-          <a href={raceHref} class="btn btn-primary" aria-label={t('calendar.round.toRaceAria', { round: label })}>
+          <a href={raceHref} class="btn btn-primary">
             {t('calendar.round.toRace')}
+            <span class="sr-only">({label})</span>
             <ChevronRight size={18} aria-hidden="true" />
           </a>
-          <a href={icsHref} download class="btn btn-secondary" aria-label={t('calendar.round.icsAria', { round: label })} data-track="ics_download">
+          <a href={icsHref} download class="btn btn-secondary" data-track="ics_download">
             <CalendarPlus size={18} aria-hidden="true" />
             {t('common.addToCalendar')}
+            <span class="sr-only">({t('calendar.round.icsHint', { round: label })})</span>
           </a>
         </div>
         </>

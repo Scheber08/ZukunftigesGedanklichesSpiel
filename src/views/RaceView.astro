@@ -122,11 +122,11 @@ const jsonLd = [
               href={url(lang, 'raceIcs', routeParams)}
               download
               class="btn btn-secondary header-btn"
-              aria-label={t('calendar.round.icsAria', { round: label })}
               data-track="ics_download"
             >
               <CalendarPlus size={18} aria-hidden="true" />
               {t('calendar.race.addToCalendar')}
+              <span class="sr-only">({t('calendar.round.icsHint', { round: label })})</span>
             </a>
           )
         }

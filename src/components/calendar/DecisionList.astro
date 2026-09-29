@@ -63,8 +63,9 @@ function teamOf(driverId: number) {
                 {plainExcerpt(reason.text, 200)}
               </p>
             )}
-            <a href={href} class="decision-more" aria-label={t('calendar.stewards.readMoreAria', { ref: d.public_ref })}>
+            <a href={href} class="decision-more">
               {t('calendar.stewards.readMore')}
+              <span class="sr-only">({d.public_ref})</span>
               <ChevronRight size={16} aria-hidden="true" />
             </a>
           </li>

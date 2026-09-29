@@ -80,21 +80,17 @@ const pending = !cancelled && !summary && new Date(round.start_utc) <= league.no
     {pending && <p class="mt-2 text-sm text-warning">{t('calendar.round.resultPending')}</p>}
 
     <div class="mt-3 flex flex-wrap gap-2">
-      <a href={raceHref} class="btn btn-ghost btn-sm border border-border" aria-label={t('calendar.round.toRaceAria', { round: label })}>
+      <a href={raceHref} class="btn btn-ghost btn-sm border border-border">
         {summary ? t('calendar.round.toResult') : t('calendar.round.toRace')}
+        <span class="sr-only">({label})</span>
         <ChevronRight size={16} aria-hidden="true" />
       </a>
       {
         upcoming && (
-          <a
-            href={icsHref}
-            download
-            class="btn btn-ghost btn-sm border border-border"
-            aria-label={t('calendar.round.icsAria', { round: label })}
-            data-track="ics_download"
-          >
+          <a href={icsHref} download class="btn btn-ghost btn-sm border border-border" data-track="ics_download">
             <CalendarPlus size={16} aria-hidden="true" />
             {t('common.addToCalendar')}
+            <span class="sr-only">({t('calendar.round.icsHint', { round: label })})</span>
           </a>
         )
       }
