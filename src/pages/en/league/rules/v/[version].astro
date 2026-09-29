@@ -1,0 +1,12 @@
+---
+import { rulesVersionStaticPaths } from '~/lib/content/paths';
+import RulesView from '~/views/RulesView.astro';
+
+export async function getStaticPaths() {
+  return rulesVersionStaticPaths();
+}
+
+const { version } = Astro.params;
+---
+
+<RulesView lang="en" version={version!} />

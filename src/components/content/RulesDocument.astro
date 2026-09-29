@@ -1,0 +1,580 @@
+---
+/**
+ * Regelwerk als ein Dokument (Plan §4.8): Inhaltsverzeichnis links (Desktop sticky,
+ * mobil einklappbar), Suche (nur mit JS sichtbar, filtert und markiert Abschnitte),
+ * alle Paragraphen mit Anker-Link. Druckansicht ohne Navigation.
+ */
+import Search from '@lucide/astro/icons/search';
+import X from '@lucide/astro/icons/x';
+import RuleSection from './RuleSection.astro';
+import RulesToc from './RulesToc.astro';
+import { useT, type Lang } from '~/i18n';
+import type { RuleNode } from '~/lib/league/league';
+
+interface Props {
+  lang: Lang;
+  tree: RuleNode[];
+}
+const { lang, tree } = Astro.props;
+const t = useT(lang);
+---
+
+<div class="rules-layout" data-rules lang={lang}>
+  <!-- Mobil: einklappbares Inhaltsverzeichnis -->
+  <details class="toc-mobile card no-print">
+    <summary class="toc-summary">{t('content.rules.tocShow')}</summary>
+    <nav aria-label={t('content.rules.toc')} class="px-3 pb-3">
+      <RulesToc lang={lang} tree={tree} />
+    </nav>
+  </details>
+
+  <!-- Desktop: Inhaltsverzeichnis links, sticky -->
+  <aside class="toc-desktop no-print">
+    <nav aria-label={t('content.rules.toc')} class="toc-sticky">
+      <p class="micro mb-3 px-2">{t('content.rules.toc')}</p>
+      <RulesToc lang={lang} tree={tree} />
+    </nav>
+  </aside>
+
+  <div class="rules-main min-w-0">
+    <div role="search" class="rules-search no-print" data-rules-search hidden>
+      <label for="rules-search-input" class="label">{t('content.rules.search.label')}</label>
+      <div class="search-row">
+        <Search size={18} aria-hidden="true" class="search-icon" />
+        <input
+          id="rules-search-input"
+          type="search"
+          class="input"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder={t('content.rules.search.placeholder')}
+          aria-describedby="rules-search-hint rules-search-status"
+          data-rules-input
+        />
+        <button type="button" class="btn btn-ghost btn-icon clear-btn" aria-label={t('content.rules.search.clear')} data-rules-clear hidden>
+          <X size={18} aria-hidden="true" />
+        </button>
+      </div>
+      <p id="rules-search-hint" class="field-hint">{t('content.rules.search.hint')}</p>
+      <p
+        id="rules-search-status"
+        class="search-status"
+        role="status"
+        data-rules-status
+        data-one={t('content.rules.search.resultOne')}
+        data-many={t('content.rules.search.resultMany', { n: '{n}' })}
+        data-none={t('content.rules.search.none')}
+      >
+      </p>
+    </div>
+
+    <div class="rules-doc" data-rules-doc>
+      {tree.map((node) => <RuleSection lang={lang} node={node} />)}
+    </div>
+
+    <p class="no-print mt-10">
+      <a href="#main" class="text-sm font-semibold text-green hover:text-teal">↑ {t('content.rules.backToTop')}</a>
+    </p>
+  </div>
+</div>
+
+<style>
+  .rules-layout {
+    display: grid;
+    gap: 2rem;
+  }
+  @media (min-width: 1024px) {
+    .rules-layout {
+      grid-template-columns: 17rem minmax(0, 1fr);
+      gap: 3rem;
+    }
+  }
+
+  /* Inhaltsverzeichnis */
+  .toc-mobile {
+    overflow: hidden;
+  }
+  .toc-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 48px;
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+  }
+  .toc-summary::-webkit-details-marker {
+    display: none;
+  }
+  .toc-summary::after {
+    content: '';
+    width: 0.55rem;
+    height: 0.55rem;
+    border-right: 2px solid var(--color-teal);
+    border-bottom: 2px solid var(--color-teal);
+    transform: rotate(45deg);
+    transition: transform 180ms ease-out;
+  }
+  .toc-mobile[open] > .toc-summary::after {
+    transform: rotate(-135deg);
+  }
+  .toc-desktop {
+    display: none;
+  }
+  @media (min-width: 1024px) {
+    .toc-mobile {
+      display: none;
+    }
+    .toc-desktop {
+      display: block;
+    }
+    .toc-sticky {
+      position: sticky;
+      top: calc(var(--header-h) + 1.5rem);
+      max-height: calc(100dvh - var(--header-h) - 3rem);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-right: 0.5rem;
+      scrollbar-width: thin;
+    }
+  }
+
+  /* Suche */
+  .rules-search {
+    display: grid;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    padding: 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface-1);
+  }
+  .rules-search[hidden] {
+    display: none;
+  }
+  .search-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .search-row .input {
+    padding-left: 2.5rem;
+    padding-right: 3rem;
+  }
+  .search-row :global(.search-icon) {
+    position: absolute;
+    left: 0.8rem;
+    color: var(--color-muted);
+    pointer-events: none;
+  }
+  .clear-btn {
+    position: absolute;
+    right: 0;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .search-status:empty {
+    display: none;
+  }
+  .search-status {
+    font-size: var(--fs-small);
+    font-weight: 600;
+    color: var(--color-teal);
+  }
+
+  /* Abschnitte */
+  .rules-doc :global(.rule) {
+    scroll-margin-top: calc(var(--header-h) + 1rem);
+  }
+  .rules-doc :global(.rule-l0) {
+    padding-top: 2.5rem;
+  }
+  .rules-doc :global(.rule-l0:first-child) {
+    padding-top: 0;
+  }
+  .rules-doc :global(.rule-l0 > .rule-head) {
+    padding-bottom: 0.75rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .rules-doc :global(.rule-l1),
+  .rules-doc :global(.rule-l2) {
+    margin-top: 1.75rem;
+    padding-left: 1rem;
+    border-left: 2px solid transparent;
+    transition: border-color 150ms ease-out;
+  }
+  .rules-doc :global(.rule:target > .rule-head .rule-number),
+  .rules-doc :global(.rule.is-match > .rule-head .rule-number) {
+    color: var(--color-green);
+  }
+  .rules-doc :global(.rule-l1:target),
+  .rules-doc :global(.rule-l2:target),
+  .rules-doc :global(.rule-l1.is-match),
+  .rules-doc :global(.rule-l2.is-match) {
+    border-left-color: var(--color-teal);
+  }
+  .rules-doc :global(.rule-head) {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .rules-doc :global(.rule-title) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    min-width: 0;
+    padding-top: 0.35rem;
+  }
+  .rules-doc :global(h2.rule-title) {
+    font-size: var(--fs-h2);
+    text-transform: uppercase;
+  }
+  .rules-doc :global(h3.rule-title) {
+    font-size: var(--fs-h3);
+  }
+  .rules-doc :global(h4.rule-title) {
+    font-size: 1.125rem;
+  }
+  .rules-doc :global(.rule-number) {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-teal);
+  }
+  .rules-doc :global(.rule-anchor) {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: var(--radius-control);
+    color: var(--color-muted);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.125rem;
+    text-decoration: none;
+    opacity: 0.7;
+    transition:
+      color 150ms ease-out,
+      opacity 150ms ease-out;
+  }
+  .rules-doc :global(.rule-head:hover .rule-anchor),
+  .rules-doc :global(.rule-anchor:hover),
+  .rules-doc :global(.rule-anchor:focus-visible) {
+    color: var(--color-teal);
+    opacity: 1;
+  }
+  .rules-doc :global(.rule-body) {
+    max-width: 75ch;
+    margin-top: 0.5rem;
+  }
+
+  /* Tabellen (Strafenkatalog): scrollbarer Bereich, erste Spalte fixiert */
+  .rules-doc :global(.rules-table) {
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface-1);
+  }
+  .rules-doc :global(.rules-table table) {
+    display: table;
+    width: 100%;
+    min-width: 44rem;
+    overflow: visible;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .rules-doc :global(.rules-table thead th) {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  .rules-doc :global(.rules-table th:first-child),
+  .rules-doc :global(.rules-table td:first-child) {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    white-space: nowrap;
+    font-weight: 700;
+    color: var(--color-teal);
+    background: var(--color-surface-1);
+    box-shadow: inset -1px 0 0 var(--color-border);
+  }
+  .rules-doc :global(.rules-table thead th:first-child) {
+    z-index: 2;
+    background: var(--color-surface-2);
+    color: var(--color-muted);
+  }
+  .rules-doc :global(.rules-table tbody tr:nth-child(even) td) {
+    background: rgb(255 255 255 / 0.02);
+  }
+  .rules-doc :global(.rules-table tbody tr:nth-child(even) td:first-child) {
+    background: #111114;
+  }
+  .rules-doc :global(.rules-table td:nth-child(2)) {
+    min-width: 14rem;
+  }
+  .rules-doc :global(.rules-table td:nth-child(3)) {
+    min-width: 10rem;
+    font-weight: 600;
+  }
+  .rules-doc :global(.rules-table td:nth-child(4)) {
+    min-width: 14rem;
+    color: var(--color-muted);
+  }
+  .rules-doc :global(.rules-table tr:last-child td) {
+    border-bottom: 0;
+  }
+  .rules-doc :global(.rules-table:focus-visible) {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+  }
+
+  /* Suchtreffer (CSS Custom Highlight API, wo verfügbar) */
+  :global(::highlight(rules-search)) {
+    background-color: rgb(52 196 208 / 0.35);
+    color: #fff;
+  }
+
+  /* Druckansicht: nur das Dokument */
+  @media print {
+    .rules-layout {
+      display: block;
+    }
+    .toc-mobile,
+    .toc-desktop,
+    .rules-search,
+    .rules-doc :global(.rule-anchor) {
+      display: none !important;
+    }
+    .rules-doc :global([data-rule-section][hidden]) {
+      display: block !important;
+    }
+    .rules-doc :global(.rule-l1),
+    .rules-doc :global(.rule-l2) {
+      border-left: 0;
+      padding-left: 0;
+    }
+    .rules-doc :global(.rule-number) {
+      color: #000;
+    }
+    .rules-doc :global(.rule-title) {
+      break-after: avoid;
+    }
+    .rules-doc :global(.prose strong) {
+      color: #000;
+    }
+    .rules-doc :global(.prose a) {
+      text-decoration: none;
+    }
+    .rules-doc :global(.rules-table) {
+      overflow: visible;
+      border-color: #999;
+    }
+    .rules-doc :global(.rules-table table) {
+      min-width: 0;
+      font-size: 9pt;
+    }
+    .rules-doc :global(.rules-table th),
+    .rules-doc :global(.rules-table td),
+    .rules-doc :global(.rules-table td:first-child),
+    .rules-doc :global(.rules-table thead th:first-child) {
+      position: static;
+      background: #fff !important;
+      color: #000 !important;
+      box-shadow: none;
+    }
+    .rules-doc :global(.rules-table tr) {
+      break-inside: avoid;
+    }
+  }
+</style>
+
+<script>
+  /**
+   * Regelwerk-Suche: filtert Abschnitte (Kapitel bleiben sichtbar, wenn ein Unterabschnitt
+   * passt), markiert Treffer und blendet passende Einträge im Inhaltsverzeichnis ein.
+   * Dazu Scrollspy im Inhaltsverzeichnis und Schließen des mobilen Verzeichnisses.
+   */
+  const rules = document.querySelector<HTMLElement>('[data-rules]');
+  const searchBox = rules?.querySelector<HTMLElement>('[data-rules-search]');
+  const doc = rules?.querySelector<HTMLElement>('[data-rules-doc]');
+
+  /** Kleinschreibung ohne Akzente, Länge bleibt Zeichen für Zeichen erhalten. */
+  const fold = (text: string): string => {
+    let out = '';
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i]!;
+      const base = c.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+      if (base.length === 1) out += base;
+      else {
+        const lower = c.toLowerCase();
+        out += lower.length === 1 ? lower : c;
+      }
+    }
+    return out;
+  };
+
+  if (rules && doc) {
+    const sections = [...doc.querySelectorAll<HTMLElement>('[data-rule-section]')];
+    const roots = sections.filter((s) => s.dataset.level === '0');
+    const childrenOf = (s: HTMLElement) => [...s.children].filter((c): c is HTMLElement => c instanceof HTMLElement && c.hasAttribute('data-rule-section'));
+    const ownParts = (s: HTMLElement) =>
+      [...s.children].filter((c): c is HTMLElement => c instanceof HTMLElement && (c.classList.contains('rule-head') || c.classList.contains('rule-body')));
+    const ownText = new Map(sections.map((s) => [s, fold(ownParts(s).map((p) => p.textContent ?? '').join(' '))]));
+    const tocItems = [...rules.querySelectorAll<HTMLElement>('[data-toc-item]')];
+    const byAnchor = new Map(sections.map((s) => [s.id, s]));
+
+    // ------------------------------------------------------------ Suche
+    if (searchBox) {
+      const input = searchBox.querySelector<HTMLInputElement>('[data-rules-input]')!;
+      const clear = searchBox.querySelector<HTMLButtonElement>('[data-rules-clear]')!;
+      const status = searchBox.querySelector<HTMLElement>('[data-rules-status]')!;
+      const cssWithHighlights = CSS as unknown as { highlights?: Map<string, unknown> };
+      const HighlightCtor = (window as unknown as { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
+      const canHighlight = cssWithHighlights.highlights != null && HighlightCtor != null;
+
+      const syncToc = () => {
+        for (const item of tocItems) {
+          const target = byAnchor.get(item.dataset.tocItem ?? '');
+          item.hidden = target ? target.hidden : false;
+        }
+      };
+
+      const highlight = (query: string) => {
+        if (!canHighlight) return;
+        cssWithHighlights.highlights!.delete('rules-search');
+        if (!query) return;
+        const ranges: Range[] = [];
+        for (const s of sections) {
+          if (s.hidden) continue;
+          for (const part of ownParts(s)) {
+            const walker = document.createTreeWalker(part, NodeFilter.SHOW_TEXT);
+            for (let node = walker.nextNode(); node && ranges.length < 400; node = walker.nextNode()) {
+              const text = fold(node.textContent ?? '');
+              let idx = text.indexOf(query);
+              while (idx !== -1 && ranges.length < 400) {
+                const range = new Range();
+                range.setStart(node, idx);
+                range.setEnd(node, idx + query.length);
+                ranges.push(range);
+                idx = text.indexOf(query, idx + query.length);
+              }
+            }
+          }
+        }
+        cssWithHighlights.highlights!.set('rules-search', new HighlightCtor!(...ranges));
+      };
+
+      const reset = () => {
+        for (const s of sections) {
+          s.hidden = false;
+          s.classList.remove('is-match');
+        }
+        syncToc();
+        highlight('');
+        status.textContent = '';
+        clear.hidden = true;
+      };
+
+      const apply = () => {
+        const query = fold(input.value.trim());
+        clear.hidden = input.value === '';
+        if (query.length < 2) {
+          reset();
+          clear.hidden = input.value === '';
+          return;
+        }
+        let matches = 0;
+        const visit = (s: HTMLElement, forced: boolean): boolean => {
+          const own = ownText.get(s)!.includes(query);
+          if (own) matches++;
+          s.classList.toggle('is-match', own);
+          let childVisible = false;
+          for (const c of childrenOf(s)) if (visit(c, forced || own)) childVisible = true;
+          const visible = forced || own || childVisible;
+          s.hidden = !visible;
+          return visible;
+        };
+        for (const r of roots) visit(r, false);
+        syncToc();
+        highlight(query);
+        status.textContent =
+          matches === 0
+            ? (status.dataset.none ?? '')
+            : matches === 1
+              ? (status.dataset.one ?? '')
+              : (status.dataset.many ?? '{n}').replace('{n}', String(matches));
+      };
+
+      let timer: number | undefined;
+      input.addEventListener('input', () => {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(apply, 150);
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && input.value !== '') {
+          e.preventDefault();
+          input.value = '';
+          apply();
+        }
+      });
+      clear.addEventListener('click', () => {
+        input.value = '';
+        apply();
+        input.focus();
+      });
+      // Sprung zu einem ausgeblendeten Abschnitt: Suche zurücksetzen
+      window.addEventListener('hashchange', () => {
+        const target = byAnchor.get(decodeURIComponent(window.location.hash.slice(1)));
+        if (target?.hidden) {
+          input.value = '';
+          reset();
+          target.scrollIntoView();
+        }
+      });
+      // Vor dem Drucken alles zeigen
+      window.addEventListener('beforeprint', () => {
+        if (input.value !== '') {
+          input.value = '';
+          reset();
+        }
+      });
+      searchBox.hidden = false;
+    }
+
+    // ------------------------------------------------------------ Mobiles Verzeichnis schließen
+    const mobileToc = rules.querySelector<HTMLDetailsElement>('.toc-mobile');
+    mobileToc?.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('a')) mobileToc.open = false;
+    });
+
+    // ------------------------------------------------------------ Scrollspy
+    const links = [...rules.querySelectorAll<HTMLAnchorElement>('[data-toc-link]')];
+    const spied = sections.filter((s) => s.dataset.level === '0' || s.dataset.level === '1');
+    if ('IntersectionObserver' in window && spied.length > 0) {
+      const visible = new Set<HTMLElement>();
+      const mark = () => {
+        const current = spied.find((s) => visible.has(s) && s.dataset.level === '1') ?? spied.find((s) => visible.has(s));
+        for (const a of links) {
+          if (current && a.dataset.tocLink === current.id) a.setAttribute('aria-current', 'location');
+          else a.removeAttribute('aria-current');
+        }
+      };
+      const io = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) visible.add(entry.target as HTMLElement);
+            else visible.delete(entry.target as HTMLElement);
+          }
+          mark();
+        },
+        { rootMargin: '-15% 0px -70% 0px' },
+      );
+      for (const s of spied) io.observe(s);
+    }
+  }
+</script>

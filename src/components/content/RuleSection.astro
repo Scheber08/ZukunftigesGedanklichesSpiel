@@ -1,0 +1,44 @@
+---
+/**
+ * Ein Abschnitt des Regelwerks (Kapitel „§3“ oder Paragraph „§3.2“), rekursiv.
+ * id = Anker aus der DB (z. B. "p3-2"), dazu ein sichtbarer Anker-Link „#“.
+ */
+import { useT, type Lang } from '~/i18n';
+import { enhanceTables } from '~/lib/content/rules';
+import { localized, type RuleNode } from '~/lib/league/league';
+import { renderMarkdown } from '~/lib/util/markdown';
+
+interface Props {
+  lang: Lang;
+  node: RuleNode;
+  level?: number;
+}
+const { lang, node, level = 0 } = Astro.props;
+const t = useT(lang);
+const title = localized(node, 'title', lang);
+const body = localized(node, 'body', lang);
+const Heading = level === 0 ? 'h2' : level === 1 ? 'h3' : 'h4';
+const Wrapper = level === 0 ? 'section' : 'div';
+const html =
+  body.text.trim() !== ''
+    ? enhanceTables(renderMarkdown(body.text), {
+        label: t('content.rules.tableLabel', { n: node.number }),
+        caption: `${node.number} ${title.text}`,
+        className: 'rules-table',
+      })
+    : '';
+---
+
+<Wrapper id={node.anchor} class:list={['rule', `rule-l${Math.min(level, 2)}`]} data-rule-section data-level={level}>
+  <div class="rule-head">
+    <Heading id={`${node.anchor}-titel`} class="rule-title" lang={title.fallback ? 'de' : undefined}>
+      <span class="rule-number">{node.number}</span>
+      <span class="rule-name">{title.text}</span>
+    </Heading>
+    <a class="rule-anchor" href={`#${node.anchor}`} aria-label={t('content.rules.anchor', { n: node.number })} title={t('content.rules.anchor', { n: node.number })}>
+      #
+    </a>
+  </div>
+  {html && <div class="rule-body prose" lang={body.fallback ? 'de' : undefined} set:html={html} />}
+  {node.children.map((child) => <Astro.self lang={lang} node={child} level={level + 1} />)}
+</Wrapper>

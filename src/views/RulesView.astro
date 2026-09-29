@@ -1,0 +1,259 @@
+---
+/**
+ * Regelwerk (Plan §4.8): gültige Fassung unter /liga/regelwerk, jede Fassung zusätzlich
+ * unter /liga/regelwerk/v/[version]. Oben Version, „gilt ab“, Stand und Changelog.
+ * Die englische Seite ist deutlich als Übersetzung markiert (DE ist verbindlich).
+ */
+import Info from '@lucide/astro/icons/info';
+import Printer from '@lucide/astro/icons/printer';
+import RulesDocument from '~/components/content/RulesDocument.astro';
+import Badge from '~/components/ui/Badge.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import Markdown from '~/components/ui/Markdown.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import TranslationNotice from '~/components/ui/TranslationNotice.astro';
+import { SITE } from '~/config/site';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { findRulesVersion, rulesHaveFallback, rulesUpdatedAt } from '~/lib/content/rules';
+import { formatDate } from '~/lib/domain/time';
+import { localized } from '~/lib/league/league';
+import { loadLeague } from '~/lib/server/league';
+import { breadcrumbJsonLd } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  /** Nur auf /liga/regelwerk/v/[version]: die angefragte Fassung */
+  version?: string;
+}
+const { lang, version } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+
+const current = league.rulesVersion;
+const shown = findRulesVersion(league, version);
+if (version && !shown) throw new Error(`Regelwerk-Version nicht gefunden: ${version}`);
+const isVersionPage = version != null;
+const isCurrent = shown != null && shown.id === current?.id;
+const versions = league.rulesVersions;
+
+const tree = shown ? league.rulesTree(shown.id) : [];
+const updated = shown ? rulesUpdatedAt(league, shown) : null;
+const hasFallback = rulesHaveFallback(tree, lang);
+
+const pageTitle = isVersionPage && shown ? t('content.rules.versionTitle', { v: shown.version }) : t('content.rules.title');
+const pageAlternates = isVersionPage && shown ? alternates('rulesVersion', { version: shown.version }) : alternates('rules');
+const description = isVersionPage && shown ? t('content.rules.versionDescription', { v: shown.version }) : t('content.rules.description');
+
+const site = Astro.site ?? new URL(Astro.url.origin);
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('content.rules.title'), href: url(lang, 'rules') },
+  ...(isVersionPage && shown ? [{ label: t('content.rules.versionN', { v: shown.version }), href: pageAlternates[lang] }] : []),
+];
+const jsonLd = [
+  breadcrumbJsonLd(
+    site,
+    crumbs.map((c) => ({ name: c.label, href: c.href })),
+  ),
+  ...(shown
+    ? [
+        {
+          '@context': 'https://schema.org',
+          '@type': 'CreativeWork',
+          name: `${pageTitle} · ${SITE.name}`,
+          version: shown.version,
+          url: new URL(pageAlternates[lang], site).href,
+          inLanguage: lang === 'de' ? 'de-DE' : 'en-GB',
+          ...(shown.effective_from ? { temporalCoverage: `${shown.effective_from}/..` } : {}),
+          ...(updated ? { dateModified: updated } : {}),
+          ...(lang === 'en' ? { translationOfWork: { '@type': 'CreativeWork', url: new URL(pageAlternates.de, site).href, inLanguage: 'de-DE' } } : {}),
+        },
+      ]
+    : []),
+];
+
+const versionHref = (v: string) => (current && current.version === v ? url(lang, 'rules') : url(lang, 'rulesVersion', { version: v }));
+const isShown = (id: number) => shown?.id === id;
+const dateOf = (iso: string | null) => (iso ? formatDate(iso, lang) : '–');
+---
+
+<BaseLayout lang={lang} title={pageTitle} description={description} alternates={pageAlternates} jsonLd={jsonLd} noindex={isVersionPage && isCurrent}>
+  <PageHeader
+    lang={lang}
+    title={t('content.rules.title')}
+    eyebrow={shown ? t('content.rules.versionN', { v: shown.version }) : undefined}
+    lead={t('content.rules.lead')}
+    breadcrumbs={crumbs}
+    updated={updated}
+  >
+    <button slot="actions" type="button" class="btn btn-secondary btn-sm no-print" data-rules-print hidden>
+      <Printer size={16} aria-hidden="true" />
+      {t('content.rules.print')}
+    </button>
+    {
+      shown && (
+        <dl class="rules-meta mt-6">
+          <div>
+            <dt>{t('content.rules.version')}</dt>
+            <dd>{shown.version}</dd>
+          </div>
+          <div>
+            <dt>{t('content.rules.effectiveFrom')}</dt>
+            <dd>{shown.effective_from ? <time datetime={shown.effective_from}>{dateOf(shown.effective_from)}</time> : '–'}</dd>
+          </div>
+          <div>
+            <dt>{t('content.rules.status')}</dt>
+            <dd>
+              <Badge variant={isCurrent ? 'green' : 'muted'}>{isCurrent ? t('content.rules.statusCurrent') : t('content.rules.statusArchived')}</Badge>
+            </dd>
+          </div>
+        </dl>
+      )
+    }
+  </PageHeader>
+
+  <div class="container-page section">
+    {
+      !shown ? (
+        <EmptyState title={t('content.rules.none.title')} text={t('content.rules.none.text')} />
+      ) : (
+        <>
+          <div class="mb-8 grid gap-3">
+            {lang === 'en' && (
+              <p class="alert alert-warning flex flex-wrap items-center gap-x-3 gap-y-1" role="note">
+                <Info size={18} aria-hidden="true" class="shrink-0 text-warning" />
+                <strong>{t('content.rules.translation')}</strong>
+                <a href={isVersionPage ? pageAlternates.de : url('de', 'rules')} hreflang="de" class="text-green underline hover:text-teal">
+                  {t('content.rules.translationLink')}
+                </a>
+              </p>
+            )}
+            {isVersionPage && (
+              <p class:list={['alert flex flex-wrap items-center gap-x-3 gap-y-1', isCurrent ? 'alert-success' : 'alert-warning']} role="note">
+                <span>{isCurrent ? t('content.rules.currentNotice', { v: shown.version }) : t('content.rules.archivedNotice', { v: shown.version })}</span>
+                <a href={url(lang, 'rules')} class="font-semibold text-green underline hover:text-teal">
+                  {t('content.rules.toCurrent')}
+                </a>
+              </p>
+            )}
+            <TranslationNotice lang={lang} show={hasFallback} />
+          </div>
+
+          {versions.length > 0 && (
+            <details class="changelog card no-print mb-10" open={versions.length <= 2}>
+              <summary class="changelog-summary">
+                <span>{t('content.rules.changelog')}</span>
+                <span class="badge badge-muted">{versions.length}</span>
+              </summary>
+              <div class="px-5 pb-5">
+                <p class="field-hint mb-4">{t('content.rules.changelogHint')}</p>
+                <ol class="changelog-list">
+                  {versions.map((v) => {
+                    const log = localized(v, 'changelog', lang);
+                    return (
+                      <li class:list={['changelog-item', { 'is-shown': isShown(v.id) }]}>
+                        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <strong class="font-display text-lg">{t('content.rules.versionN', { v: v.version })}</strong>
+                          {v.id === current?.id && <Badge variant="green">{t('content.rules.currentMark')}</Badge>}
+                          {v.effective_from && (
+                            <span class="text-sm text-muted">
+                              {t('content.rules.effectiveFrom')}: <time datetime={v.effective_from}>{dateOf(v.effective_from)}</time>
+                            </span>
+                          )}
+                        </div>
+                        {log.text && <Markdown source={log.text} class="mt-2 text-sm" lang={log.fallback ? 'de' : undefined} />}
+                        {!isShown(v.id) && (
+                          <a href={versionHref(v.version)} class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-green hover:text-teal">
+                            {t('content.rules.viewVersion', { v: v.version })} →
+                          </a>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            </details>
+          )}
+
+          <RulesDocument lang={lang} tree={tree} />
+
+          <p class="mt-12 border-t border-border pt-6 text-sm text-muted">{t('content.rules.bindingSource')}</p>
+        </>
+      )
+    }
+  </div>
+</BaseLayout>
+
+<style>
+  .rules-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 2rem;
+  }
+  .rules-meta dt {
+    font-size: var(--fs-micro);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+  .rules-meta dd {
+    margin-top: 0.25rem;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.125rem;
+  }
+  .changelog-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 52px;
+    padding: 0.875rem 1.25rem;
+    font-weight: 700;
+    cursor: pointer;
+    list-style: none;
+  }
+  .changelog-summary::-webkit-details-marker {
+    display: none;
+  }
+  .changelog-summary::after {
+    content: '';
+    margin-left: auto;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-right: 2px solid var(--color-teal);
+    border-bottom: 2px solid var(--color-teal);
+    transform: rotate(45deg);
+    transition: transform 180ms ease-out;
+  }
+  .changelog[open] > .changelog-summary::after {
+    transform: rotate(-135deg);
+  }
+  .changelog-list {
+    display: grid;
+    gap: 1rem;
+    list-style: none;
+    padding: 0;
+  }
+  .changelog-item {
+    padding-left: 1rem;
+    border-left: 2px solid var(--color-border);
+  }
+  .changelog-item.is-shown {
+    border-left-color: var(--color-teal);
+  }
+  @media print {
+    .rules-meta dd {
+      color: #000;
+    }
+  }
+</style>
+
+<script>
+  const printButton = document.querySelector<HTMLButtonElement>('[data-rules-print]');
+  if (printButton && typeof window.print === 'function') {
+    printButton.hidden = false;
+    printButton.addEventListener('click', () => window.print());
+  }
+</script>
