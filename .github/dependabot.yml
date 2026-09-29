@@ -12,6 +12,13 @@ updates:
       time: '06:00'
       timezone: Europe/Berlin
     open-pull-requests-limit: 5
+    ignore:
+      # @astrojs/check und svelte-check unterstützen TypeScript 7 (Go-Compiler) noch nicht
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      # @types/node folgt der eingesetzten Node-Hauptversion, nicht der neuesten
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     labels:
       - dependencies
     commit-message:
