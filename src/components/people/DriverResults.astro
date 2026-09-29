@@ -1,0 +1,145 @@
+---
+/**
+ * Ergebnisliste eines Fahrers nach Saison gruppiert (Plan §4.5): Runde (Link zur Rennseite),
+ * Session, Team, Start, Position/Status, Punkte und Marken (Pole „P“, schnellste Runde mit
+ * Stoppuhr, Reserve „R“). Jede Saison als Akkordeon, die neueste ist offen.
+ */
+import Timer from '@lucide/astro/icons/timer';
+import TeamName from '~/components/ui/TeamName.astro';
+import { url, useT, type Lang } from '~/i18n';
+import type { League } from '~/lib/league/league';
+import type { SeasonResults } from '~/lib/people';
+import { roundLabel, seasonLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  groups: SeasonResults[];
+}
+const { lang, league, groups } = Astro.props;
+const t = useT(lang);
+---
+
+<div class="accordion">
+  {
+    groups.map((g, gi) => {
+      const name = seasonLabel(g.season, lang);
+      return (
+        <details open={gi === 0}>
+          <summary>
+            <span class="flex flex-wrap items-baseline gap-x-3">
+              <span class="nav-label text-lg">{name}</span>
+              <span class="text-sm font-normal text-muted">{t('people.results.seasonPoints', { n: g.points })}</span>
+            </span>
+          </summary>
+          <div class="table-wrap mb-5">
+            <table class="timing-table">
+              <caption class="sr-only">{t('people.results.caption', { season: name })}</caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="sticky-col">{t('common.round')}</th>
+                  <th scope="col">{t('people.results.session')}</th>
+                  <th scope="col">{t('common.team')}</th>
+                  <th scope="col" class="num">{t('people.results.grid')}</th>
+                  <th scope="col" class="num">{t('people.results.result')}</th>
+                  <th scope="col" class="num">{t('common.pointsShort')}</th>
+                  <th scope="col">{t('people.results.marks')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {g.rows.map((row, i) => {
+                  const r = row.result;
+                  const prev = g.rows[i - 1];
+                  const firstOfRound = !prev || prev.round.id !== row.round.id;
+                  const label = roundLabel(row.round, league.track(row.round.track_id), lang);
+                  const classified = r.status === 'classified' && r.position != null;
+                  return (
+                    <tr class:list={[firstOfRound && i > 0 && 'round-start']}>
+                      <th scope="row" class="sticky-col font-normal">
+                        {firstOfRound ? (
+                          <a href={url(lang, 'race', { season: row.season.slug, round: row.round.number })} class="round-link">
+                            {label}
+                          </a>
+                        ) : (
+                          <span class="text-muted">
+                            <span class="sr-only">{label}</span>
+                            <span aria-hidden="true">↳</span>
+                          </span>
+                        )}
+                      </th>
+                      <td>{t(`session.${row.session.type}`)}</td>
+                      <td class="muted">
+                        <TeamName lang={lang} team={league.team(r.team_id)} short />
+                      </td>
+                      <td class="num muted">{row.session.type !== 'qualifying' && r.grid_position != null ? r.grid_position : ''}</td>
+                      <td class:list={['num font-semibold', !classified && 'text-danger', classified && r.position! <= 3 && row.session.type !== 'qualifying' && 'podium']}>
+                        {classified ? t('people.pos', { n: r.position! }) : t(`status.result.${r.status}`)}
+                      </td>
+                      <td class="num">{r.points > 0 ? r.points : ''}</td>
+                      <td>
+                        <span class="marks">
+                          {r.is_pole && (
+                            <abbr class="pole" title={t('legend.pole')}>
+                              P
+                            </abbr>
+                          )}
+                          {r.is_fastest_lap && (
+                            <span class="text-teal" title={t('legend.fastestLap')}>
+                              <Timer size={15} aria-hidden="true" />
+                              <span class="sr-only">{t('legend.fastestLap')}</span>
+                            </span>
+                          )}
+                          {r.role === 'reserve' && (
+                            <abbr class="res" title={t('legend.reserve')}>
+                              {t('common.reserveShort')}
+                            </abbr>
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      );
+    })
+  }
+</div>
+
+<style>
+  .round-start > * {
+    border-top: 1px solid #3a3a42;
+  }
+  .round-link {
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .round-link:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+  .podium {
+    box-shadow: inset 0 -2px 0 var(--color-green);
+  }
+  .marks {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .pole {
+    font-weight: 800;
+    color: var(--color-green);
+    text-decoration: none;
+  }
+  .res {
+    padding: 0 0.3rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-muted);
+    text-decoration: none;
+  }
+</style>

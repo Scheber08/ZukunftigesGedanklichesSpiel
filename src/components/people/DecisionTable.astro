@@ -1,0 +1,93 @@
+---
+/**
+ * Öffentliches Strafenregister eines Fahrers (Plan §4.5, §4.6): nur veröffentlichte
+ * Entscheidungen, jede mit Link auf ihre Seite im Steward-Register.
+ */
+import { url, useT, type Lang } from '~/i18n';
+import type { DecisionRow } from '~/lib/db/types';
+import { formatDate } from '~/lib/domain/time';
+import type { League } from '~/lib/league/league';
+import { roundLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  decisions: DecisionRow[];
+  caption: string;
+  /** Spalte Strafpunkte zeigen (nur wenn die Saison Strafpunkte nutzt) */
+  penaltyPoints?: boolean;
+}
+const { lang, league, decisions, caption, penaltyPoints = false } = Astro.props;
+const t = useT(lang);
+
+function extra(d: DecisionRow): string {
+  if (d.verdict === 'time_penalty' && d.time_seconds) return t('people.penalties.seconds', { n: d.time_seconds });
+  if ((d.verdict === 'position_penalty' || d.verdict === 'grid_penalty_next') && d.positions) return t('people.penalties.positions', { n: d.positions });
+  return '';
+}
+const severe = new Set(['time_penalty', 'position_penalty', 'grid_penalty_next', 'dsq', 'race_ban']);
+---
+
+<div class="table-wrap">
+  <table class="timing-table">
+    <caption class="sr-only">{caption}</caption>
+    <thead>
+      <tr>
+        <th scope="col" class="sticky-col">{t('people.penalties.ref')}</th>
+        <th scope="col">{t('common.round')}</th>
+        <th scope="col">{t('people.results.session')}</th>
+        <th scope="col">{t('people.penalties.verdict')}</th>
+        {penaltyPoints && <th scope="col" class="num">{t('people.penalties.pointsTotal', { season: '' }).trim()}</th>}
+        <th scope="col" class="num">{t('common.date')}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {
+        decisions.map((d) => {
+          const round = league.round(d.round_id);
+          const season = round ? league.season(round.season_id) : undefined;
+          const session = d.session_id != null ? league.session(d.session_id) : undefined;
+          const detail = extra(d);
+          return (
+            <tr>
+              <th scope="row" class="sticky-col font-normal">
+                <a href={url(lang, 'decision', { ref: d.public_ref })} class="ref tabular">
+                  {d.public_ref}
+                </a>
+              </th>
+              <td>
+                {round && season ? (
+                  <a href={url(lang, 'race', { season: season.slug, round: round.number })} class="hover:text-teal">
+                    {roundLabel(round, league.track(round.track_id), lang)}
+                  </a>
+                ) : (
+                  '–'
+                )}
+              </td>
+              <td class="muted">{session ? t(`session.${session.type}`) : '–'}</td>
+              <td>
+                <span class:list={[severe.has(d.verdict) && 'text-danger', d.verdict === 'warning' && 'text-warning']}>{t(`people.verdict.${d.verdict}`)}</span>
+                {detail && <span class="muted"> · {detail}</span>}
+              </td>
+              {penaltyPoints && <td class="num">{d.penalty_points ?? '–'}</td>}
+              <td class="num muted">{d.published_at ? formatDate(d.published_at, lang) : '–'}</td>
+            </tr>
+          );
+        })
+      }
+    </tbody>
+  </table>
+</div>
+
+<style>
+  .ref {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    color: var(--color-green);
+  }
+  .ref:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+</style>

@@ -1,0 +1,240 @@
+---
+/**
+ * Kennzahlen-Kacheln (Plan §4.5) mit Umschalter Karriere / aktuelle Saison.
+ * Der Umschalter kommt ohne JavaScript aus (Radio + :has()); ohne :has()-Unterstützung
+ * bleibt die Karriere sichtbar. Dazu eine Tabelle mit beiden Zeiträumen als Alternative.
+ */
+import { useT, type Lang } from '~/i18n';
+import type { CareerStats } from '~/lib/domain/stats';
+import { hasStats, signed, STAT_KEYS, type StatKey } from '~/lib/people';
+import { formatDecimal, formatPercent, formatPoints } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  id: string;
+  career: CareerStats;
+  /** Kennzahlen der aktuellen Saison (null = kein Umschalter) */
+  season?: CareerStats | null;
+  seasonName?: string;
+  /** WM-Position in der aktuellen Saison */
+  championship?: { position: number; tied: boolean } | null;
+}
+const { lang, id, career, season = null, seasonName, championship = null } = Astro.props;
+const t = useT(lang);
+
+type Tile = { key: string; label: string; value: string; detail?: string; highlight?: boolean };
+
+function value(stats: CareerStats, key: StatKey): string {
+  switch (key) {
+    case 'points':
+      return formatPoints(stats.points, lang);
+    case 'avgFinish':
+      return formatDecimal(stats.avgFinish, lang);
+    case 'bestFinish':
+      return stats.bestFinish == null ? '–' : t('people.pos', { n: stats.bestFinish });
+    case 'dnfRate':
+      return formatPercent(stats.dnfRate, lang);
+    case 'positionsGained':
+      return stats.starts > 0 ? signed(stats.positionsGained) : '–';
+    default:
+      return String(stats[key]);
+  }
+}
+
+function detail(stats: CareerStats, key: StatKey): string | undefined {
+  if (key === 'starts' && stats.reserveStarts > 0) return t('people.stats.reserveStarts', { n: stats.reserveStarts });
+  if (key === 'dnfRate' && stats.starts > 0) return t('people.stats.dnfDetail', { n: stats.dnfs, starts: stats.starts });
+  if (key === 'avgFinish' && stats.avgFinish != null) return t('people.stats.avgDetail');
+  if (key === 'positionsGained' && stats.starts > 0) return t('people.stats.gainedDetail');
+  return undefined;
+}
+
+function tiles(stats: CareerStats, withChampionship: boolean): Tile[] {
+  const list: Tile[] = [];
+  if (withChampionship && championship) {
+    list.push({
+      key: 'championship',
+      label: t('people.stats.championship'),
+      value: `${championship.tied ? '=' : ''}${t('people.pos', { n: championship.position })}`,
+      highlight: true,
+    });
+  }
+  for (const key of STAT_KEYS) {
+    list.push({ key, label: t(`people.stats.${key}`), value: value(stats, key), detail: detail(stats, key), highlight: key === 'points' });
+  }
+  if (stats.sprintWins > 0) list.push({ key: 'sprintWins', label: t('people.stats.sprintWins'), value: String(stats.sprintWins) });
+  return list;
+}
+
+const careerTiles = tiles(career, false);
+const seasonTiles = season ? tiles(season, true) : [];
+const hasCareer = hasStats(career);
+const hasSeason = season != null && hasStats(season);
+const name = `${id}-scope`;
+---
+
+<div class="stat-block" id={id}>
+  {
+    season && (
+      <fieldset class="segmented scope-switch mb-5">
+        <legend class="sr-only">{t('people.stats.scope')}</legend>
+        <input type="radio" name={name} id={`${name}-career`} value="career" checked class="sr-only" />
+        <label for={`${name}-career`}>{t('people.stats.career')}</label>
+        <input type="radio" name={name} id={`${name}-season`} value="season" class="sr-only" />
+        <label for={`${name}-season`}>{seasonName ?? t('people.stats.season')}</label>
+      </fieldset>
+    )
+  }
+
+  <div class="panel panel-career">
+    {
+      hasCareer ? (
+        <dl class="tiles">
+          {careerTiles.map((tile) => (
+            <div class:list={['tile', tile.highlight && 'tile-hl']}>
+              <dt class="micro">{tile.label}</dt>
+              <dd class="tile-value tabular">{tile.value}</dd>
+              {tile.detail && <dd class="tile-detail">{tile.detail}</dd>}
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p class="card p-5 text-sm text-muted">{t('people.stats.none')}</p>
+      )
+    }
+  </div>
+
+  {
+    season && (
+      <div class="panel panel-season">
+        {hasSeason ? (
+          <dl class="tiles">
+            {seasonTiles.map((tile) => (
+              <div class:list={['tile', tile.highlight && 'tile-hl']}>
+                <dt class="micro">{tile.label}</dt>
+                <dd class="tile-value tabular">{tile.value}</dd>
+                {tile.detail && <dd class="tile-detail">{tile.detail}</dd>}
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p class="card p-5 text-sm text-muted">{t('people.stats.noneSeason')}</p>
+        )}
+      </div>
+    )
+  }
+
+  {
+    hasCareer && (
+      <details class="mt-4">
+        <summary class="summary text-sm text-muted">{t('people.stats.asTable')}</summary>
+        <div class="table-wrap mt-3">
+          <table class="timing-table">
+            <caption class="sr-only">{t('people.stats.tableCaption')}</caption>
+            <thead>
+              <tr>
+                <th scope="col" class="sticky-col">{t('people.stats.metric')}</th>
+                <th scope="col" class="num">{t('people.stats.career')}</th>
+                {season && <th scope="col" class="num">{seasonName ?? t('people.stats.season')}</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {season && championship && (
+                <tr>
+                  <th scope="row" class="sticky-col font-normal">{t('people.stats.championship')}</th>
+                  <td class="num muted">–</td>
+                  <td class="num">{`${championship.tied ? '=' : ''}${t('people.pos', { n: championship.position })}`}</td>
+                </tr>
+              )}
+              {STAT_KEYS.map((key) => (
+                <tr>
+                  <th scope="row" class="sticky-col font-normal">{t(`people.stats.${key}`)}</th>
+                  <td class="num">{value(career, key)}</td>
+                  {season && <td class="num">{value(season, key)}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    )
+  }
+</div>
+
+<style>
+  .scope-switch label {
+    min-height: 44px;
+    padding: 0.25rem 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+  }
+  .scope-switch input:checked + label {
+    background: var(--color-surface-2);
+    color: var(--color-fg);
+    box-shadow: inset 0 -1px 0 var(--color-teal);
+  }
+  .scope-switch input:focus-visible + label {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+  }
+  .panel-season {
+    display: none;
+  }
+  .stat-block:has(input[value='season']:checked) .panel-season {
+    display: block;
+  }
+  .stat-block:has(input[value='season']:checked) .panel-career {
+    display: none;
+  }
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  @media (min-width: 640px) {
+    .tiles {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 1024px) {
+    .tiles {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+  }
+  .tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface-1);
+  }
+  .tile-hl {
+    border-color: transparent;
+    background:
+      linear-gradient(var(--color-surface-1), var(--color-surface-1)) padding-box,
+      var(--g-accent) border-box;
+  }
+  .tile-value {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(1.5rem, 1.3rem + 0.8vw, 2rem);
+    line-height: 1.1;
+  }
+  .tile-detail {
+    font-size: 0.75rem;
+    color: var(--color-muted);
+  }
+  .summary {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    cursor: pointer;
+  }
+</style>

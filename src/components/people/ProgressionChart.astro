@@ -1,0 +1,144 @@
+---
+/**
+ * Kleiner Punkteverlauf für EIN Fahrer bzw. Team (Plan §3.5, §4.5): serverseitiges SVG
+ * mit Linie in Teamfarbe, Punktmarken und Werten, dazu immer eine Tabelle als Alternative.
+ */
+import { useT, type Lang } from '~/i18n';
+import type { League } from '~/lib/league/league';
+import type { ProgressionStep } from '~/lib/people';
+import { roundLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  id: string;
+  steps: ProgressionStep[];
+  title: string;
+  description: string;
+  color?: string | null;
+}
+const { lang, league, id, steps, title, description, color } = Astro.props;
+const t = useT(lang);
+
+const W = 640;
+const H = 240;
+const M = { top: 28, right: 28, bottom: 34, left: 44 };
+const innerW = W - M.left - M.right;
+const innerH = H - M.top - M.bottom;
+const n = steps.length;
+const maxValue = Math.max(10, ...steps.map((s) => s.total));
+const step = maxValue <= 50 ? 10 : maxValue <= 150 ? 25 : maxValue <= 400 ? 50 : 100;
+const niceMax = Math.ceil(maxValue / step) * step;
+const ticks = Array.from({ length: niceMax / step + 1 }, (_, i) => i * step);
+const x = (i: number) => M.left + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
+const y = (v: number) => M.top + innerH - (v / niceMax) * innerH;
+const lineColor = color ?? '#34C4D0';
+const points = steps.map((s, i) => `${x(i)},${y(s.total)}`).join(' ');
+const area = n > 1 ? `M ${x(0)},${y(0)} L ${steps.map((s, i) => `${x(i)},${y(s.total)}`).join(' L ')} L ${x(n - 1)},${y(0)} Z` : '';
+// Werte an jeder Marke nur, solange es übersichtlich bleibt
+const labelEvery = n <= 12;
+const gradientId = `${id}-fill`;
+---
+
+{
+  n === 0 ? (
+    <p class="card p-5 text-sm text-muted">{t('people.chart.none')}</p>
+  ) : (
+    <figure class="card p-4">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-labelledby={`${id}-t ${id}-d`} class="h-auto w-full">
+        <title id={`${id}-t`}>{title}</title>
+        <desc id={`${id}-d`}>{description}</desc>
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color={lineColor} stop-opacity="0.28" />
+            <stop offset="1" stop-color={lineColor} stop-opacity="0" />
+          </linearGradient>
+        </defs>
+        <g class="axis">
+          {ticks.map((v) => (
+            <g>
+              <line x1={M.left} x2={M.left + innerW} y1={y(v)} y2={y(v)} />
+              <text x={M.left - 8} y={y(v) + 4} text-anchor="end">
+                {v}
+              </text>
+            </g>
+          ))}
+          {steps.map((s, i) => (
+            <text x={x(i)} y={H - M.bottom + 20} text-anchor="middle">
+              R{s.round.number}
+            </text>
+          ))}
+        </g>
+        {area && <path d={area} fill={`url(#${gradientId})`} />}
+        <polyline points={points} fill="none" stroke={lineColor} stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
+        {steps.map((s, i) => (
+          <g>
+            <circle cx={x(i)} cy={y(s.total)} r={i === n - 1 ? 5.5 : 4} class="dot" fill={i === n - 1 ? lineColor : '#050505'} stroke={lineColor} stroke-width="2" />
+            {(labelEvery || i === n - 1) && (
+              <text x={x(i)} y={y(s.total) - 10} text-anchor="middle" class:list={['value', i === n - 1 && 'value-last']}>
+                {s.total}
+              </text>
+            )}
+          </g>
+        ))}
+      </svg>
+      <details class="mt-2">
+        <summary class="summary text-sm text-muted">{t('chart.asTable')}</summary>
+        <div class="table-wrap mt-3">
+          <table class="timing-table">
+            <caption class="sr-only">{title}</caption>
+            <thead>
+              <tr>
+                <th scope="col" class="sticky-col">{t('common.round')}</th>
+                <th scope="col" class="num">{t('people.chart.roundPoints')}</th>
+                <th scope="col" class="num">{t('people.chart.total')}</th>
+                <th scope="col" class="num">{t('people.chart.position')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {steps.map((s) => (
+                <tr>
+                  <th scope="row" class="sticky-col font-normal">
+                    {roundLabel(s.round, league.track(s.round.track_id), lang)}
+                  </th>
+                  <td class="num">{s.delta > 0 ? `+${s.delta}` : s.delta}</td>
+                  <td class="num font-semibold">{s.total}</td>
+                  <td class="num">{s.position != null ? t('people.pos', { n: s.position }) : '–'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </figure>
+  )
+}
+
+<style>
+  .axis line {
+    stroke: var(--color-border);
+    stroke-width: 1;
+  }
+  .axis text {
+    font-family: var(--font-sans);
+    font-size: 12px;
+    fill: var(--color-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .value {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 12px;
+    fill: var(--color-fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .value-last {
+    font-size: 14px;
+  }
+  .summary {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    cursor: pointer;
+  }
+</style>

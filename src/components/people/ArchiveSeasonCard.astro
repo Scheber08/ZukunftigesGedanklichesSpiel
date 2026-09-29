@@ -1,0 +1,280 @@
+---
+/**
+ * Eine Saison im Archiv (Plan §4.8): Status, Zeitraum, Spielversion, Runden, Endstand
+ * (Top 3 + Konstrukteurs-Champion) und Links zu Saisonwertung, Kalender und Rennseiten.
+ * Abgeschlossene Saisons sind als „eingefroren“ gekennzeichnet (Icon + Text).
+ */
+import Lock from '@lucide/astro/icons/lock';
+import Trophy from '@lucide/astro/icons/trophy';
+import Badge from '~/components/ui/Badge.astro';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import Flag from '~/components/ui/Flag.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import TeamName from '~/components/ui/TeamName.astro';
+import { url, useT, type Lang } from '~/i18n';
+import { formatDate } from '~/lib/domain/time';
+import type { League } from '~/lib/league/league';
+import type { ArchiveSeason } from '~/lib/people';
+import { roundLabel, seasonLabel, teamStyle } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  entry: ArchiveSeason;
+  /** Diese Saison ist die aktuelle (Link zum Kalender) */
+  current?: boolean;
+}
+const { lang, league, entry, current = false } = Astro.props;
+const t = useT(lang);
+const { season } = entry;
+const name = seasonLabel(season, lang);
+const headingId = `season-${season.slug}`;
+const statusVariant = season.status === 'finished' ? 'green' : season.status === 'active' ? 'teal' : 'muted';
+const period =
+  entry.from && entry.to
+    ? `${formatDate(entry.from, lang)} – ${formatDate(entry.to, lang)}`
+    : entry.from
+      ? `${formatDate(entry.from, lang)} – …`
+      : t('people.archive.periodOpen');
+const finished = season.status === 'finished';
+const standingsHref = season.status !== 'planned' ? url(lang, 'seasonStandings', { season: season.slug }) : null;
+const constructorsTeam = entry.constructors ? league.team(entry.constructors.teamId) : undefined;
+const championInTop3 = entry.championId != null && entry.top3.some((s) => s.driverId === entry.championId);
+---
+
+<article class:list={['season-card card', finished && 'is-frozen']} aria-labelledby={headingId}>
+  <header class="flex flex-wrap items-center justify-between gap-3">
+    <h2 id={headingId} class="nav-label text-2xl md:text-3xl">{name}</h2>
+    <div class="flex flex-wrap items-center gap-2">
+      <Badge variant={statusVariant}>{t(`people.archive.status.${season.status}`)}</Badge>
+      {
+        entry.frozen && (
+          <Badge variant="muted" title={t('people.archive.frozenHint')}>
+            <Lock size={12} aria-hidden="true" />
+            {t('people.archive.frozen')}
+          </Badge>
+        )
+      }
+    </div>
+  </header>
+
+  <dl class="meta">
+    <div>
+      <dt class="micro">{t('people.archive.period')}</dt>
+      <dd class="tabular">{period}</dd>
+    </div>
+    <div>
+      <dt class="micro">{t('people.archive.gameVersion')}</dt>
+      <dd>{season.game_version || '–'}</dd>
+    </div>
+    <div>
+      <dt class="micro">{t('people.archive.rounds')}</dt>
+      <dd>
+        {t('people.archive.roundsValue', { done: entry.completed, total: entry.scheduled })}
+        {entry.sprints > 0 && <span class="text-muted"> · {t('people.archive.roundsSprint', { n: entry.sprints })}</span>}
+      </dd>
+    </div>
+  </dl>
+
+  {entry.frozen && <p class="frozen-note"><Lock size={14} aria-hidden="true" />{t('people.archive.frozenHint')}</p>}
+
+  {
+    entry.top3.length > 0 ? (
+      <div class="standings">
+        <div>
+          <h3 class="micro mb-3">{finished ? t('people.archive.finalStandings') : t('people.archive.currentStandings')}</h3>
+          <ol class="grid gap-2">
+            {entry.top3.map((s) => {
+              const team = s.teamId != null ? league.team(s.teamId) : undefined;
+              const isChampion = finished && s.driverId === entry.championId;
+              return (
+                <li class="podium-row" style={teamStyle(team)}>
+                  <span class="podium-pos tabular">
+                    {s.tied && <span class="sr-only">{t('standings.tied')} </span>}
+                    {s.tied ? `=${s.position}` : s.position}
+                  </span>
+                  <span class="min-w-0">
+                    <DriverLink lang={lang} driver={league.driver(s.driverId)} team={team} stripe={false} />
+                    {isChampion && (
+                      <Badge variant="solid" class="ml-2">
+                        <Trophy size={12} aria-hidden="true" />
+                        {t('people.archive.champion')}
+                      </Badge>
+                    )}
+                  </span>
+                  <span class="tabular text-sm font-semibold">{t('people.points', { n: s.points })}</span>
+                </li>
+              );
+            })}
+          </ol>
+          {finished && entry.championId != null && !championInTop3 && (
+            <p class="mt-2 text-sm">
+              {t('people.archive.champion')}: <DriverLink lang={lang} driver={league.driver(entry.championId)} stripe={false} />
+            </p>
+          )}
+        </div>
+        {constructorsTeam && entry.constructors && (
+          <div class="constructors" style={teamStyle(constructorsTeam)}>
+            <p class="micro">{finished ? t('people.archive.constructorsChampion') : t('people.archive.constructorsLeader')}</p>
+            <p class="mt-1 flex flex-wrap items-center justify-between gap-2">
+              <TeamName lang={lang} team={constructorsTeam} class="nav-label text-lg" />
+              <span class="tabular text-sm font-semibold">{t('people.points', { n: entry.constructors.points })}</span>
+            </p>
+          </div>
+        )}
+      </div>
+    ) : (
+      <p class="mt-5 text-sm text-muted">{season.status === 'planned' ? t('people.archive.plannedHint') : t('people.archive.noResults')}</p>
+    )
+  }
+
+  <div class="mt-5 flex flex-wrap gap-3">
+    {
+      standingsHref && (
+        <a href={standingsHref} class="btn btn-secondary btn-sm">
+          {t('people.archive.toStandings')}
+        </a>
+      )
+    }
+    {
+      current && (
+        <a href={url(lang, 'calendar')} class="btn btn-ghost btn-sm border border-border">
+          {t('people.archive.toCalendar')}
+        </a>
+      )
+    }
+  </div>
+
+  {
+    entry.rounds.length > 0 && (
+      <details class="races mt-4">
+        <summary>{t('people.archive.races', { season: name })}</summary>
+        <ol class="race-list">
+          {entry.rounds.map((r) => {
+            const track = league.track(r.track_id);
+            return (
+              <li>
+                <a href={url(lang, 'race', { season: season.slug, round: r.number })} class="race-link">
+                  <Flag code={track?.country_code} lang={lang} decorative />
+                  <span>{roundLabel(r, track, lang)}</span>
+                </a>
+                <span class="flex flex-wrap items-center gap-2 text-xs text-muted">
+                  <time datetime={r.start_utc}>{formatDate(r.start_utc, lang)}</time>
+                  {r.format === 'sprint' && <Badge variant="teal">{t('common.sprint')}</Badge>}
+                  <RoundStatusBadge status={r.status} lang={lang} />
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </details>
+    )
+  }
+</article>
+
+<style>
+  .season-card {
+    padding: 1.25rem;
+  }
+  @media (min-width: 768px) {
+    .season-card {
+      padding: 1.75rem;
+    }
+  }
+  .meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: 0.75rem 1.5rem;
+    margin-top: 1.25rem;
+  }
+  .meta dd {
+    margin-top: 0.2rem;
+    font-weight: 600;
+  }
+  .frozen-note {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    font-size: 0.8125rem;
+    color: var(--color-muted);
+  }
+  .standings {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-border);
+  }
+  @media (min-width: 768px) {
+    .standings {
+      grid-template-columns: 1.4fr 1fr;
+      align-items: start;
+    }
+  }
+  .podium-row {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-control);
+    background: var(--color-surface-2);
+    border-left: 4px solid var(--team-color, var(--color-border));
+  }
+  .podium-pos {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 1.25rem;
+    text-align: right;
+  }
+  .constructors {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-control);
+    background: var(--color-surface-2);
+    border-left: 4px solid var(--team-color, var(--color-border));
+  }
+  .races summary {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-muted);
+  }
+  .races summary:hover {
+    color: var(--color-fg);
+  }
+  .race-list {
+    display: grid;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+  }
+  @media (min-width: 768px) {
+    .race-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 1.5rem;
+    }
+  }
+  .race-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .race-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .race-link:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+</style>

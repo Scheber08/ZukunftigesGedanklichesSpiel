@@ -1,0 +1,25 @@
+---
+/** Umschalter Fahrer | Teams als Links (zwei eigene Seiten, kein JavaScript). */
+import { url, useT, type Lang } from '~/i18n';
+
+interface Props {
+  lang: Lang;
+  current: 'drivers' | 'teams';
+}
+const { lang, current } = Astro.props;
+const t = useT(lang);
+const items = [
+  { key: 'drivers', href: url(lang, 'drivers'), label: t('people.nav.drivers') },
+  { key: 'teams', href: url(lang, 'teams'), label: t('people.nav.teams') },
+] as const;
+---
+
+<nav aria-label={t('people.nav.label')} class="tabs mt-6">
+  {
+    items.map((item) => (
+      <a href={item.href} class="tab" aria-current={item.key === current ? 'page' : undefined}>
+        {item.label}
+      </a>
+    ))
+  }
+</nav>

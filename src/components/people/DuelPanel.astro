@@ -1,0 +1,169 @@
+---
+/**
+ * Teamkollegen-Duell (Plan §4.5): Qualifying, Rennen und Punkte Kopf an Kopf,
+ * dazu Runde für Runde als Tabelle. Balken sind nur Deko, die Zahlen stehen immer daneben.
+ */
+import DriverLink from '~/components/ui/DriverLink.astro';
+import { useT, type Lang } from '~/i18n';
+import type { DriverRow, TeamRow } from '~/lib/db/types';
+import type { Duel } from '~/lib/domain/stats';
+import type { League } from '~/lib/league/league';
+import { roundLabel, teamStyle } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  id: string;
+  a: DriverRow;
+  b: DriverRow;
+  team: TeamRow;
+  duel: Duel;
+}
+const { lang, league, id, a, b, team, duel } = Astro.props;
+const t = useT(lang);
+const nameA = league.driverName(a.id, lang);
+const nameB = league.driverName(b.id, lang);
+
+const rows = [
+  { key: 'qualifying', label: t('session.qualifying'), x: duel.qualiWinsA, y: duel.qualiWinsB },
+  { key: 'race', label: t('session.race'), x: duel.raceWinsA, y: duel.raceWinsB },
+  { key: 'points', label: t('common.points'), x: duel.pointsA, y: duel.pointsB },
+];
+const share = (x: number, y: number) => (x + y === 0 ? 50 : Math.round((x / (x + y)) * 100));
+const pos = (n: number | null) => (n == null ? '–' : t('people.pos', { n }));
+const better = (mine: number | null, other: number | null) => mine != null && (other == null || mine < other);
+const orderedRounds = [...duel.rounds]
+  .map((r) => ({ ...r, round: league.round(r.roundId) }))
+  .sort((p, q) => (p.round?.number ?? 0) - (q.round?.number ?? 0));
+---
+
+<div class="duel card p-4 md:p-5" style={teamStyle(team)}>
+  <div class="duel-head">
+    <DriverLink lang={lang} driver={a} team={team} class="text-base" />
+    <span class="micro">{t('people.duel.versus')}</span>
+    <DriverLink lang={lang} driver={b} team={team} stripe={false} class="justify-end text-base" />
+  </div>
+  <p class="mt-1 text-xs text-muted">{t('people.duel.lead', { team: team.name })}</p>
+
+  {
+    duel.rounds.length === 0 ? (
+      <p class="mt-4 text-sm text-muted">{t('people.duel.none')}</p>
+    ) : (
+      <>
+        <dl class="mt-4 grid gap-3">
+          {rows.map((r) => (
+            <div class="duel-row">
+              <dt class="micro text-center">{r.label}</dt>
+              <dd class="duel-values">
+                <span class:list={['v tabular', r.x > r.y && 'lead']}>{r.x}</span>
+                <span class="bar" aria-hidden="true">
+                  <span class="bar-a" style={`width: ${share(r.x, r.y)}%`} />
+                  <span class="bar-b" />
+                </span>
+                <span class:list={['v tabular text-right', r.y > r.x && 'lead']}>{r.y}</span>
+                <span class="sr-only">{t('people.duel.score', { a: nameA, x: r.x, b: nameB, y: r.y })}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+        <details class="mt-3">
+          <summary class="summary text-sm text-muted">{t('people.duel.rounds')}</summary>
+          <div class="table-wrap mt-3">
+            <table class="timing-table" id={`${id}-rounds`}>
+              <caption class="sr-only">{t('people.duel.caption', { a: nameA, b: nameB })}</caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="sticky-col" rowspan="2">
+                    {t('common.round')}
+                  </th>
+                  <th scope="colgroup" colspan="2" class="text-center">
+                    {t('session.qualifying')}
+                  </th>
+                  <th scope="colgroup" colspan="2" class="text-center">
+                    {t('session.race')}
+                  </th>
+                </tr>
+                <tr>
+                  <th scope="col" class="num">{nameA}</th>
+                  <th scope="col" class="num">{nameB}</th>
+                  <th scope="col" class="num">{nameA}</th>
+                  <th scope="col" class="num">{nameB}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderedRounds.map((r) => (
+                  <tr>
+                    <th scope="row" class="sticky-col font-normal">
+                      {r.round ? roundLabel(r.round, league.track(r.round.track_id), lang) : '–'}
+                    </th>
+                    <td class:list={['num', better(r.qualiA, r.qualiB) && 'win']}>{pos(r.qualiA)}</td>
+                    <td class:list={['num', better(r.qualiB, r.qualiA) && 'win']}>{pos(r.qualiB)}</td>
+                    <td class:list={['num', better(r.raceA, r.raceB) && 'win']}>{pos(r.raceA)}</td>
+                    <td class:list={['num', better(r.raceB, r.raceA) && 'win']}>{pos(r.raceB)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </>
+    )
+  }
+</div>
+
+<style>
+  .duel {
+    border-top: 4px solid var(--team-color, var(--color-border));
+  }
+  .duel-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .duel-row {
+    display: grid;
+    gap: 0.25rem;
+  }
+  .duel-values {
+    display: grid;
+    grid-template-columns: 3.5rem 1fr 3.5rem;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .v {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--color-muted);
+  }
+  .v.lead {
+    color: var(--color-fg);
+  }
+  .bar {
+    display: flex;
+    height: 0.5rem;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--color-surface-2);
+  }
+  .bar-a {
+    background: var(--color-green);
+  }
+  .bar-b {
+    flex: 1;
+    background: var(--color-teal-deep);
+  }
+  .win {
+    font-weight: 700;
+    color: var(--color-fg);
+    box-shadow: inset 0 -2px 0 var(--color-green);
+  }
+  .summary {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    cursor: pointer;
+  }
+</style>

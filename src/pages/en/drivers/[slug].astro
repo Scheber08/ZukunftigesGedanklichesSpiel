@@ -1,0 +1,15 @@
+---
+import { driverProfileSlugs } from '~/lib/people';
+import { loadLeague } from '~/lib/server/league';
+import DriverView from '~/views/DriverView.astro';
+
+/** Profilseiten für alle nicht pseudonymisierten Fahrer mit Ergebnis, Nummer oder Cockpit. */
+export async function getStaticPaths() {
+  const league = await loadLeague();
+  return driverProfileSlugs(league).map((slug) => ({ params: { slug } }));
+}
+
+const { slug } = Astro.params;
+---
+
+<DriverView lang="en" slug={slug!} />

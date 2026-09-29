@@ -1,0 +1,109 @@
+---
+/**
+ * Kopf für Fahrer- und Teamseiten: Brotkrümel, Teamstreifen als Akzent, große Startnummer
+ * (Titillium 900) und genau eine H1. Badges und Steckbrief kommen über Slots.
+ */
+import { useT, type Lang } from '~/i18n';
+import type { TeamRow } from '~/lib/db/types';
+import { teamStyle } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  title: string;
+  eyebrow?: string;
+  breadcrumbs: Array<{ label: string; href?: string }>;
+  team?: TeamRow | null;
+  /** Große Startnummer links (undefined = keine Nummernspalte) */
+  number?: number | null;
+  numberLabel?: string;
+}
+const { lang, title, eyebrow, breadcrumbs, team, number, numberLabel } = Astro.props;
+const t = useT(lang);
+---
+
+<header class="page-header profile-header" style={teamStyle(team)}>
+  <div class="container-page">
+    <nav aria-label={t('a11y.breadcrumb')} class="mb-6 text-sm text-muted">
+      <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {
+          breadcrumbs.map((b, i) => (
+            <li class="flex items-center gap-2">
+              {i > 0 && <span aria-hidden="true">/</span>}
+              {b.href && i < breadcrumbs.length - 1 ? (
+                <a href={b.href} class="hover:text-fg">
+                  {b.label}
+                </a>
+              ) : (
+                <span aria-current={i === breadcrumbs.length - 1 ? 'page' : undefined}>{b.label}</span>
+              )}
+            </li>
+          ))
+        }
+      </ol>
+    </nav>
+
+    <div class="head">
+      <span class="accent" aria-hidden="true"></span>
+      {
+        number !== undefined && (
+          <p class="big-number tabular">
+            <span class="sr-only">{numberLabel} </span>
+            {number ?? '–'}
+          </p>
+        )
+      }
+      <div class="min-w-0">
+        {eyebrow && <p class="micro mb-2 text-teal!">{eyebrow}</p>}
+        <h1 class="title uppercase">{title}</h1>
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <slot name="badges" />
+        </div>
+      </div>
+    </div>
+    <slot />
+  </div>
+</header>
+
+<style>
+  .profile-header {
+    position: relative;
+    overflow: hidden;
+  }
+  /* dezenter Schimmer in Teamfarbe oben – nur Fläche, kein Logo */
+  .profile-header::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: var(--team-color, transparent);
+    opacity: 0.9;
+  }
+  .head {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 0.75rem 1rem;
+  }
+  .head:has(.big-number) {
+    grid-template-columns: auto auto 1fr;
+  }
+  .accent {
+    align-self: stretch;
+    width: 4px;
+    min-height: 3.5rem;
+    border-radius: 2px;
+    background: var(--team-color, var(--g-accent));
+  }
+  .big-number {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(3.5rem, 2.5rem + 5vw, 6.5rem);
+    line-height: 0.9;
+    letter-spacing: -0.01em;
+    min-width: 1.4ch;
+    text-align: right;
+  }
+  .title {
+    overflow-wrap: anywhere;
+  }
+</style>

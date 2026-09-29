@@ -1,0 +1,270 @@
+---
+/**
+ * Fahrerliste (Plan §4.1, §4.5): Stammfahrer der aktuellen Saison nach Team,
+ * Reservepool in Wartelisten-Reihenfolge und ehemalige Fahrer. Öffentlich nur
+ * Gamertag, Startnummer, Flagge (optional) und Plattform (Plan §1).
+ */
+import DriverCard from '~/components/people/DriverCard.astro';
+import PeopleTabs from '~/components/people/PeopleTabs.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import TeamName from '~/components/ui/TeamName.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import type { Id } from '~/lib/db/types';
+import type { TeamStanding } from '~/lib/domain/standings';
+import { platformCounts, regularsByTeam } from '~/lib/people';
+import { loadLeague } from '~/lib/server/league';
+import { seasonLabel, teamStyle } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const season = league.currentSeason;
+
+const roster = season ? league.roster(season.id) : { regulars: [], reserves: [], former: [] };
+const groups = season ? regularsByTeam(league, season.id) : [];
+// Pseudonymisierte Ehemalige tauchen nicht namentlich auf (Plan §6.7)
+const former = roster.former.filter((d) => !d.anonymized);
+const teamStanding = new Map<Id, TeamStanding>(season ? league.teamStandings(season.id).map((s) => [s.teamId, s]) : []);
+const platforms = platformCounts([...roster.regulars.map((r) => r.driver), ...roster.reserves]);
+const seasonName = season ? seasonLabel(season, lang) : '';
+const seats = groups.length * 2;
+const updated = league.lastUpdated([...league.data.drivers, ...league.data.seats]);
+
+const lastSeasonOf = (driverId: Id) => league.driverSeasons(driverId)[0];
+const sinceOf = (seasonId: Id | null) => (seasonId != null ? league.season(seasonId) : undefined);
+---
+
+<BaseLayout
+  lang={lang}
+  title={t('people.drivers.title')}
+  description={t('people.drivers.metaDescription', { season: seasonName || t('common.season') })}
+  alternates={alternates('drivers')}
+>
+  <PageHeader
+    lang={lang}
+    title={t('people.drivers.title')}
+    eyebrow={seasonName || undefined}
+    lead={t('people.drivers.lead')}
+    breadcrumbs={[{ label: t('nav.home'), href: url(lang, 'home') }, { label: t('people.drivers.title') }]}
+    updated={updated}
+  >
+    {
+      season && (
+        <p class="mt-4 text-sm">
+          <strong>{t('people.drivers.summary', { regulars: roster.regulars.length, reserves: roster.reserves.length, former: former.length })}</strong>
+        </p>
+      )
+    }
+    <PeopleTabs lang={lang} current="drivers" />
+  </PageHeader>
+
+  <div class="container-page">
+    {
+      !season ? (
+        <div class="section">
+          <EmptyState title={t('people.drivers.noSeason')}>
+            <a href={url(lang, 'join')} class="btn btn-primary mt-6">
+              {t('people.drivers.joinLink')}
+            </a>
+          </EmptyState>
+        </div>
+      ) : (
+        <>
+          <!-- Stammfahrer nach Team -->
+          <section class="py-10 md:py-14" aria-labelledby="regulars-title">
+            <SectionTitle id="regulars-title" title={t('people.drivers.regulars')} class="mb-3!" />
+            <p class="mb-6 max-w-2xl text-sm text-muted">{t('people.drivers.regularsLead', { seats, teams: groups.length })}</p>
+            {groups.length === 0 ? (
+              <EmptyState title={t('people.drivers.noRegulars')} />
+            ) : (
+              <ul class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {groups.map((g) => {
+                  const st = teamStanding.get(g.team.id);
+                  return (
+                    <li class="team-group card" style={teamStyle(g.team)}>
+                      <div class="team-head">
+                        <h3 class="nav-label text-lg">
+                          <TeamName lang={lang} team={g.team} />
+                        </h3>
+                        {st && st.points > 0 && (
+                          <p class="text-sm text-muted tabular" title={t('people.teams.standingLabel')}>
+                            <span class="sr-only">{t('people.teams.positionLabel', { n: st.position })}: </span>
+                            <span aria-hidden="true">{t('people.pos', { n: st.position })} · </span>
+                            {t('people.points', { n: st.points })}
+                          </p>
+                        )}
+                      </div>
+                      <ul class="grid gap-2">
+                        {g.drivers.map(({ driver }) => (
+                          <li>
+                            <DriverCard lang={lang} driver={driver} team={g.team} number={league.numberOf(driver.id)} />
+                          </li>
+                        ))}
+                        {g.drivers.length < 2 && (
+                          <li class="open-seat">
+                            <span>{t('people.drivers.openSeat')}</span>
+                            <a href={url(lang, 'join')} class="text-sm font-semibold text-green hover:text-teal">
+                              {t('people.drivers.joinLink')} →
+                            </a>
+                          </li>
+                        )}
+                      </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {roster.regulars.length + roster.reserves.length > 0 && (
+              <dl class="platforms">
+                <dt class="micro">{t('people.drivers.platforms')}</dt>
+                <dd class="badge badge-muted">{t('people.drivers.platformCount', { platform: t('platform.pc_steam'), n: platforms.pc })}</dd>
+                <dd class="badge badge-muted">{t('people.drivers.platformCount', { platform: t('platform.playstation'), n: platforms.playstation })}</dd>
+                <dd class="badge badge-muted">{t('people.drivers.platformCount', { platform: t('platform.xbox'), n: platforms.xbox })}</dd>
+              </dl>
+            )}
+          </section>
+
+          <!-- Reservepool -->
+          <section class="border-t border-border py-10 md:py-14" aria-labelledby="reserves-title">
+            <SectionTitle id="reserves-title" title={t('people.drivers.reserves')} class="mb-3!" />
+            <p class="mb-6 max-w-2xl text-sm text-muted">{t('people.drivers.reservesLead')}</p>
+            {roster.reserves.length === 0 ? (
+              <EmptyState title={t('people.drivers.noReserves')}>
+                <a href={url(lang, 'join')} class="btn btn-secondary btn-sm mt-5">
+                  {t('people.drivers.joinLink')}
+                </a>
+              </EmptyState>
+            ) : (
+              <ol class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {roster.reserves.map((driver, i) => {
+                  const since = sinceOf(driver.joined_season_id);
+                  return (
+                    <li class="reserve-item">
+                      <span class="wait-pos tabular" aria-hidden="true">
+                        {i + 1}
+                      </span>
+                      <DriverCard lang={lang} driver={driver} number={league.numberOf(driver.id)} class="flex-1">
+                        <span class="sr-only">{t('people.drivers.reserveOrder', { n: i + 1 })}</span>
+                        {since && <span>{t('people.drivers.since', { season: seasonLabel(since, lang) })}</span>}
+                      </DriverCard>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </section>
+
+          <!-- Ehemalige -->
+          <section class="border-t border-border py-10 md:py-14" aria-labelledby="former-title">
+            <SectionTitle id="former-title" title={t('people.drivers.former')} class="mb-3!" />
+            <p class="mb-6 max-w-2xl text-sm text-muted">{t('people.drivers.formerLead')}</p>
+            {former.length === 0 ? (
+              <p class="text-sm text-muted">{t('people.drivers.noFormer')}</p>
+            ) : (
+              <ul class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {former.map((driver) => {
+                  const last = lastSeasonOf(driver.id);
+                  return (
+                    <li>
+                      <DriverCard lang={lang} driver={driver} number={null} showNumber={false}>
+                        {last && <span>{t('people.drivers.lastSeason', { season: seasonLabel(last, lang) })}</span>}
+                      </DriverCard>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <!-- Mitfahren -->
+          <section class="pb-14" aria-labelledby="join-title">
+            <div class="card flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 id="join-title" class="text-2xl uppercase">
+                  {t('people.drivers.joinTitle')}
+                </h2>
+                <p class="mt-2 text-sm text-muted">{t('people.drivers.joinText')}</p>
+              </div>
+              <a href={url(lang, 'join')} class="btn btn-primary shrink-0">
+                {t('people.drivers.joinLink')}
+              </a>
+            </div>
+          </section>
+        </>
+      )
+    }
+  </div>
+</BaseLayout>
+
+<style>
+  .team-group {
+    position: relative;
+    display: grid;
+    align-content: start;
+    gap: 0.875rem;
+    padding: 1rem;
+    border-top: 4px solid var(--team-color, var(--color-border));
+  }
+  .team-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.25rem 1rem;
+  }
+  .open-seat {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 4.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-control);
+    color: var(--color-muted);
+    font-size: 0.875rem;
+  }
+  .open-seat a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .platforms {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+  }
+  .platforms dt {
+    margin-right: 0.25rem;
+  }
+  .reserve-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .wait-pos {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--color-muted);
+  }
+  .reserve-item :global(.driver-card) {
+    flex: 1;
+    min-width: 0;
+  }
+</style>

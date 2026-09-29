@@ -1,0 +1,69 @@
+---
+/**
+ * Archiv (Plan §4.8): alle Saisons – auch geplante – mit Status, Zeitraum, Spielversion,
+ * Endstand (Top 3 + Konstrukteurs-Champion) und Links zu Saisonwertung und Rennseiten.
+ * Abgeschlossene Saisons sind eingefroren und nur noch lesbar.
+ */
+import ArchiveSeasonCard from '~/components/people/ArchiveSeasonCard.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { archiveOverview } from '~/lib/people';
+import { loadLeague } from '~/lib/server/league';
+import { breadcrumbJsonLd } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const entries = archiveOverview(league);
+const current = league.currentSeason;
+const hasFinished = entries.some((e) => e.frozen);
+
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('people.archive.title'), href: url(lang, 'archive') },
+];
+const site = Astro.site ?? new URL(Astro.url.origin);
+const jsonLd = breadcrumbJsonLd(site, crumbs.map((c) => ({ name: c.label, href: c.href })));
+---
+
+<BaseLayout lang={lang} title={t('people.archive.title')} description={t('people.archive.metaDescription')} alternates={alternates('archive')} jsonLd={jsonLd}>
+  <PageHeader
+    lang={lang}
+    title={t('people.archive.title')}
+    eyebrow={t('nav.league')}
+    lead={t('people.archive.lead')}
+    breadcrumbs={[crumbs[0]!, { label: t('people.archive.title') }]}
+    updated={league.lastUpdated(league.data.seasons)}
+  >
+    {
+      hasFinished && (
+        <p class="mt-5">
+          <a href={url(lang, 'hallOfFame')} class="text-sm font-semibold text-green hover:text-teal">
+            {t('people.archive.hofLink')} →
+          </a>
+        </p>
+      )
+    }
+  </PageHeader>
+
+  <div class="container-page py-10 md:py-14">
+    {
+      entries.length === 0 ? (
+        <EmptyState title={t('people.archive.none')} />
+      ) : (
+        <ol class="grid gap-6">
+          {entries.map((entry) => (
+            <li>
+              <ArchiveSeasonCard lang={lang} league={league} entry={entry} current={entry.season.id === current?.id} />
+            </li>
+          ))}
+        </ol>
+      )
+    }
+  </div>
+</BaseLayout>

@@ -1,0 +1,399 @@
+---
+/**
+ * Fahrerprofil (Plan §4.5): Kopf mit großer Startnummer, Kennzahlen (Karriere/Saison),
+ * Punkteverlauf, Teamkollegen-Duell, Ergebnisse nach Saison, Einsätze als Ersatz,
+ * Nummern-Historie und öffentliches Strafenregister.
+ * Öffentlich nur Gamertag, Nummer, Flagge (optional) und Plattform – kein Realname, kein Alter.
+ */
+import ExternalLink from '@lucide/astro/icons/external-link';
+import DecisionTable from '~/components/people/DecisionTable.astro';
+import DriverResults from '~/components/people/DriverResults.astro';
+import DuelPanel from '~/components/people/DuelPanel.astro';
+import ProfileHeader from '~/components/people/ProfileHeader.astro';
+import ProgressionChart from '~/components/people/ProgressionChart.astro';
+import SectionNav from '~/components/people/SectionNav.astro';
+import StatTiles from '~/components/people/StatTiles.astro';
+import Badge from '~/components/ui/Badge.astro';
+import BrandIcon from '~/components/ui/BrandIcon.astro';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import Flag from '~/components/ui/Flag.astro';
+import PlatformBadge from '~/components/ui/PlatformBadge.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import TeamName from '~/components/ui/TeamName.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { formatDate } from '~/lib/domain/time';
+import {
+  driverDuels,
+  driverRole,
+  numberPeriods,
+  penaltyPointsTotal,
+  progressionSteps,
+  resultsBySeason,
+  safeExternalUrl,
+} from '~/lib/people';
+import { loadLeague } from '~/lib/server/league';
+import { breadcrumbJsonLd, countryName, roundLabel, seasonLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  slug: string;
+}
+const { lang, slug } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const found = league.driverBySlug(slug);
+// Pseudonymisierte Fahrer haben keine Profilseite (Plan §6.7)
+const driver = found && !found.anonymized ? found : undefined;
+
+const season = league.currentSeason;
+const seasonName = season ? seasonLabel(season, lang) : '';
+const number = driver ? league.numberOf(driver.id) : null;
+const team = driver && season ? league.driverTeam(driver.id, season.id) : undefined;
+const role = driver ? driverRole(league, driver, season?.id) : 'former';
+const since = driver?.joined_season_id != null ? league.season(driver.joined_season_id) : undefined;
+
+const career = driver ? league.driverCareer(driver.id) : undefined;
+const seasonStats = driver && season && season.status !== 'planned' ? league.driverCareer(driver.id, season.id) : null;
+const standing = driver && season ? league.driverStandings(season.id).find((s) => s.driverId === driver.id) : undefined;
+const steps = driver && season && standing ? progressionSteps(league, 'driver', season.id, driver.id) : [];
+const standingTeam = standing?.teamId != null ? league.team(standing.teamId) : undefined;
+const duels = driver && season ? driverDuels(league, driver.id, season.id) : [];
+const resultGroups = driver ? resultsBySeason(league.driverResults(driver.id)) : [];
+const numbers = driver ? numberPeriods(league, driver.id) : [];
+const reserveApps = driver ? league.reserveAppearances(driver.id) : [];
+const decisions = driver ? league.decisionsForDriver(driver.id) : [];
+const penaltyEnabled = season?.penalty_points_enabled ?? false;
+const penaltyTotal = season && penaltyEnabled ? penaltyPointsTotal(league, decisions, season.id) : 0;
+
+const links = driver?.show_links
+  ? [
+      { kind: 'twitch' as const, href: safeExternalUrl(driver.twitch_url), label: t('people.driver.twitch', { name: driver.gamertag }) },
+      { kind: 'youtube' as const, href: safeExternalUrl(driver.youtube_url), label: t('people.driver.youtube', { name: driver.gamertag }) },
+    ].filter((l): l is { kind: 'twitch' | 'youtube'; href: string; label: string } => l.href != null)
+  : [];
+
+const roleLabel = t(`people.role.${role}`);
+const pageAlternates = alternates('driver', { slug });
+const breadcrumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('people.drivers.title'), href: url(lang, 'drivers') },
+  { label: driver?.gamertag ?? t('common.formerDriver') },
+];
+const site = Astro.site ?? new URL(Astro.url.origin);
+const jsonLd = driver
+  ? breadcrumbJsonLd(site, [
+      { name: t('nav.home'), href: url(lang, 'home') },
+      { name: t('people.drivers.title'), href: url(lang, 'drivers') },
+      { name: driver.gamertag, href: url(lang, 'driver', { slug: driver.slug }) },
+    ])
+  : undefined;
+
+const showReserveSection = reserveApps.length > 0 || role === 'reserve';
+const nav = [
+  { id: 'stats', label: t('people.stats.title') },
+  ...(steps.length > 0 ? [{ id: 'progression', label: t('chart.title') }] : []),
+  ...(duels.length > 0 || role === 'regular' ? [{ id: 'duel', label: t('people.duel.title') }] : []),
+  { id: 'results', label: t('people.results.title') },
+  ...(showReserveSection ? [{ id: 'reserve', label: t('people.reserve.title') }] : []),
+  { id: 'numbers', label: t('people.numbers.title') },
+  { id: 'penalties', label: t('people.penalties.title') },
+];
+if (!driver) Astro.response.status = 404;
+---
+
+<BaseLayout
+  lang={lang}
+  title={driver?.gamertag ?? t('people.driver.notFound')}
+  description={driver ? t('people.driver.metaDescription', { name: driver.gamertag, role: roleLabel }) : undefined}
+  alternates={pageAlternates}
+  jsonLd={jsonLd}
+  noindex={!driver}
+>
+  {
+    !driver || !career ? (
+      <div class="container-page section">
+        <h1 class="sr-only">{t('people.driver.notFound')}</h1>
+        <EmptyState title={t('people.driver.notFound')}>
+          <a href={url(lang, 'drivers')} class="btn btn-secondary mt-6">
+            {t('people.drivers.title')}
+          </a>
+        </EmptyState>
+      </div>
+    ) : (
+      <>
+        <ProfileHeader
+          lang={lang}
+          title={driver.gamertag}
+          eyebrow={roleLabel}
+          breadcrumbs={breadcrumbs}
+          team={team ?? standingTeam}
+          number={number}
+          numberLabel={t('people.driver.number')}
+        >
+          <Fragment slot="badges">
+            {driver.nationality_code && <Flag code={driver.nationality_code} lang={lang} class="text-xl" />}
+            <PlatformBadge platform={driver.platform} lang={lang} />
+            <Badge variant={role === 'regular' ? 'green' : role === 'reserve' ? 'teal' : 'muted'}>{roleLabel}</Badge>
+          </Fragment>
+
+          <h2 class="sr-only">{t('people.driver.facts')}</h2>
+          <dl class="facts">
+            <div>
+              <dt class="micro">{t('people.driver.team')}</dt>
+              <dd>{team ? <TeamName lang={lang} team={team} /> : <span class="text-muted">{t('people.driver.noTeam')}</span>}</dd>
+            </div>
+            <div>
+              <dt class="micro">{t('people.driver.number')}</dt>
+              <dd class="tabular">{number ?? <span class="text-muted">{t('people.driver.noNumber')}</span>}</dd>
+            </div>
+            <div>
+              <dt class="micro">{t('common.platform')}</dt>
+              <dd>{t(`platform.long.${driver.platform}`)}</dd>
+            </div>
+            {driver.nationality_code && (
+              <div>
+                <dt class="micro">{t('people.driver.country')}</dt>
+                <dd class="inline-flex items-center gap-2">
+                  <Flag code={driver.nationality_code} lang={lang} decorative />
+                  {countryName(driver.nationality_code, lang)}
+                </dd>
+              </div>
+            )}
+            {since && (
+              <div>
+                <dt class="micro">{t('people.driver.since')}</dt>
+                <dd>{seasonLabel(since, lang)}</dd>
+              </div>
+            )}
+          </dl>
+
+          {links.length > 0 && (
+            <div class="mt-5 flex flex-wrap items-center gap-3">
+              <span class="micro">{t('people.driver.links')}</span>
+              {links.map((l) => (
+                <a href={l.href} class="btn btn-secondary btn-sm" target="_blank" rel="noopener me">
+                  <BrandIcon name={l.kind} size={16} />
+                  <span>{l.label}</span>
+                  <ExternalLink size={14} aria-hidden="true" />
+                  <span class="sr-only">{t('a11y.externalLink')}</span>
+                </a>
+              ))}
+            </div>
+          )}
+
+          <SectionNav lang={lang} items={nav} />
+        </ProfileHeader>
+
+        <div class="container-page">
+          <!-- Kennzahlen -->
+          <section id="stats" class="profile-section" aria-labelledby="stats-title">
+            <SectionTitle id="stats-title" title={t('people.stats.title')} />
+            <StatTiles
+              lang={lang}
+              id="driver-stats"
+              career={career}
+              season={seasonStats}
+              seasonName={seasonName || undefined}
+              championship={standing ? { position: standing.position, tied: standing.tied } : null}
+            />
+          </section>
+
+          <!-- Punkteverlauf der aktuellen Saison -->
+          {season && steps.length > 0 && (
+            <section id="progression" class="profile-section" aria-labelledby="progression-title">
+              <SectionTitle id="progression-title" title={t('people.chart.title', { season: seasonName })} />
+              <ProgressionChart
+                lang={lang}
+                league={league}
+                id="driver-progression"
+                steps={steps}
+                title={t('people.chart.title', { season: seasonName })}
+                description={t('people.chart.description', { name: driver.gamertag })}
+                color={(team ?? standingTeam)?.color_hex}
+              />
+            </section>
+          )}
+
+          <!-- Teamkollegen-Duell -->
+          {(duels.length > 0 || role === 'regular') && (
+            <section id="duel" class="profile-section" aria-labelledby="duel-title">
+              <SectionTitle id="duel-title" title={t('people.duel.title')} />
+              {duels.length === 0 ? (
+                <p class="card p-5 text-sm text-muted">{team ? t('people.duel.noMate') : t('people.duel.noTeam')}</p>
+              ) : (
+                <div class="grid gap-4 lg:grid-cols-2">
+                  {duels.map((d, i) => (
+                    <DuelPanel lang={lang} league={league} id={`duel-${i}`} a={driver} b={d.mate} team={d.team} duel={d.duel} />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          <!-- Ergebnisse nach Saison -->
+          <section id="results" class="profile-section" aria-labelledby="results-title">
+            <SectionTitle id="results-title" title={t('people.results.title')} />
+            {resultGroups.length === 0 ? (
+              <p class="card p-5 text-sm text-muted">{t('people.results.none')}</p>
+            ) : (
+              <DriverResults lang={lang} league={league} groups={resultGroups} />
+            )}
+          </section>
+
+          <!-- Einsätze als Ersatz -->
+          {showReserveSection && (
+            <section id="reserve" class="profile-section" aria-labelledby="reserve-title">
+              <SectionTitle id="reserve-title" title={t('people.reserve.title')} />
+              {reserveApps.length === 0 ? (
+                <p class="card p-5 text-sm text-muted">{t('people.reserve.none')}</p>
+              ) : (
+                <div class="table-wrap">
+                  <table class="timing-table">
+                    <caption class="sr-only">{t('people.reserve.caption', { name: driver.gamertag })}</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col" class="sticky-col">{t('common.round')}</th>
+                        <th scope="col">{t('common.season')}</th>
+                        <th scope="col">{t('common.team')}</th>
+                        <th scope="col">{t('people.reserve.for')}</th>
+                        <th scope="col" class="num">{t('common.number')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reserveApps.map(({ round, entry }) => {
+                        const s = league.season(round.season_id);
+                        const replaced = entry.replaces_driver_id != null ? league.driver(entry.replaces_driver_id) : undefined;
+                        return (
+                          <tr>
+                            <th scope="row" class="sticky-col font-normal">
+                              {s ? (
+                                <a href={url(lang, 'race', { season: s.slug, round: round.number })} class="hover:text-teal">
+                                  {roundLabel(round, league.track(round.track_id), lang)}
+                                </a>
+                              ) : (
+                                roundLabel(round, league.track(round.track_id), lang)
+                              )}
+                            </th>
+                            <td class="muted">{s ? seasonLabel(s, lang) : '–'}</td>
+                            <td>
+                              <TeamName lang={lang} team={league.team(entry.team_id)} />
+                            </td>
+                            <td>{replaced ? <DriverLink lang={lang} driver={replaced} stripe={false} /> : '–'}</td>
+                            <td class="num">{entry.race_number ?? '–'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+
+          <!-- Nummern-Historie -->
+          <section id="numbers" class="profile-section" aria-labelledby="numbers-title">
+            <SectionTitle id="numbers-title" title={t('people.numbers.title')} />
+            {numbers.length === 0 ? (
+              <p class="card p-5 text-sm text-muted">{t('people.numbers.none')}</p>
+            ) : (
+              <div class="table-wrap max-w-2xl">
+                <table class="timing-table">
+                  <caption class="sr-only">{t('people.numbers.caption', { name: driver.gamertag })}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col" class="num">{t('people.numbers.number')}</th>
+                      <th scope="col">{t('people.numbers.from')}</th>
+                      <th scope="col">{t('people.numbers.to')}</th>
+                      <th scope="col">{t('common.status')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {numbers.map(({ row, state }) => (
+                      <tr>
+                        <th scope="row" class="num">
+                          <span class="nr tabular">{row.number}</span>
+                        </th>
+                        <td>{formatDate(row.valid_from, lang)}</td>
+                        <td class="muted">{row.valid_to ? formatDate(row.valid_to, lang) : t('people.numbers.open')}</td>
+                        <td>
+                          <Badge variant={state === 'current' ? 'green' : state === 'upcoming' ? 'teal' : 'muted'}>{t(`people.numbers.state.${state}`)}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p class="mt-3 max-w-2xl text-xs text-muted">{t('people.numbers.note')}</p>
+          </section>
+
+          <!-- Strafenregister -->
+          <section id="penalties" class="profile-section pb-16" aria-labelledby="penalties-title">
+            <SectionTitle id="penalties-title" title={t('people.penalties.title')} href={url(lang, 'stewards')} linkLabel={t('people.penalties.all')} />
+            {season && penaltyEnabled && (
+              <p class="penalty-account card mb-4 p-4">
+                <span class="micro">{t('people.penalties.pointsTotal', { season: seasonName })}</span>
+                <span class="tabular">{penaltyTotal}</span>
+              </p>
+            )}
+            {decisions.length === 0 ? (
+              <p class="card p-5 text-sm text-muted">{t('people.penalties.none')}</p>
+            ) : (
+              <DecisionTable
+                lang={lang}
+                league={league}
+                decisions={decisions}
+                caption={t('people.penalties.caption', { name: driver.gamertag })}
+                penaltyPoints={penaltyEnabled}
+              />
+            )}
+            {!penaltyEnabled && <p class="mt-3 max-w-2xl text-xs text-muted">{t('people.penalties.pointsSoon')}</p>}
+          </section>
+        </div>
+      </>
+    )
+  }
+</BaseLayout>
+
+<style>
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 1.5rem;
+    margin-top: 1.75rem;
+  }
+  @media (min-width: 768px) {
+    .facts {
+      grid-template-columns: repeat(5, minmax(0, auto));
+      justify-content: start;
+      gap: 1rem 2.5rem;
+    }
+  }
+  .facts dd {
+    margin-top: 0.25rem;
+    font-weight: 600;
+  }
+  .profile-section {
+    padding-top: 3rem;
+    scroll-margin-top: calc(var(--header-h) + 1rem);
+  }
+  .nr {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 1.25rem;
+  }
+  .penalty-account {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    max-width: 24rem;
+  }
+  .penalty-account .tabular {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.75rem;
+  }
+</style>

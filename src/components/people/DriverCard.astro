@@ -1,0 +1,136 @@
+---
+/**
+ * Fahrer-Karte (Fahrerliste, Teamseite): Teamstreifen · große Startnummer · GAMERTAG ·
+ * Flagge · Plattform-Badge. Die ganze Karte ist klickbar (Link auf dem Gamertag, gestreckt).
+ * Pseudonymisierte Fahrer werden nicht verlinkt.
+ */
+import Flag from '~/components/ui/Flag.astro';
+import PlatformBadge from '~/components/ui/PlatformBadge.astro';
+import { url, useT, type Lang } from '~/i18n';
+import type { DriverRow, TeamRow } from '~/lib/db/types';
+import { hasProfile } from '~/lib/people';
+import { teamStyle } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  driver: DriverRow;
+  team?: TeamRow | null;
+  number: number | null;
+  /** Startnummer anzeigen (bei Ehemaligen ohne aktive Nummer: nein) */
+  showNumber?: boolean;
+  /** Element des Gamertags (Überschrift nur, wenn die Liste keine eigene hat) */
+  as?: 'h3' | 'h4' | 'p';
+  class?: string;
+}
+const { lang, driver, team, number, showNumber = true, as: Tag = 'p', class: className } = Astro.props;
+const t = useT(lang);
+const linked = hasProfile(driver);
+const name = linked ? driver.gamertag : `${t('common.formerDriver')} #${driver.id}`;
+const href = linked ? url(lang, 'driver', { slug: driver.slug }) : null;
+---
+
+<div class:list={['driver-card', href && 'is-linked', !showNumber && 'no-number', className]} style={teamStyle(team)}>
+  <span class="team-stripe" aria-hidden="true"></span>
+  {showNumber && <span class="num tabular" aria-hidden="true">{number ?? '–'}</span>}
+  <div class="body">
+    <Tag class="name">
+      {
+        href ? (
+          <a href={href} class="stretched">
+            {showNumber && <span class="sr-only">{t('common.number')} {number ?? '–'} </span>}
+            {name}
+          </a>
+        ) : (
+          <span>
+            {showNumber && <span class="sr-only">{t('common.number')} {number ?? '–'} </span>}
+            {name}
+          </span>
+        )
+      }
+    </Tag>
+    <div class="meta">
+      {!driver.anonymized && driver.nationality_code && <Flag code={driver.nationality_code} lang={lang} />}
+      {!driver.anonymized && <PlatformBadge platform={driver.platform} lang={lang} />}
+      <slot />
+    </div>
+  </div>
+</div>
+
+<style>
+  .driver-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 4px 3.25rem 1fr;
+    align-items: center;
+    gap: 0.875rem;
+    min-height: 4.5rem;
+    padding: 0.75rem 1rem 0.75rem 0.75rem;
+    border-radius: var(--radius-control);
+    background: var(--color-surface-2);
+    border: 1px solid transparent;
+    transition:
+      border-color 180ms ease-out,
+      background 180ms ease-out;
+  }
+  .driver-card.no-number {
+    grid-template-columns: 4px 1fr;
+  }
+  .driver-card .team-stripe {
+    height: 100%;
+  }
+  .driver-card.is-linked:hover,
+  .driver-card.is-linked:focus-within {
+    border-color: transparent;
+    background:
+      linear-gradient(var(--color-surface-2), var(--color-surface-2)) padding-box,
+      var(--g-accent) border-box;
+  }
+  .num {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 2.25rem;
+    line-height: 1;
+    text-align: right;
+  }
+  .body {
+    min-width: 0;
+  }
+  .name {
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  .name a {
+    text-decoration: none;
+  }
+  .name a:hover {
+    color: var(--color-teal);
+  }
+  /* ganze Karte als Klickfläche */
+  .stretched::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+  .stretched:focus-visible {
+    outline: none;
+  }
+  .stretched:focus-visible::after {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.6rem;
+    margin-top: 0.3rem;
+    font-size: 0.8125rem;
+    color: var(--color-muted);
+  }
+</style>
