@@ -1,0 +1,305 @@
+---
+/**
+ * Einzelne Steward-Entscheidung (Plan §4.6): alle Details, Begründung als Markdown (DE/EN
+ * mit Übersetzungshinweis), Regel-Referenz, Clip, Wirkung auf das Ergebnis, Rennseite.
+ */
+import ArrowLeft from '@lucide/astro/icons/arrow-left';
+import BookOpen from '@lucide/astro/icons/book-open';
+import Flag from '@lucide/astro/icons/flag';
+import Video from '@lucide/astro/icons/video';
+import { decisionItem, decisionItems } from '~/components/stewards/model';
+import { penaltyOf, ruleAnchor } from '~/components/stewards/utils';
+import VerdictBadge from '~/components/stewards/VerdictBadge.astro';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import Markdown from '~/components/ui/Markdown.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import ShareButton from '~/components/ui/ShareButton.astro';
+import TeamName from '~/components/ui/TeamName.astro';
+import TranslationNotice from '~/components/ui/TranslationNotice.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { formatDate, formatDateLong } from '~/lib/domain/time';
+import { loadLeague } from '~/lib/server/league';
+import { breadcrumbJsonLd, roundLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  /** public_ref aus der URL */
+  ref: string;
+}
+const { lang, ref } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const decision = league.decisionByRef(ref);
+const item = decision ? decisionItem(league, decision, lang) : null;
+if (!decision || !item) {
+  throw new Error(`Entscheidung ${ref} nicht gefunden`);
+}
+
+const { round, track, season, sessionType, driver, team, number, reasoning } = item;
+const driverName = league.driverName(decision.driver_id, lang);
+const label = roundLabel(round, track, lang);
+const verdictText = t(`stewards.verdict.${decision.verdict}`);
+const penalty = penaltyOf(decision);
+const anchor = ruleAnchor(decision.rule_ref);
+const rulesHref = `${url(lang, 'rules')}${anchor ? `#${anchor}` : ''}`;
+const raceHref = url(lang, 'race', { season: season.slug, round: round.number });
+const registerHref = url(lang, 'stewards');
+const selfHref = url(lang, 'decision', { ref: decision.public_ref });
+
+// Begründung: EN mit Übersetzungshinweis, DE-Original aufklappbar
+const showOriginal = lang === 'en' && !reasoning.fallback && decision.reasoning_en != null && decision.reasoning_en.trim() !== '';
+
+// Wirkung auf das Ergebnis
+const session = decision.session_id != null ? league.session(decision.session_id) : league.sessionOf(round.id, 'race');
+const result = session ? league.resultsOf(session.id).find((r) => r.driver_id === decision.driver_id) : undefined;
+const resultText = result
+  ? result.status === 'classified' && result.position != null
+    ? `P${result.position}${result.steward_penalty_s > 0 ? ` (${t('results.penaltySeconds', { n: result.steward_penalty_s })})` : ''}`
+    : t(`status.result.${result.status}`)
+  : null;
+const affectsNext = decision.verdict === 'grid_penalty_next' || decision.verdict === 'race_ban';
+const nextRound = affectsNext ? league.roundsOf(season.id).find((r) => r.number > round.number && r.status !== 'cancelled') : undefined;
+const effectN = decision.verdict === 'time_penalty' ? decision.time_seconds : decision.positions;
+const showResult = resultText != null && ['time_penalty', 'position_penalty', 'dsq'].includes(decision.verdict);
+
+// Weitere Entscheidungen dieser Runde
+const sameRound = decisionItems(league, lang)
+  .filter((i) => i.round.id === round.id && i.decision.id !== decision.id)
+  .sort((a, b) => a.decision.public_ref.localeCompare(b.decision.public_ref));
+
+const site = Astro.site ?? new URL(Astro.url.origin);
+const jsonLd = breadcrumbJsonLd(site, [
+  { name: t('nav.home'), href: url(lang, 'home') },
+  { name: t('nav.stewards'), href: registerHref },
+  { name: decision.public_ref, href: selfHref },
+]);
+---
+
+<BaseLayout
+  lang={lang}
+  title={t('stewards.decision.metaTitle', { ref: decision.public_ref })}
+  description={t('stewards.decision.metaDescription', { verdict: verdictText, driver: driverName, round: label })}
+  alternates={alternates('decision', { ref: decision.public_ref })}
+  ogType="article"
+  publishedTime={decision.published_at ?? undefined}
+  modifiedTime={decision.updated_at}
+  jsonLd={jsonLd}
+>
+  <PageHeader
+    lang={lang}
+    title={t('stewards.decision.title', { ref: decision.public_ref })}
+    eyebrow={t('stewards.decision.eyebrow')}
+    breadcrumbs={[
+      { label: t('nav.home'), href: url(lang, 'home') },
+      { label: t('nav.stewards'), href: registerHref },
+      { label: decision.public_ref },
+    ]}
+  >
+    <p class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-muted">
+      <VerdictBadge verdict={decision.verdict} lang={lang} />
+      <span>{driverName}</span>
+      <span aria-hidden="true">·</span>
+      <a href={raceHref} class="underline hover:text-teal">{label}</a>
+      <span aria-hidden="true">·</span>
+      <span>{t(`session.${sessionType}`)}</span>
+    </p>
+    <div slot="actions" class="no-print">
+      <ShareButton lang={lang} />
+    </div>
+  </PageHeader>
+
+  <div class="container-page section grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+    <aside class="card p-5 lg:order-2 lg:sticky lg:top-24" aria-labelledby="summary-title">
+      <h2 id="summary-title" class="micro mb-4">{t('stewards.decision.summary')}</h2>
+      <dl class="summary grid gap-3 text-sm">
+        <div>
+          <dt>{t('stewards.field.ref')}</dt>
+          <dd class="tabular font-semibold">{decision.public_ref}</dd>
+        </div>
+        <div>
+          <dt>{t('stewards.field.driver')}</dt>
+          <dd class="grid gap-1">
+            <DriverLink lang={lang} driver={driver} team={team} number={number} />
+            {team && <TeamName lang={lang} team={team} class="text-muted" stripe={false} />}
+          </dd>
+        </div>
+        <div>
+          <dt>{t('stewards.field.round')}</dt>
+          <dd>
+            <a href={raceHref} class="underline hover:text-teal">{label}</a>
+            <span class="text-muted"> · {t('common.seasonN', { n: season.number })}</span>
+          </dd>
+        </div>
+        <div>
+          <dt>{t('stewards.field.session')}</dt>
+          <dd>{t(`session.${sessionType}`)}</dd>
+        </div>
+        <div>
+          <dt>{t('stewards.field.verdict')}</dt>
+          <dd><VerdictBadge verdict={decision.verdict} lang={lang} /></dd>
+        </div>
+        <div>
+          <dt>{t('stewards.field.penalty')}</dt>
+          <dd class="font-semibold">{t(penalty.key, { n: penalty.n ?? '' })}</dd>
+        </div>
+        {
+          decision.penalty_points != null && season.penalty_points_enabled && (
+            <div>
+              <dt>{t('stewards.field.penalty')}</dt>
+              <dd>{t('stewards.penalty.points', { n: decision.penalty_points })}</dd>
+            </div>
+          )
+        }
+        {
+          decision.rule_ref && (
+            <div>
+              <dt>{t('stewards.field.rule')}</dt>
+              <dd>
+                <a href={rulesHref} class="inline-flex items-center gap-1.5 underline hover:text-teal">
+                  <BookOpen size={16} aria-hidden="true" />
+                  {t('stewards.decision.ruleLink', { rule: decision.rule_ref })}
+                </a>
+              </dd>
+            </div>
+          )
+        }
+        <div>
+          <dt>{t('stewards.field.clip')}</dt>
+          <dd>
+            {
+              decision.clip_url ? (
+                <a href={decision.clip_url} class="inline-flex items-center gap-1.5 underline hover:text-teal" target="_blank" rel="noopener noreferrer">
+                  <Video size={16} aria-hidden="true" />
+                  {t('stewards.clip')}
+                  <span class="sr-only"> {t('a11y.externalLink')}</span>
+                </a>
+              ) : (
+                <span class="text-muted">{t('stewards.decision.noClip')}</span>
+              )
+            }
+          </dd>
+        </div>
+        {
+          decision.published_at && (
+            <div>
+              <dt>{t('stewards.field.date')}</dt>
+              <dd>
+                <time datetime={decision.published_at}>{formatDateLong(decision.published_at, lang)}</time>
+              </dd>
+            </div>
+          )
+        }
+      </dl>
+      <div class="no-print mt-5 grid gap-2">
+        <a href={raceHref} class="btn btn-secondary btn-sm">
+          <Flag size={16} aria-hidden="true" />
+          {t('stewards.decision.toRace')}
+        </a>
+        <a href={registerHref} class="btn btn-ghost btn-sm border border-border">
+          <ArrowLeft size={16} aria-hidden="true" />
+          {t('stewards.decision.backToRegister')}
+        </a>
+      </div>
+    </aside>
+
+    <div class="grid min-w-0 gap-12 lg:order-1">
+      <section aria-labelledby="reasoning-title">
+        <SectionTitle id="reasoning-title" title={t('stewards.decision.reasoning')} />
+        <TranslationNotice lang={lang} show={reasoning.fallback} />
+        <Markdown source={reasoning.text} lang={reasoning.fallback ? 'de' : lang} />
+        {
+          showOriginal && (
+            <>
+              <p class="mt-4 text-sm text-muted">{t('stewards.decision.translated')}</p>
+              <details class="accordion mt-2 max-w-[72ch]">
+                <summary>{t('stewards.decision.original')}</summary>
+                <Markdown source={decision.reasoning_de} lang="de" class="pb-4 text-muted" />
+              </details>
+            </>
+          )
+        }
+      </section>
+
+      <section aria-labelledby="effect-title">
+        <SectionTitle id="effect-title" title={t('stewards.decision.effect.title')} />
+        <div class="card max-w-[72ch] p-5">
+          <p>{t(`stewards.decision.effect.${decision.verdict}`, { n: effectN ?? '', driver: driverName })}</p>
+          {
+            affectsNext && (
+              <p class="mt-3 text-sm">
+                {nextRound ? (
+                  <>
+                    {t('stewards.decision.effect.appliesTo')}{' '}
+                    <a
+                      href={url(lang, 'race', { season: season.slug, round: nextRound.number })}
+                      class="font-semibold underline hover:text-teal"
+                    >
+                      {roundLabel(nextRound, league.track(nextRound.track_id), lang)}
+                    </a>
+                  </>
+                ) : (
+                  t('stewards.decision.effect.appliesToNext')
+                )}
+              </p>
+            )
+          }
+          {
+            showResult && (
+              <p class="mt-3 text-sm text-muted">
+                {t('stewards.decision.effect.currentResult', { driver: driverName })}{' '}
+                <a href={raceHref} class="font-semibold text-fg underline hover:text-teal">
+                  {resultText}
+                </a>
+              </p>
+            )
+          }
+        </div>
+      </section>
+
+      {
+        sameRound.length > 0 && (
+          <section aria-labelledby="same-round-title">
+            <SectionTitle id="same-round-title" title={t('stewards.decision.sameRound')} />
+            <ul class="grid gap-3">
+              {sameRound.map((i) => (
+                <li class="card flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+                  <a href={url(lang, 'decision', { ref: i.decision.public_ref })} class="tabular font-semibold underline hover:text-teal">
+                    {i.decision.public_ref}
+                  </a>
+                  <VerdictBadge verdict={i.decision.verdict} lang={lang} />
+                  <DriverLink lang={lang} driver={i.driver} team={i.team} />
+                  {i.decision.published_at && (
+                    <time datetime={i.decision.published_at} class="text-sm text-muted sm:ml-auto">
+                      {formatDate(i.decision.published_at, lang)}
+                    </time>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .summary > div {
+    display: grid;
+    gap: 0.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .summary > div:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+  .summary dt {
+    font-size: var(--fs-micro);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+</style>

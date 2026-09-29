@@ -1,0 +1,87 @@
+---
+/**
+ * Live-Prüfung der Wunsch-Startnummer (Plan §4.9): fragt /api/number-check (entprellt)
+ * und zeigt „frei/vergeben“ als Text an. Ohne JavaScript prüft der Server beim Absenden.
+ */
+import { useT, type Lang } from '~/i18n';
+
+interface Props {
+  lang: Lang;
+  id: string;
+}
+const { lang, id } = Astro.props;
+const t = useT(lang);
+---
+
+<p
+  id={id}
+  class="number-status field-hint"
+  aria-live="polite"
+  data-number-status
+  data-checking={t('forms.join.number.checking', { n: '{n}' })}
+  data-free={t('forms.join.number.free', { n: '{n}' })}
+  data-taken={t('forms.join.number.taken', { n: '{n}' })}
+  data-invalid={t('forms.join.number.invalid')}
+  data-error={t('forms.join.number.error')}
+>
+</p>
+
+<style>
+  .number-status:empty {
+    display: none;
+  }
+  .number-status[data-state='free'] {
+    color: var(--color-green);
+  }
+  .number-status[data-state='taken'],
+  .number-status[data-state='invalid'] {
+    color: var(--color-danger);
+  }
+  .number-status[data-state='free']::before {
+    content: '✓ ';
+    font-weight: 700;
+  }
+  .number-status[data-state='taken']::before {
+    content: '✕ ';
+    font-weight: 700;
+  }
+</style>
+
+<script>
+  const input = document.querySelector<HTMLInputElement>('input[data-number-check]');
+  const status = document.querySelector<HTMLElement>('[data-number-status]');
+  if (input && status) {
+    const text = (key: string, n?: number) => (status.dataset[key] ?? '').replace('{n}', n == null ? '' : String(n));
+    const show = (message: string, state: string) => {
+      status.textContent = message;
+      status.dataset.state = state;
+      // Vergebene Nummer: Absenden im Browser verhindern (der Server prüft trotzdem)
+      input.setCustomValidity(state === 'taken' ? message : '');
+    };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let seq = 0;
+    const check = async () => {
+      const raw = input.value.trim();
+      if (raw === '') return show('', '');
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 2 || n > 99) return show(text('invalid'), 'invalid');
+      const mine = ++seq;
+      show(text('checking', n), 'checking');
+      try {
+        const res = await fetch(`/api/number-check?n=${n}`, { headers: { accept: 'application/json' } });
+        const data = (await res.json()) as { available?: boolean | null };
+        if (mine !== seq) return;
+        if (data.available === true) show(text('free', n), 'free');
+        else if (data.available === false) show(text('taken', n), 'taken');
+        else show(text('error'), 'error');
+      } catch {
+        if (mine === seq) show(text('error'), 'error');
+      }
+    };
+    input.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(check, 400);
+    });
+    if (input.value.trim() !== '') void check();
+  }
+</script>

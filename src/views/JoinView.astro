@@ -1,0 +1,404 @@
+---
+/**
+ * Mitfahren (Plan §4.9): Voraussetzungen, Ablauf in Schritten, aktueller Anmeldestatus und
+ * das Anmeldeformular ohne Login. Nach dem Absenden: Bestätigung mit Discord-Button und
+ * „Wie geht es weiter?“ sowie GA-Ereignis 'registration_submitted'.
+ */
+import { actions, isInputError } from 'astro:actions';
+import Cake from '@lucide/astro/icons/cake';
+import Gamepad2 from '@lucide/astro/icons/gamepad-2';
+import IdCard from '@lucide/astro/icons/id-card';
+import Joystick from '@lucide/astro/icons/joystick';
+import MessageCircle from '@lucide/astro/icons/message-circle';
+import Shuffle from '@lucide/astro/icons/shuffle';
+import CheckboxField from '~/components/forms/CheckboxField.astro';
+import ChoiceGroup from '~/components/forms/ChoiceGroup.astro';
+import ErrorSummary from '~/components/forms/ErrorSummary.astro';
+import Field from '~/components/forms/Field.astro';
+import Honeypot from '~/components/forms/Honeypot.astro';
+import NumberStatus from '~/components/forms/NumberStatus.astro';
+import SelectField from '~/components/forms/SelectField.astro';
+import SubmitButton from '~/components/forms/SubmitButton.astro';
+import TrackEvent from '~/components/forms/TrackEvent.astro';
+import Turnstile from '~/components/forms/Turnstile.astro';
+import Badge from '~/components/ui/Badge.astro';
+import BrandIcon from '~/components/ui/BrandIcon.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { AVAILABILITIES, INPUT_DEVICES, PLATFORMS, WANTED_ROLES } from '~/lib/db/types';
+import { countryOptions } from '~/lib/forms/countries';
+import { collectErrors } from '~/lib/forms/errors';
+import { LIMITS } from '~/lib/forms/schemas';
+import { posted, postedChecked, postedForm } from '~/lib/forms/values';
+import { REQUIREMENTS } from '~/lib/seed/content/guide';
+import { loadPublicSettings } from '~/lib/server/league';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+
+const settings = await loadPublicSettings();
+const reg = settings.registration;
+const regNote = lang === 'de' ? reg.note_de : (reg.note_en ?? reg.note_de);
+const open = reg.state !== 'closed';
+const discordUrl = settings.discord_invite.url;
+
+const result = Astro.getActionResult(actions.registerDriver);
+const success = result && !result.error ? result.data : null;
+const form = result?.error ? await postedForm(Astro.request) : null;
+const { fields: errors, form: formError } = collectErrors(lang, result?.error, isInputError(result?.error));
+
+const labels = {
+  gamertag: t('forms.join.gamertag'),
+  ea_id: t('forms.join.eaId'),
+  discord_username: t('forms.join.discord'),
+  platform: t('forms.join.platform'),
+  input_device: t('forms.join.input'),
+  desired_number: t('forms.join.number'),
+  nationality: t('forms.join.nationality'),
+  wanted_role: t('forms.join.role'),
+  availability: t('forms.join.availability'),
+  experience: t('forms.join.experience'),
+  reference_time: t('forms.join.referenceTime'),
+  age16: t('forms.join.age16'),
+  rules: `${t('forms.join.rules.rulesLink')} / ${t('forms.join.rules.termsLink')}`,
+};
+
+const statusVariant = reg.state === 'open' ? 'green' : reg.state === 'waitlist' ? 'warning' : 'danger';
+const REQUIREMENT_ICONS = { game: Gamepad2, crossplay: Shuffle, ea_id: IdCard, discord: MessageCircle, age: Cake, input: Joystick } as const;
+const steps = [1, 2, 3, 4] as const;
+---
+
+<BaseLayout lang={lang} title={t('forms.join.metaTitle')} description={t('forms.join.metaDescription')} alternates={alternates('join')}>
+  <PageHeader lang={lang} title={t('forms.join.title')} eyebrow={t('forms.join.eyebrow')} lead={t('forms.join.lead')}>
+    {
+      !success && open && (
+        <a href="#anmeldung" class="btn btn-primary mt-6">
+          {t('forms.join.formTitle')}
+        </a>
+      )
+    }
+  </PageHeader>
+
+  <div class="container-page">
+    <!-- Anmeldestatus -->
+    <section class="mt-8" aria-labelledby="status-title">
+      <div class="card flex flex-col gap-3 p-5 md:flex-row md:items-center md:gap-6">
+        <h2 id="status-title" class="micro shrink-0">{t('forms.join.status.title')}</h2>
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Badge variant={statusVariant}>{t(`forms.join.status.${reg.state}`)}</Badge>
+          {
+            open && (
+              <p class="text-sm">
+                <strong>{t('forms.join.status.freeSeats', { n: reg.free_seats })}</strong>
+                <span class="text-muted"> · {t('forms.join.status.freeReserve', { n: reg.free_reserve })}</span>
+              </p>
+            )
+          }
+        </div>
+        {regNote && <p class="text-sm text-muted md:ml-auto md:max-w-sm">{regNote}</p>}
+      </div>
+    </section>
+
+    {
+      !success && (
+        <>
+          <!-- Voraussetzungen -->
+          <section class="section pb-0" aria-labelledby="requirements-title">
+            <SectionTitle id="requirements-title" title={t('forms.join.requirements.title')} href={url(lang, 'faq')} linkLabel={t('forms.join.requirements.more')} />
+            <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {REQUIREMENTS.map((r) => {
+                const Icon = REQUIREMENT_ICONS[r.key as keyof typeof REQUIREMENT_ICONS] ?? Gamepad2;
+                return (
+                  <li class="card p-5">
+                    <h3 class="flex items-center gap-2.5 text-lg uppercase">
+                      <span class="text-teal">
+                        <Icon size={20} aria-hidden="true" />
+                      </span>
+                      {lang === 'de' ? r.title_de : r.title_en}
+                    </h3>
+                    <p class="mt-2 text-sm text-muted">{lang === 'de' ? r.body_de : r.body_en}</p>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+
+          <!-- Ablauf -->
+          <section class="section pb-0" aria-labelledby="steps-title">
+            <SectionTitle id="steps-title" title={t('forms.join.steps.title')} />
+            <ol class="steps grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {steps.map((n) => (
+                <li class="card step p-5">
+                  <span class="step-no" aria-hidden="true">
+                    {n}
+                  </span>
+                  <h3 class="mt-3 text-lg uppercase">{t(`forms.join.steps.${n}.title`)}</h3>
+                  <p class="mt-2 text-sm text-muted">{t(`forms.join.steps.${n}.text`)}</p>
+                </li>
+              ))}
+            </ol>
+          </section>
+        </>
+      )
+    }
+
+    <!-- Formular bzw. Bestätigung -->
+    <section id="anmeldung" class="section max-w-3xl scroll-mt-24" aria-labelledby="form-title">
+      {
+        success ? (
+          <div class="grid gap-6">
+            <div class="alert alert-success" role="status">
+              <h2 id="form-title" class="text-2xl uppercase">
+                {t('forms.join.success.title', { name: success.gamertag })}
+              </h2>
+              <p class="mt-2">{t('forms.join.success.text')}</p>
+              {success.waitlist && <p class="mt-2 text-warning">{t('forms.join.success.waitlist')}</p>}
+            </div>
+            <TrackEvent name="registration_submitted" />
+            <div class="card p-5 md:p-6">
+              <h3 class="text-xl uppercase">{t('forms.join.success.next')}</h3>
+              <ol class="steps mt-4 grid gap-4">
+                {([1, 2, 3, 4] as const).map((n) => (
+                  <li class="flex gap-4">
+                    <span class="step-no shrink-0" aria-hidden="true">
+                      {n}
+                    </span>
+                    <p class="pt-1.5">{t(`forms.join.success.step${n}`)}</p>
+                  </li>
+                ))}
+              </ol>
+              <div class="mt-6 flex flex-wrap gap-3">
+                {discordUrl ? (
+                  <a href={discordUrl} class="btn btn-primary" target="_blank" rel="noopener" data-track="discord_click">
+                    <BrandIcon name="discord" size={18} />
+                    {t('common.joinDiscord')}
+                  </a>
+                ) : (
+                  <p class="text-sm text-muted">{t('forms.join.success.noDiscord')}</p>
+                )}
+                <a href={url(lang, 'rules')} class="btn btn-secondary">
+                  {t('forms.join.success.rules')}
+                </a>
+                <a href={url(lang, 'faq')} class="btn btn-ghost border border-border">
+                  {t('forms.join.success.guide')}
+                </a>
+              </div>
+            </div>
+          </div>
+        ) : !open ? (
+          <div class="alert alert-warning">
+            <h2 id="form-title" class="text-xl uppercase">
+              {t('forms.join.closedFormTitle')}
+            </h2>
+            <p class="mt-2">{t('forms.join.status.closedText')}</p>
+            {discordUrl && (
+              <a href={discordUrl} class="btn btn-secondary btn-sm mt-4" target="_blank" rel="noopener" data-track="discord_click">
+                <BrandIcon name="discord" size={18} />
+                {t('common.joinDiscord')}
+              </a>
+            )}
+          </div>
+        ) : (
+          <>
+            <SectionTitle id="form-title" title={t('forms.join.formTitle')} />
+            {reg.state === 'waitlist' && <p class="alert alert-warning mb-4 text-sm">{t('forms.join.status.waitlistText')}</p>}
+            <p class="mb-4 text-sm text-muted">{t('forms.requiredLegend')}</p>
+            <ErrorSummary lang={lang} errors={errors} labels={labels} formError={formError} />
+            <form method="POST" action={actions.registerDriver} class="card mt-6 grid gap-6 p-5 md:p-6">
+              <Honeypot lang={lang} />
+              <div class="grid gap-5 sm:grid-cols-2">
+                <Field
+                  lang={lang}
+                  name="gamertag"
+                  label={labels.gamertag}
+                  required
+                  hint={t('forms.join.gamertagHint')}
+                  error={errors.gamertag}
+                  value={posted(form, 'gamertag')}
+                  autocomplete="nickname"
+                  minlength={LIMITS.gamertag.min}
+                  maxlength={LIMITS.gamertag.max}
+                  spellcheck={false}
+                />
+                <Field
+                  lang={lang}
+                  name="ea_id"
+                  label={labels.ea_id}
+                  hint={t('forms.join.eaIdHint')}
+                  error={errors.ea_id}
+                  value={posted(form, 'ea_id')}
+                  autocomplete="off"
+                  maxlength={LIMITS.eaId.max}
+                  spellcheck={false}
+                />
+                <Field
+                  lang={lang}
+                  name="discord_username"
+                  label={labels.discord_username}
+                  required
+                  hint={t('forms.join.discordHint')}
+                  error={errors.discord_username}
+                  value={posted(form, 'discord_username')}
+                  autocomplete="off"
+                  maxlength={LIMITS.discord.max}
+                  spellcheck={false}
+                  attrs={{ autocapitalize: 'none' }}
+                />
+                <SelectField
+                  lang={lang}
+                  name="platform"
+                  label={labels.platform}
+                  required
+                  error={errors.platform}
+                  value={posted(form, 'platform')}
+                  options={PLATFORMS.map((p) => ({ value: p, label: t(`platform.long.${p}`) }))}
+                />
+              </div>
+
+              <ChoiceGroup
+                lang={lang}
+                name="input_device"
+                legend={labels.input_device}
+                required
+                columns={2}
+                error={errors.input_device}
+                value={posted(form, 'input_device')}
+                options={INPUT_DEVICES.map((d) => ({ value: d, label: t(`forms.join.input.${d}`) }))}
+              />
+
+              <div class="grid gap-5 sm:grid-cols-2">
+                <Field
+                  lang={lang}
+                  name="desired_number"
+                  type="number"
+                  label={labels.desired_number}
+                  required
+                  hint={t('forms.join.numberHint')}
+                  error={errors.desired_number}
+                  value={posted(form, 'desired_number')}
+                  min={2}
+                  max={99}
+                  step={1}
+                  inputmode="numeric"
+                  autocomplete="off"
+                  describedby="f-desired_number-status"
+                  attrs={{ 'data-number-check': true }}
+                >
+                  <NumberStatus lang={lang} id="f-desired_number-status" />
+                </Field>
+                <SelectField
+                  lang={lang}
+                  name="nationality"
+                  label={labels.nationality}
+                  hint={t('forms.join.nationalityHint')}
+                  error={errors.nationality}
+                  value={posted(form, 'nationality')}
+                  placeholder={t('forms.join.nationality.none')}
+                  options={countryOptions(lang)}
+                />
+              </div>
+
+              <div class="grid gap-6 sm:grid-cols-2">
+                <ChoiceGroup
+                  lang={lang}
+                  name="wanted_role"
+                  legend={labels.wanted_role}
+                  required
+                  error={errors.wanted_role}
+                  value={posted(form, 'wanted_role')}
+                  options={WANTED_ROLES.map((r) => ({ value: r, label: t(`forms.join.role.${r}`) }))}
+                />
+                <ChoiceGroup
+                  lang={lang}
+                  name="availability"
+                  legend={labels.availability}
+                  required
+                  hint={t('forms.join.availabilityHint')}
+                  error={errors.availability}
+                  value={posted(form, 'availability')}
+                  options={AVAILABILITIES.map((a) => ({ value: a, label: t(`forms.join.availability.${a}`) }))}
+                />
+              </div>
+
+              <Field
+                lang={lang}
+                name="experience"
+                type="textarea"
+                label={labels.experience}
+                hint={t('forms.join.experienceHint')}
+                error={errors.experience}
+                value={posted(form, 'experience')}
+                rows={4}
+                maxlength={LIMITS.experience.max}
+              />
+              <Field
+                lang={lang}
+                name="reference_time"
+                label={labels.reference_time}
+                hint={t('forms.join.referenceTimeHint')}
+                error={errors.reference_time}
+                value={posted(form, 'reference_time')}
+                autocomplete="off"
+                maxlength={LIMITS.referenceTime.max}
+                class="sm:max-w-md"
+              />
+
+              <div class="grid gap-2 border-t border-border pt-5">
+                <CheckboxField lang={lang} name="age16" required checked={postedChecked(form, 'age16')} error={errors.age16}>
+                  {t('forms.join.age16')}
+                </CheckboxField>
+                <CheckboxField lang={lang} name="rules" required checked={postedChecked(form, 'rules')} error={errors.rules}>
+                  {t('forms.join.rules.before')}
+                  <a href={url(lang, 'rules')} target="_blank" rel="noopener">
+                    {t('forms.join.rules.rulesLink')}
+                    <span class="sr-only"> {t('a11y.externalLink')}</span>
+                  </a>
+                  {t('forms.join.rules.middle')}
+                  <a href={url(lang, 'terms')} target="_blank" rel="noopener">
+                    {t('forms.join.rules.termsLink')}
+                    <span class="sr-only"> {t('a11y.externalLink')}</span>
+                  </a>
+                  {t('forms.join.rules.after')}
+                </CheckboxField>
+                <p class="text-sm text-muted">
+                  {t('forms.join.privacy.before')}
+                  <a href={url(lang, 'privacy')} class="text-green underline hover:text-teal">
+                    {t('forms.join.privacy.link')}
+                  </a>
+                  {t('forms.join.privacy.after')}
+                </p>
+              </div>
+
+              <Turnstile lang={lang} />
+              <div>
+                <SubmitButton lang={lang} label={t('forms.join.submit')} />
+              </div>
+            </form>
+          </>
+        )
+      }
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .step-no {
+    display: inline-grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    background: var(--g-accent);
+    color: #000;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 1.125rem;
+    line-height: 1;
+  }
+</style>

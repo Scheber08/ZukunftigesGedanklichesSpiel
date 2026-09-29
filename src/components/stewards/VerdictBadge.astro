@@ -1,0 +1,17 @@
+---
+/** Entscheidung als Badge – Text plus dezente Farbe (Plan §3.5). */
+import Badge from '~/components/ui/Badge.astro';
+import { useT, type Lang } from '~/i18n';
+import type { Verdict } from '~/lib/db/types';
+import { VERDICT_VARIANT } from './utils';
+
+interface Props {
+  verdict: Verdict;
+  lang: Lang;
+  class?: string;
+}
+const { verdict, lang, class: className } = Astro.props;
+const t = useT(lang);
+---
+
+<Badge variant={VERDICT_VARIANT[verdict]} class={className}>{t(`stewards.verdict.${verdict}`)}</Badge>

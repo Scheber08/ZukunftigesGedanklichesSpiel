@@ -1,0 +1,12 @@
+---
+import { decisionStaticPaths } from '~/components/stewards/paths';
+import DecisionView from '~/views/DecisionView.astro';
+
+export async function getStaticPaths() {
+  return decisionStaticPaths();
+}
+
+const { ref } = Astro.params;
+---
+
+<DecisionView lang="en" ref={ref!} />

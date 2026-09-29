@@ -72,7 +72,7 @@ const common = {
   minlength,
   maxlength,
   spellcheck: spellcheck === undefined ? undefined : spellcheck ? ('true' as const) : ('false' as const),
-  'aria-invalid': error ? 'true' : undefined,
+  'aria-invalid': error ? ('true' as const) : undefined,
   'aria-describedby': describedBy,
   ...attrs,
 };

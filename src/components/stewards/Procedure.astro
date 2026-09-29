@@ -1,0 +1,50 @@
+---
+/**
+ * Kurz erklärt: Frist, Videobeweis, Befangenheit, Veröffentlichung (Plan §4.6, Regelwerk §7).
+ */
+import Clock from '@lucide/astro/icons/clock';
+import Eye from '@lucide/astro/icons/eye';
+import Scale from '@lucide/astro/icons/scale';
+import Video from '@lucide/astro/icons/video';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import { url, useT, type Lang } from '~/i18n';
+
+interface Props {
+  lang: Lang;
+  /** Protestfrist der aktuellen Saison in Stunden */
+  hours: number;
+  headingId?: string;
+}
+const { lang, hours, headingId = 'procedure-title' } = Astro.props;
+const t = useT(lang);
+const rules = url(lang, 'rules');
+const items = [
+  { key: 'deadline', icon: Clock, anchor: 'p7-2' },
+  { key: 'evidence', icon: Video, anchor: 'p7-3' },
+  { key: 'conflict', icon: Scale, anchor: 'p7-5' },
+  { key: 'publication', icon: Eye, anchor: 'p7-7' },
+] as const;
+---
+
+<section aria-labelledby={headingId}>
+  <SectionTitle id={headingId} title={t('stewards.procedure.title')} href={`${rules}#p7`} linkLabel={t('stewards.procedure.rulesLink')} />
+  <p class="-mt-2 mb-5 max-w-2xl text-muted">{t('stewards.procedure.lead')}</p>
+  <ul class="grid gap-4 sm:grid-cols-2">
+    {
+      items.map(({ key, icon: Icon, anchor }) => (
+        <li class="card p-5">
+          <h3 class="flex items-center gap-2.5 text-lg uppercase">
+            <span class="text-teal">
+              <Icon size={20} aria-hidden="true" />
+            </span>
+            {t(`stewards.procedure.${key}.title`)}
+          </h3>
+          <p class="mt-2 text-sm text-muted">{t(`stewards.procedure.${key}.text`, { hours })}</p>
+          <a href={`${rules}#${anchor}`} class="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-green hover:text-teal">
+            §{anchor.slice(1).replace('-', '.')} →
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</section>

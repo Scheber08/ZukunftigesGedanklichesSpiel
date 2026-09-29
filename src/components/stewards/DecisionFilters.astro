@@ -1,0 +1,157 @@
+---
+/**
+ * Filter fürs Register nach Saison, Runde, Fahrer und Art der Entscheidung (Plan §4.6).
+ * Läuft im Browser über data-Attribute der Einträge; ohne JavaScript bleibt der Filter
+ * ausgeblendet und alle Entscheidungen sind sichtbar. Der Filter steht in der URL (Teilen-Link).
+ */
+import RotateCcw from '@lucide/astro/icons/rotate-ccw';
+import { useT, type Lang } from '~/i18n';
+
+interface Option {
+  value: string;
+  label: string;
+}
+
+interface Props {
+  lang: Lang;
+  seasons: Option[];
+  rounds: Array<Option & { season: string }>;
+  drivers: Option[];
+  verdicts: Option[];
+  total: number;
+}
+const { lang, seasons, rounds, drivers, verdicts, total } = Astro.props;
+const t = useT(lang);
+const selects = [
+  { name: 'season', label: t('stewards.filter.season'), options: seasons },
+  { name: 'round', label: t('stewards.filter.round'), options: rounds },
+  { name: 'driver', label: t('stewards.filter.driver'), options: drivers },
+  { name: 'verdict', label: t('stewards.filter.verdict'), options: verdicts },
+] as const;
+---
+
+<form class="filters card" data-decision-filters hidden>
+  <fieldset>
+    <legend class="micro mb-3">{t('stewards.filter.legend')}</legend>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {
+        selects.map((s) => (
+          <div class="field">
+            <label for={`filter-${s.name}`} class="label">
+              {s.label}
+            </label>
+            <select id={`filter-${s.name}`} name={s.name} class="select">
+              <option value="">{t('stewards.filter.all')}</option>
+              {s.options.map((o) => (
+                <option value={o.value} data-season={'season' in o ? o.season : undefined}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ))
+      }
+    </div>
+  </fieldset>
+  <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+    <p class="text-sm text-muted" aria-live="polite" data-filter-status data-template={t('stewards.filter.status', { shown: '{shown}', total: '{total}' })}>
+      {t('stewards.filter.status', { shown: total, total })}
+    </p>
+    <button type="button" class="btn btn-ghost btn-sm border border-border" data-filter-reset hidden>
+      <RotateCcw size={16} aria-hidden="true" />
+      {t('stewards.filter.reset')}
+    </button>
+  </div>
+</form>
+
+<style>
+  .filters {
+    padding: 1rem 1.25rem 1.125rem;
+  }
+  .filters fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+  }
+</style>
+
+<script>
+  import { EMPTY_FILTER, FILTER_KEYS, filterToSearch, isFilterActive, matchesFilter, parseFilter, type DecisionFilter } from './utils';
+
+  const form = document.querySelector<HTMLFormElement>('[data-decision-filters]');
+  if (form) {
+    const items = [...document.querySelectorAll<HTMLElement>('[data-decision-item]')];
+    const status = form.querySelector<HTMLElement>('[data-filter-status]');
+    const reset = form.querySelector<HTMLButtonElement>('[data-filter-reset]');
+    const empty = document.querySelector<HTMLElement>('[data-filter-empty]');
+    const select = (name: string) => form.querySelector<HTMLSelectElement>(`select[name="${name}"]`);
+
+    const readForm = (): DecisionFilter => {
+      const f = { ...EMPTY_FILTER };
+      for (const key of FILTER_KEYS) f[key] = select(key)?.value ?? '';
+      return f;
+    };
+
+    // Runden anderer Saisons ausblenden, sobald eine Saison gewählt ist
+    const syncRounds = () => {
+      const season = select('season')?.value ?? '';
+      const rounds = select('round');
+      if (!rounds) return;
+      for (const opt of rounds.options) {
+        const hide = opt.value !== '' && season !== '' && opt.dataset.season !== season;
+        opt.hidden = hide;
+        opt.disabled = hide;
+      }
+      if (rounds.selectedOptions[0]?.disabled) rounds.value = '';
+    };
+
+    const writeForm = (f: DecisionFilter) => {
+      for (const key of FILTER_KEYS) {
+        const el = select(key);
+        if (!el) continue;
+        el.value = [...el.options].some((o) => o.value === f[key]) ? f[key] : '';
+      }
+      syncRounds();
+    };
+
+    const apply = () => {
+      const f = readForm();
+      let shown = 0;
+      for (const item of items) {
+        const match = matchesFilter(
+          {
+            season: item.dataset.season ?? '',
+            round: item.dataset.round ?? '',
+            driver: item.dataset.driver ?? '',
+            verdict: item.dataset.verdict ?? '',
+          },
+          f,
+        );
+        item.hidden = !match;
+        if (match) shown++;
+      }
+      if (status) {
+        status.textContent = (status.dataset.template ?? '{shown}/{total}').replace('{shown}', String(shown)).replace('{total}', String(items.length));
+      }
+      if (empty) empty.hidden = shown !== 0;
+      if (reset) reset.hidden = !isFilterActive(f);
+      history.replaceState(history.state, '', `${location.pathname}${filterToSearch(f)}${location.hash}`);
+    };
+
+    form.hidden = false;
+    writeForm(parseFilter(location.search));
+    apply();
+
+    form.addEventListener('change', (e) => {
+      if ((e.target as HTMLElement | null)?.getAttribute('name') === 'season') syncRounds();
+      apply();
+    });
+    form.addEventListener('submit', (e) => e.preventDefault());
+    reset?.addEventListener('click', () => {
+      writeForm(EMPTY_FILTER);
+      apply();
+      select('season')?.focus();
+    });
+  }
+</script>
