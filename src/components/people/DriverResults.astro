@@ -5,11 +5,12 @@
  * Stoppuhr, Reserve „R“). Jede Saison als Akkordeon, die neueste ist offen.
  */
 import Timer from '@lucide/astro/icons/timer';
+import RoundLink from '~/components/people/RoundLink.astro';
 import TeamName from '~/components/ui/TeamName.astro';
-import { url, useT, type Lang } from '~/i18n';
+import { useT, type Lang } from '~/i18n';
 import type { League } from '~/lib/league/league';
-import { roundLabel } from '~/lib/view';
-import { seasonTitle, type SeasonResults } from '~/lib/people';
+import type { SeasonResults } from '~/lib/people';
+import { roundLabel, seasonLabel } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -23,7 +24,7 @@ const t = useT(lang);
 <div class="accordion">
   {
     groups.map((g, gi) => {
-      const name = seasonTitle(g.season, lang);
+      const name = seasonLabel(g.season, lang);
       return (
         <details open={gi === 0}>
           <summary>
@@ -57,9 +58,7 @@ const t = useT(lang);
                     <tr class:list={[firstOfRound && i > 0 && 'round-start']}>
                       <th scope="row" class="sticky-col font-normal">
                         {firstOfRound ? (
-                          <a href={url(lang, 'race', { season: row.season.slug, round: row.round.number })} class="round-link">
-                            {label}
-                          </a>
+                          <RoundLink lang={lang} league={league} round={row.round} />
                         ) : (
                           <span class="text-muted">
                             <span class="sr-only">{label}</span>
@@ -110,15 +109,7 @@ const t = useT(lang);
 
 <style>
   .round-start > * {
-    border-top: 1px solid #3a3a42;
-  }
-  .round-link {
-    font-weight: 600;
-    text-decoration: none;
-  }
-  .round-link:hover {
-    color: var(--color-teal);
-    text-decoration: underline;
+    border-top: 1px solid color-mix(in srgb, var(--color-muted) 30%, var(--color-border));
   }
   .podium {
     box-shadow: inset 0 -2px 0 var(--color-green);

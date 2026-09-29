@@ -11,6 +11,7 @@ import DriverResults from '~/components/people/DriverResults.astro';
 import DuelPanel from '~/components/people/DuelPanel.astro';
 import ProfileHeader from '~/components/people/ProfileHeader.astro';
 import ProgressionChart from '~/components/people/ProgressionChart.astro';
+import RoundLink from '~/components/people/RoundLink.astro';
 import SectionNav from '~/components/people/SectionNav.astro';
 import StatTiles from '~/components/people/StatTiles.astro';
 import Badge from '~/components/ui/Badge.astro';
@@ -19,7 +20,6 @@ import DriverLink from '~/components/ui/DriverLink.astro';
 import EmptyState from '~/components/ui/EmptyState.astro';
 import Flag from '~/components/ui/Flag.astro';
 import PlatformBadge from '~/components/ui/PlatformBadge.astro';
-import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
 import SectionTitle from '~/components/ui/SectionTitle.astro';
 import TeamName from '~/components/ui/TeamName.astro';
 import { alternates, url, useT, type Lang } from '~/i18n';
@@ -34,10 +34,9 @@ import {
   progressionSteps,
   resultsBySeason,
   safeExternalUrl,
-  seasonTitle,
 } from '~/lib/people';
 import { loadLeague } from '~/lib/server/league';
-import { breadcrumbJsonLd, countryName, roundLabel } from '~/lib/view';
+import { breadcrumbJsonLd, countryName, seasonLabel } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -51,7 +50,7 @@ const found = league.driverBySlug(slug);
 const driver = found && !found.anonymized ? found : undefined;
 
 const season = league.currentSeason;
-const seasonName = season ? seasonTitle(season, lang) : '';
+const seasonName = season ? seasonLabel(season, lang) : '';
 const number = driver ? league.numberOf(driver.id) : null;
 const team = driver && season ? league.driverTeam(driver.id, season.id) : undefined;
 const role = driver ? driverRole(league, driver, season?.id) : 'former';
@@ -135,7 +134,7 @@ if (!driver) Astro.response.status = 404;
           title={driver.gamertag}
           eyebrow={role !== 'former' && seasonName ? seasonName : undefined}
           breadcrumbs={breadcrumbs}
-          team={team ?? standingTeam}
+          team={team ?? standingTeam ?? lastTeam}
           number={number ?? undefined}
           numberLabel={t('people.driver.number')}
         >
@@ -155,7 +154,7 @@ if (!driver) Astro.response.status = 404;
             </div>
             <div>
               <dt class="micro">{t('people.driver.number')}</dt>
-              <dd class="tabular">{number ?? <span class="text-muted">{t('people.driver.noNumber')}</span>}</dd>
+              <dd class="tabular">{number ?? <span class="text-muted">{numbers.length > 0 ? t('people.driver.noActiveNumber') : t('people.driver.noNumber')}</span>}</dd>
             </div>
             <div>
               <dt class="micro">{t('common.platform')}</dt>
@@ -173,7 +172,7 @@ if (!driver) Astro.response.status = 404;
             {since && (
               <div>
                 <dt class="micro">{t('people.driver.since')}</dt>
-                <dd>{seasonTitle(since, lang)}</dd>
+                <dd>{seasonLabel(since, lang)}</dd>
               </div>
             )}
           </dl>
@@ -277,18 +276,9 @@ if (!driver) Astro.response.status = 404;
                         return (
                           <tr>
                             <th scope="row" class="sticky-col font-normal">
-                              <span class="flex flex-wrap items-center gap-2">
-                                {s ? (
-                                  <a href={url(lang, 'race', { season: s.slug, round: round.number })} class="hover:text-teal">
-                                    {roundLabel(round, league.track(round.track_id), lang)}
-                                  </a>
-                                ) : (
-                                  roundLabel(round, league.track(round.track_id), lang)
-                                )}
-                                {!league.hasResults(round.id) && <RoundStatusBadge status={round.status} lang={lang} />}
-                              </span>
+                              <RoundLink lang={lang} league={league} round={round} status />
                             </th>
-                            <td class="muted">{s ? seasonTitle(s, lang) : '–'}</td>
+                            <td class="muted">{s ? seasonLabel(s, lang) : '–'}</td>
                             <td>
                               <TeamName lang={lang} team={league.team(entry.team_id)} />
                             </td>
@@ -390,6 +380,12 @@ if (!driver) Astro.response.status = 404;
   .profile-section {
     padding-top: 3rem;
     scroll-margin-top: calc(var(--header-h) + 1rem);
+  }
+  /* Link neben der Abschnittsüberschrift als 44-px-Touch-Ziel */
+  .profile-section :global(.section-title + a) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
   }
   .nr {
     font-family: var(--font-display);

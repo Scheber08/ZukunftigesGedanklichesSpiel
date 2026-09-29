@@ -5,7 +5,7 @@
  */
 import { useT, type Lang } from '~/i18n';
 import type { League } from '~/lib/league/league';
-import type { ProgressionStep } from '~/lib/people';
+import { signed, type ProgressionStep } from '~/lib/people';
 import { roundLabel } from '~/lib/view';
 
 interface Props {
@@ -32,6 +32,7 @@ const niceMax = Math.ceil(maxValue / step) * step;
 const ticks = Array.from({ length: niceMax / step + 1 }, (_, i) => i * step);
 const x = (i: number) => M.left + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
 const y = (v: number) => M.top + innerH - (v / niceMax) * innerH;
+// Fallback = Token --color-teal (SVG-Attribute kennen keine CSS-Variablen)
 const lineColor = color ?? '#34C4D0';
 const points = steps.map((s, i) => `${x(i)},${y(s.total)}`).join(' ');
 const area = n > 1 ? `M ${x(0)},${y(0)} L ${steps.map((s, i) => `${x(i)},${y(s.total)}`).join(' L ')} L ${x(n - 1)},${y(0)} Z` : '';
@@ -73,7 +74,15 @@ const gradientId = `${id}-fill`;
         <polyline points={points} fill="none" stroke={lineColor} stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
         {steps.map((s, i) => (
           <g>
-            <circle cx={x(i)} cy={y(s.total)} r={i === n - 1 ? 5.5 : 4} class="dot" fill={i === n - 1 ? lineColor : '#050505'} stroke={lineColor} stroke-width="2" />
+            <circle
+              cx={x(i)}
+              cy={y(s.total)}
+              r={i === n - 1 ? 5.5 : 4}
+              class:list={['dot', i === n - 1 && 'dot-last']}
+              fill={lineColor}
+              stroke={lineColor}
+              stroke-width="2"
+            />
             {(labelEvery || i === n - 1) && (
               <text x={x(i)} y={y(s.total) - 10} text-anchor="middle" class:list={['value', i === n - 1 && 'value-last']}>
                 {s.total}
@@ -101,7 +110,7 @@ const gradientId = `${id}-fill`;
                   <th scope="row" class="sticky-col font-normal">
                     {roundLabel(s.round, league.track(s.round.track_id), lang)}
                   </th>
-                  <td class="num">{s.delta > 0 ? `+${s.delta}` : s.delta}</td>
+                  <td class="num">{signed(s.delta)}</td>
                   <td class="num font-semibold">{s.total}</td>
                   <td class="num">{s.position != null ? t('people.pos', { n: s.position }) : '–'}</td>
                 </tr>
@@ -124,6 +133,10 @@ const gradientId = `${id}-fill`;
     font-size: 12px;
     fill: var(--color-muted);
     font-variant-numeric: tabular-nums;
+  }
+  /* Zwischenmarken hohl (Seitenhintergrund), die letzte Marke gefüllt in Teamfarbe */
+  .dot:not(.dot-last) {
+    fill: var(--color-bg);
   }
   .value {
     font-family: var(--font-display);

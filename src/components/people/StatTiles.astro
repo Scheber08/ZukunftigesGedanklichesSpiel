@@ -131,7 +131,9 @@ const name = `${id}-scope`;
         <summary class="summary text-sm text-muted">{t('people.stats.asTable')}</summary>
         <div class="table-wrap mt-3">
           <table class="timing-table">
-            <caption class="sr-only">{t('people.stats.tableCaption')}</caption>
+            <caption class="sr-only">
+              {season ? t('people.stats.tableCaption', { season: seasonName ?? t('people.stats.season') }) : t('people.stats.tableCaptionCareer')}
+            </caption>
             <thead>
               <tr>
                 <th scope="col" class="sticky-col">{t('people.stats.metric')}</th>
@@ -154,6 +156,13 @@ const name = `${id}-scope`;
                   {season && <td class="num">{value(season, key)}</td>}
                 </tr>
               ))}
+              {career.sprintWins > 0 && (
+                <tr>
+                  <th scope="row" class="sticky-col font-normal">{t('people.stats.sprintWins')}</th>
+                  <td class="num">{career.sprintWins}</td>
+                  {season && <td class="num">{season.sprintWins}</td>}
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

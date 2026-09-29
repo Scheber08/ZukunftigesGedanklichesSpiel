@@ -1,0 +1,62 @@
+---
+/**
+ * Runde in Tabellen der Profilseiten („R5 · Suzuka“, Plan §9.1) mit Link zur Rennseite –
+ * einheitlich für Ergebnisliste, Ersatz-Einsätze und Strafenregister. Optional mit
+ * Status-Badge, solange die Runde noch kein veröffentlichtes Ergebnis hat.
+ */
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import { url, type Lang } from '~/i18n';
+import type { RoundRow } from '~/lib/db/types';
+import type { League } from '~/lib/league/league';
+import { roundLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  round: RoundRow | undefined;
+  /** Status zeigen, solange es kein Ergebnis gibt (z. B. „Aufstellung steht“) */
+  status?: boolean;
+}
+const { lang, league, round, status = false } = Astro.props;
+const season = round ? league.season(round.season_id) : undefined;
+const label = round ? roundLabel(round, league.track(round.track_id), lang) : '–';
+const showStatus = status && round != null && !league.hasResults(round.id);
+---
+
+{
+  showStatus ? (
+    <span class="round-cell">
+      {season ? (
+        <a href={url(lang, 'race', { season: season.slug, round: round!.number })} class="round-link">
+          {label}
+        </a>
+      ) : (
+        label
+      )}
+      <RoundStatusBadge status={round!.status} lang={lang} />
+    </span>
+  ) : round && season ? (
+    <a href={url(lang, 'race', { season: season.slug, round: round.number })} class="round-link">
+      {label}
+    </a>
+  ) : (
+    label
+  )
+}
+
+<style>
+  .round-cell {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+  }
+  .round-link {
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .round-link:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+</style>

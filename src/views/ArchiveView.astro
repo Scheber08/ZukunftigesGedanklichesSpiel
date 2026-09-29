@@ -43,7 +43,7 @@ const jsonLd = breadcrumbJsonLd(site, crumbs.map((c) => ({ name: c.label, href: 
     {
       hasFinished && (
         <p class="mt-5">
-          <a href={url(lang, 'hallOfFame')} class="text-sm font-semibold text-green hover:text-teal">
+          <a href={url(lang, 'hallOfFame')} class="inline-flex min-h-11 items-center text-sm font-semibold text-green hover:text-teal">
             {t('people.archive.hofLink')} →
           </a>
         </p>

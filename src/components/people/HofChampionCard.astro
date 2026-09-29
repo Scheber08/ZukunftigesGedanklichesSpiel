@@ -10,8 +10,7 @@ import TeamName from '~/components/ui/TeamName.astro';
 import { url, useT, type Lang } from '~/i18n';
 import type { Id, SeasonRow } from '~/lib/db/types';
 import type { League } from '~/lib/league/league';
-import { teamStyle } from '~/lib/view';
-import { seasonTitle } from '~/lib/people';
+import { seasonLabel, teamStyle } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -23,7 +22,7 @@ interface Props {
 }
 const { lang, league, season, driverId, teamId, points } = Astro.props;
 const t = useT(lang);
-const name = seasonTitle(season, lang);
+const name = seasonLabel(season, lang);
 const driver = driverId != null ? league.driver(driverId) : undefined;
 const driverStanding = driverId != null ? league.driverStandings(season.id).find((s) => s.driverId === driverId) : undefined;
 const driverTeam = driverStanding?.teamId != null ? league.team(driverStanding.teamId) : undefined;
@@ -99,7 +98,7 @@ const headingId = `champion-${season.slug}`;
     overflow: hidden;
     border-color: transparent;
     background:
-      radial-gradient(90% 60% at 100% 0%, rgb(14 90 97 / 0.35), transparent 70%) padding-box,
+      radial-gradient(90% 60% at 100% 0%, color-mix(in srgb, var(--color-teal-deep) 35%, transparent), transparent 70%) padding-box,
       linear-gradient(var(--color-surface-1), var(--color-surface-1)) padding-box,
       var(--g-accent) border-box;
   }
@@ -112,7 +111,7 @@ const headingId = `champion-${season.slug}`;
   .block-team {
     padding: 0.875rem 1rem;
     border-radius: var(--radius-control);
-    background: rgb(22 22 26 / 0.85);
+    background: color-mix(in srgb, var(--color-surface-2) 85%, transparent);
     border-left: 4px solid var(--team-color, var(--color-border));
   }
   .big-number {

@@ -68,6 +68,10 @@ const ranked = rankByValue(entries.slice(0, limit));
 </section>
 
 <style>
+  /* Rasterzellen dürfen schmaler werden als die Tabelle (die scrollt in .table-wrap) – 320 px */
+  .board {
+    min-width: 0;
+  }
   .board-title {
     margin-bottom: 0.75rem;
     font-size: 1.125rem;
@@ -75,6 +79,6 @@ const ranked = rankByValue(entries.slice(0, limit));
     letter-spacing: 0.04em;
   }
   .leader > * {
-    background: rgb(55 190 137 / 0.08);
+    background: color-mix(in srgb, var(--color-green) 8%, transparent);
   }
 </style>

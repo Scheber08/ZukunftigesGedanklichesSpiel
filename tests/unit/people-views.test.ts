@@ -21,7 +21,6 @@ import {
   regularsByTeam,
   resultsBySeason,
   safeExternalUrl,
-  seasonTitle,
   signed,
   teamDrivers,
   teamDuel,
@@ -53,15 +52,6 @@ function leagueFrom(dataset: Dataset, now = NOW): League {
 const league = leagueFrom(demoDataset(NOW));
 const season = league.currentSeason!;
 const byTag = (tag: string) => league.drivers.find((d) => d.gamertag === tag)!;
-
-describe('Anzeige', () => {
-  it('übersetzt das Standardmuster des Saisonnamens, eigene Namen bleiben', () => {
-    expect(seasonTitle({ number: 2, name: 'Saison 2' }, 'en')).toBe('Season 2');
-    expect(seasonTitle({ number: 2, name: 'Saison 2' }, 'de')).toBe('Saison 2');
-    expect(seasonTitle({ number: 3, name: '' }, 'de')).toBe('Saison 3');
-    expect(seasonTitle({ number: 4, name: 'Winter Cup' }, 'en')).toBe('Winter Cup');
-  });
-});
 
 describe('Profilseiten', () => {
   it('erzeugt Profile für alle Fahrer mit Ergebnis, Nummer oder Cockpit', () => {
@@ -237,5 +227,29 @@ describe('Archiv', () => {
     expect(planned.constructors).toBeUndefined();
     expect(planned.frozen).toBe(false);
     expect(planned.championId).toBeNull();
+  });
+});
+
+describe('Profilseiten und Links', () => {
+  it('erzeugt ein Profil für jeden verlinkbaren Fahrer (Entscheidung, Aufstellung), aber nie für Pseudonymisierte', () => {
+    const dataset = demoDataset(NOW);
+    // Inaktiver Fahrer ohne Ergebnis/Nummer/Cockpit, aber mit veröffentlichter Entscheidung
+    const base = dataset.drivers![0]!;
+    dataset.drivers = [
+      ...dataset.drivers!,
+      { ...base, id: 901, slug: 'nur-entscheidung', gamertag: 'Nur_Entscheidung', status: 'inactive' },
+      { ...base, id: 902, slug: 'geheim', gamertag: 'Geheim', status: 'inactive', anonymized: true },
+    ];
+    const decision = dataset.decisions!.find((d) => d.status === 'published')!;
+    dataset.decisions = [
+      ...dataset.decisions!,
+      { ...decision, id: 9901, public_ref: 'S9-R01-01', driver_id: 901 },
+      { ...decision, id: 9902, public_ref: 'S9-R01-02', driver_id: 902 },
+    ];
+    const l = leagueFrom(dataset);
+    const slugs = driverProfileSlugs(l);
+    expect(slugs).toContain('nur-entscheidung');
+    expect(slugs).not.toContain('geheim');
+    expect(profileDrivers(l).every((d) => !d.anonymized)).toBe(true);
   });
 });

@@ -4,7 +4,8 @@
  * bereiten die Daten für die Views in src/views/*View.astro auf.
  *
  * Datenschutz (Plan §1, §6.7): Pseudonymisierte Fahrer bekommen nie eine Profilseite
- * und werden nirgends verlinkt.
+ * und werden nirgends verlinkt. Saisonnamen zeigen die Views mit `seasonLabel()` aus
+ * src/lib/view.ts (zentral, übersetzt „Saison N“ für EN).
  */
 
 import type { DecisionRow, DriverNumberRow, DriverRow, Id, RoundEntryRow, RoundRow, SeasonRow, TeamRow } from '../db/types';
@@ -14,39 +15,31 @@ import type { CareerStats, Duel } from '../domain/stats';
 import type { League, ResultWithContext } from '../league/league';
 
 // ---------------------------------------------------------------------------
-// Anzeige
-// ---------------------------------------------------------------------------
-
-/**
- * Saisonname für die Anzeige. In der DB steht meist „Saison 2“ – auf Englisch wird das
- * Standardmuster übersetzt, eigene Namen (z. B. „Winter Cup“) bleiben unverändert.
- */
-export function seasonTitle(season: Pick<SeasonRow, 'number' | 'name'>, lang: 'de' | 'en'): string {
-  const name = season.name?.trim() ?? '';
-  if (name === '' || /^(saison|season)\s+\d+$/i.test(name)) return lang === 'de' ? `Saison ${season.number}` : `Season ${season.number}`;
-  return name;
-}
-
-// ---------------------------------------------------------------------------
 // Profilseiten
 // ---------------------------------------------------------------------------
 
 /**
- * Fahrer mit öffentlicher Profilseite: nicht pseudonymisiert und mit Ergebnis, Startnummer
- * oder Cockpit. Zusätzlich alle, die in der Fahrerliste stehen (Stamm/Reserve), damit
- * dort kein Link ins Leere führt.
+ * Fahrer mit öffentlicher Profilseite: nicht pseudonymisiert und mit Ergebnis, Startnummer,
+ * Cockpit, Aufstellung (auch als Ersetzter) oder veröffentlichter Steward-Entscheidung.
+ * Zusätzlich alle, die in der Fahrerliste stehen (Stamm/Reserve) – so führt kein Link
+ * (DriverLink, DriverCard) ins Leere.
  */
 export function profileDrivers(league: League): DriverRow[] {
-  const withNumber = new Set(league.data.driver_numbers.map((n) => n.driver_id));
-  const withSeat = new Set(league.data.seats.map((s) => s.driver_id));
+  const referenced = new Set<Id>();
+  for (const n of league.data.driver_numbers) referenced.add(n.driver_id);
+  for (const s of league.data.seats) referenced.add(s.driver_id);
+  // Nur veröffentlichte Aufstellungen (entriesOf blendet geplante Runden aus)
+  for (const round of league.data.rounds) {
+    for (const e of league.entriesOf(round.id)) {
+      referenced.add(e.driver_id);
+      if (e.replaces_driver_id != null) referenced.add(e.replaces_driver_id);
+    }
+  }
+  for (const d of league.decisions) referenced.add(d.driver_id);
   return league.drivers.filter(
     (d) =>
       !d.anonymized &&
-      (league.driverResults(d.id).length > 0 ||
-        withNumber.has(d.id) ||
-        withSeat.has(d.id) ||
-        d.status === 'active' ||
-        d.status === 'reserve'),
+      (referenced.has(d.id) || league.driverResults(d.id).length > 0 || d.status === 'active' || d.status === 'reserve'),
   );
 }
 

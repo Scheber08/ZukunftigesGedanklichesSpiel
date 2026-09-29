@@ -3,11 +3,11 @@
  * Öffentliches Strafenregister eines Fahrers (Plan §4.5, §4.6): nur veröffentlichte
  * Entscheidungen, jede mit Link auf ihre Seite im Steward-Register.
  */
+import RoundLink from '~/components/people/RoundLink.astro';
 import { url, useT, type Lang } from '~/i18n';
 import type { DecisionRow } from '~/lib/db/types';
 import { formatDate } from '~/lib/domain/time';
 import type { League } from '~/lib/league/league';
-import { roundLabel } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -45,7 +45,6 @@ const severe = new Set(['time_penalty', 'position_penalty', 'grid_penalty_next',
       {
         decisions.map((d) => {
           const round = league.round(d.round_id);
-          const season = round ? league.season(round.season_id) : undefined;
           const session = d.session_id != null ? league.session(d.session_id) : undefined;
           const detail = extra(d);
           return (
@@ -56,13 +55,7 @@ const severe = new Set(['time_penalty', 'position_penalty', 'grid_penalty_next',
                 </a>
               </th>
               <td>
-                {round && season ? (
-                  <a href={url(lang, 'race', { season: season.slug, round: round.number })} class="hover:text-teal">
-                    {roundLabel(round, league.track(round.track_id), lang)}
-                  </a>
-                ) : (
-                  '–'
-                )}
+                <RoundLink lang={lang} league={league} round={round} />
               </td>
               <td class="muted">{session ? t(`session.${session.type}`) : '–'}</td>
               <td>

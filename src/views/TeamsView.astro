@@ -14,9 +14,9 @@ import { alternates, url, useT, type Lang } from '~/i18n';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import type { Id } from '~/lib/db/types';
 import type { TeamStanding } from '~/lib/domain/standings';
-import { seasonTitle, teamDrivers } from '~/lib/people';
+import { teamDrivers } from '~/lib/people';
 import { loadLeague } from '~/lib/server/league';
-import { teamStyle } from '~/lib/view';
+import { breadcrumbJsonLd, seasonLabel, teamStyle } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -25,7 +25,7 @@ const { lang } = Astro.props;
 const t = useT(lang);
 const league = await loadLeague();
 const season = league.currentSeason;
-const seasonName = season ? seasonTitle(season, lang) : '';
+const seasonName = season ? seasonLabel(season, lang) : '';
 const teams = season ? league.teamsOf(season.id) : [];
 const standings = new Map<Id, TeamStanding>(season ? league.teamStandings(season.id).map((s) => [s.teamId, s]) : []);
 const anyPoints = [...standings.values()].some((s) => s.points > 0);
@@ -33,6 +33,13 @@ const anyPoints = [...standings.values()].some((s) => s.points > 0);
 const ordered = anyPoints
   ? [...teams].sort((a, b) => (standings.get(a.id)?.position ?? 99) - (standings.get(b.id)?.position ?? 99))
   : teams;
+
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('people.teams.title'), href: url(lang, 'teams') },
+];
+const site = Astro.site ?? new URL(Astro.url.origin);
+const jsonLd = breadcrumbJsonLd(site, crumbs.map((c) => ({ name: c.label, href: c.href })));
 ---
 
 <BaseLayout
@@ -40,13 +47,14 @@ const ordered = anyPoints
   title={t('people.teams.title')}
   description={t('people.teams.metaDescription', { n: teams.length, season: seasonName || t('common.season') })}
   alternates={alternates('teams')}
+  jsonLd={jsonLd}
 >
   <PageHeader
     lang={lang}
     title={t('people.teams.title')}
     eyebrow={seasonName || undefined}
     lead={t('people.teams.lead')}
-    breadcrumbs={[{ label: t('nav.home'), href: url(lang, 'home') }, { label: t('people.teams.title') }]}
+    breadcrumbs={[crumbs[0]!, { label: t('people.teams.title') }]}
   >
     <PeopleTabs lang={lang} current="teams" />
   </PageHeader>
@@ -56,7 +64,7 @@ const ordered = anyPoints
       !season || teams.length === 0 ? (
         <EmptyState title={t('people.teams.none')} />
       ) : (
-        <section aria-labelledby="teams-title">
+        <section class="teams-section" aria-labelledby="teams-title">
           <SectionTitle
             id="teams-title"
             title={t('people.teams.standingLabel')}
@@ -122,9 +130,22 @@ const ordered = anyPoints
 </BaseLayout>
 
 <style>
+  /* Lange Versalwörter („KONSTRUKTEURSWERTUNG“) dürfen ab 320 px umbrechen; Link rechts als 44-px-Ziel */
+  .teams-section :global(.section-title) {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+  }
+  .teams-section :global(.section-title + a) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
   .team-card {
     display: flex;
     flex-direction: column;
+    min-width: 0;
     padding: 1.25rem 1.25rem 1.25rem 1.5rem;
     border-left: 4px solid var(--team-color, var(--color-border));
   }
