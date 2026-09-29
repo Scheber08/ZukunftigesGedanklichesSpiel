@@ -1,0 +1,123 @@
+---
+/**
+ * 404 im Liga-Stil (Plan §4.10): eine statische Seite für beide Sprachen, kurz zweisprachig
+ * mit hilfreichen Links (Start, Kalender, Wertung, News, Regelwerk). Immer noindex.
+ */
+import ArrowRight from '@lucide/astro/icons/arrow-right';
+import Logo from '~/components/ui/Logo.astro';
+import { t, url, type Lang, type RouteName } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+
+const LINKS: Array<{ route: RouteName; key: 'nav.home' | 'nav.calendar' | 'nav.standings' | 'nav.news' | 'nav.rules' }> = [
+  { route: 'home', key: 'nav.home' },
+  { route: 'calendar', key: 'nav.calendar' },
+  { route: 'standings', key: 'nav.standings' },
+  { route: 'news', key: 'nav.news' },
+  { route: 'rules', key: 'nav.rules' },
+];
+const blocks: Array<{ lang: Lang }> = [{ lang: 'de' }, { lang: 'en' }];
+---
+
+<BaseLayout lang="de" title={`${t('de', 'error.404.title')} / ${t('en', 'error.404.title')}`} description={t('de', 'content.notFound.description')} alternates={{ de: '/', en: '/en' }} noindex>
+  <section class="notfound relative isolate overflow-hidden">
+    <div class="notfound-bg" aria-hidden="true">
+      <div class="glow"></div>
+      <span class="notfound-logo"><Logo size="100%" /></span>
+    </div>
+    <div class="container-page py-16 md:py-24">
+      <p class="code" aria-hidden="true">404</p>
+      <div class="grid gap-10 md:grid-cols-2 md:gap-12">
+        {
+          blocks.map(({ lang }, i) => (
+            <div lang={lang} class:list={['notfound-block', i > 0 && 'md:border-l md:border-border md:pl-12']}>
+              <p class="micro text-teal!">{t(lang, 'content.notFound.code')}</p>
+              {i === 0 ? (
+                <h1 class="mt-2 text-balance uppercase">{t(lang, 'error.404.title')}</h1>
+              ) : (
+                <h2 class="h1-size mt-2 text-balance uppercase">
+                  {t(lang, 'error.404.title')}
+                </h2>
+              )}
+              <p class="mt-4 max-w-md text-muted">{t(lang, 'error.404.text')}</p>
+              <nav aria-label={t(lang, 'content.notFound.links')} class="mt-6">
+                <ul class="grid gap-2">
+                  {LINKS.map((l) => (
+                    <li>
+                      <a href={url(lang, l.route)} class="nf-link">
+                        <span>{t(lang, l.key)}</span>
+                        <ArrowRight size={16} aria-hidden="true" />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .h1-size {
+    font-size: var(--fs-h1);
+  }
+  .notfound-bg {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+  }
+  .notfound-bg .glow {
+    left: 55%;
+    width: 50%;
+    opacity: 0.5;
+  }
+  .notfound-logo {
+    position: absolute;
+    right: -4rem;
+    top: 50%;
+    width: min(420px, 70%);
+    transform: translateY(-50%);
+    color: #fff;
+    opacity: 0.07;
+  }
+  .code {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(5rem, 3rem + 10vw, 10rem);
+    line-height: 0.9;
+    letter-spacing: -0.02em;
+    background: var(--g-accent);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 2rem;
+  }
+  .nf-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    max-width: 22rem;
+    min-height: 48px;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface-1);
+    font-weight: 600;
+    text-decoration: none;
+    transition:
+      border-color 150ms ease-out,
+      color 150ms ease-out;
+  }
+  .nf-link:hover {
+    border-color: var(--color-teal);
+    color: var(--color-teal);
+  }
+  @media print {
+    .code {
+      color: #000;
+    }
+  }
+</style>

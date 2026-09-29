@@ -1,0 +1,158 @@
+---
+/**
+ * Stream (Plan §8.2): vorbereitet. Nur mit eingetragenem Twitch-Kanal gibt es den
+ * 2-Klick-Player; sonst „Aktuell kein Stream geplant“ und noindex. Dazu der VOD-Hinweis
+ * (Archiv auf YouTube, weil Twitch Aufzeichnungen löscht).
+ */
+import CalendarDays from '@lucide/astro/icons/calendar-days';
+import Tv from '@lucide/astro/icons/tv';
+import StreamPlayer from '~/components/content/StreamPlayer.astro';
+import BrandIcon from '~/components/ui/BrandIcon.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import { SITE } from '~/config/site';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { normalizeTwitchChannel, twitchChannelUrl } from '~/lib/content/stream';
+import { loadLeague } from '~/lib/server/league';
+import { breadcrumbJsonLd } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const settings = league.settings;
+const channel = normalizeTwitchChannel(settings.twitch_channel);
+const youtube = settings.socials.youtube && /^https:\/\//i.test(settings.socials.youtube) ? settings.socials.youtube : null;
+const discordUrl = settings.discord_invite.url;
+
+const site = Astro.site ?? new URL(Astro.url.origin);
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('content.stream.title'), href: url(lang, 'stream') },
+];
+const jsonLd = [
+  breadcrumbJsonLd(
+    site,
+    crumbs.map((c) => ({ name: c.label, href: c.href })),
+  ),
+  ...(channel
+    ? [
+        {
+          '@context': 'https://schema.org',
+          '@type': 'WebPage',
+          name: `${t('content.stream.title')} · ${SITE.name}`,
+          url: new URL(url(lang, 'stream'), site).href,
+          relatedLink: twitchChannelUrl(channel),
+        },
+      ]
+    : []),
+];
+---
+
+<BaseLayout lang={lang} title={t('content.stream.title')} description={t('content.stream.description')} alternates={alternates('stream')} noindex={!channel} jsonLd={jsonLd}>
+  <PageHeader lang={lang} title={t('content.stream.title')} lead={t('content.stream.lead')} breadcrumbs={crumbs} />
+
+  <div class="container-page section">
+    {
+      channel ? (
+        <section aria-labelledby="stream-player">
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 id="stream-player" class="flex items-center gap-2 text-2xl uppercase">
+              <BrandIcon name="twitch" size={22} />
+              {channel}
+            </h2>
+            <p class="stream-status text-sm" data-stream-status data-live={t('content.stream.status.live')} aria-live="polite">
+              <span class="text-muted">{t('content.stream.status.offline')}</span>
+            </p>
+          </div>
+          <StreamPlayer lang={lang} channel={channel} />
+        </section>
+      ) : (
+        <section class="card none-card px-6 py-12 text-center md:py-16" aria-labelledby="stream-none">
+          <span class="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-surface-2 text-teal" aria-hidden="true">
+            <Tv size={28} />
+          </span>
+          <h2 id="stream-none" class="text-2xl uppercase">
+            {t('content.stream.none.title')}
+          </h2>
+          <p class="mx-auto mt-3 max-w-xl text-muted">{t('content.stream.none.text')}</p>
+          <div class="mt-6 flex flex-wrap justify-center gap-3">
+            <a href={url(lang, 'calendar')} class="btn btn-secondary">
+              <CalendarDays size={18} aria-hidden="true" />
+              {t('content.stream.vod.calendar')}
+            </a>
+            {discordUrl && (
+              <a href={discordUrl} class="btn btn-ghost" target="_blank" rel="noopener" data-track="discord_click">
+                <BrandIcon name="discord" size={18} />
+                {t('common.joinDiscord')}
+                <span class="sr-only">{t('a11y.externalLink')}</span>
+              </a>
+            )}
+          </div>
+        </section>
+      )
+    }
+
+    <section class="mt-12 grid gap-6 border-t border-border pt-10 md:grid-cols-[minmax(0,1fr)_auto] md:items-center" aria-labelledby="stream-vod">
+      <div>
+        <h2 id="stream-vod" class="section-title text-2xl uppercase">{t('content.stream.vod.title')}</h2>
+        <p class="mt-3 max-w-2xl text-muted">{t('content.stream.vod.text')}</p>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        {
+          youtube && (
+            <a href={youtube} class="btn btn-secondary" target="_blank" rel="noopener">
+              <BrandIcon name="youtube" size={18} />
+              {t('content.stream.vod.youtube')}
+              <span class="sr-only">{t('a11y.externalLink')}</span>
+            </a>
+          )
+        }
+        {
+          (channel || youtube) && (
+            <a href={url(lang, 'calendar')} class="btn btn-ghost">
+              <CalendarDays size={18} aria-hidden="true" />
+              {t('content.stream.vod.calendar')}
+            </a>
+          )
+        }
+      </div>
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .none-card {
+    background:
+      radial-gradient(50% 80% at 50% 0%, rgb(14 90 97 / 0.3), transparent 70%),
+      var(--color-surface-1);
+  }
+</style>
+
+<script>
+  // Live-Status (Server-Cache, Plan §8.2) – nur wenn ein Player da ist
+  const status = document.querySelector<HTMLElement>('[data-stream-status]');
+  if (status) {
+    fetch('/api/live', { headers: { accept: 'application/json' } })
+      .then((r) => (r.ok ? (r.json() as Promise<{ live?: boolean; title?: string | null }>) : null))
+      .then((data) => {
+        if (!data?.live) return;
+        const badge = document.createElement('span');
+        badge.className = 'badge badge-teal';
+        const dot = document.createElement('span');
+        dot.className = 'live-dot';
+        dot.setAttribute('aria-hidden', 'true');
+        badge.append(dot, document.createTextNode(status.dataset.live ?? 'LIVE'));
+        status.replaceChildren(badge);
+        if (data.title) {
+          const title = document.createElement('span');
+          title.className = 'ml-2 text-muted';
+          title.textContent = data.title;
+          status.append(title);
+        }
+      })
+      .catch(() => {});
+  }
+</script>

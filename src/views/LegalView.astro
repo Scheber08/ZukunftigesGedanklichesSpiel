@@ -1,0 +1,133 @@
+---
+/**
+ * Rechtstexte (Plan §9.2): Impressum, Datenschutz, Teilnahmebedingungen aus der Content
+ * Collection `legal`. Echtes HTML (kein iframe), H1 = Titel, „Stand“ aus dem Frontmatter,
+ * Hinweis-Banner und noindex für Entwürfe, Inhaltsverzeichnis bei längeren Texten.
+ */
+import TriangleAlert from '@lucide/astro/icons/triangle-alert';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { getLegalEntry, renderLegal, type LegalDoc } from '~/lib/content/legal';
+import { breadcrumbJsonLd } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  doc: LegalDoc;
+}
+const { lang, doc } = Astro.props;
+const t = useT(lang);
+const entry = await getLegalEntry(doc, lang);
+if (!entry) throw new Error(`Rechtstext fehlt: ${lang}/${doc} (src/content/legal)`);
+const { Content, headings } = await renderLegal(entry);
+const { title, description, updated, draft } = entry.data;
+const toc = headings.filter((h) => h.depth === 2);
+const showToc = toc.length >= 5;
+
+const site = Astro.site ?? new URL(Astro.url.origin);
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: title, href: url(lang, doc) },
+];
+const jsonLd = breadcrumbJsonLd(
+  site,
+  crumbs.map((c) => ({ name: c.label, href: c.href })),
+);
+---
+
+<BaseLayout lang={lang} title={title} description={description} alternates={alternates(doc)} noindex={draft} jsonLd={jsonLd}>
+  <PageHeader lang={lang} title={title} lead={description} breadcrumbs={crumbs} updated={updated.toISOString()} />
+
+  <div class="container-page section">
+    {
+      draft && (
+        <p class="alert alert-warning mb-10 flex max-w-3xl gap-3" role="note">
+          <TriangleAlert size={20} aria-hidden="true" class="mt-0.5 shrink-0 text-warning" />
+          <strong>{t('content.legal.draft')}</strong>
+        </p>
+      )
+    }
+    <div class:list={['grid gap-10', showToc && 'lg:grid-cols-[16rem_minmax(0,1fr)]']}>
+      {
+        showToc && (
+          <nav aria-label={t('content.legal.toc')} class="legal-toc no-print">
+            <p class="micro mb-3 px-2">{t('content.legal.toc')}</p>
+            <ol>
+              {toc.map((h) => (
+                <li>
+                  <a href={`#${h.slug}`}>{h.text}</a>
+                </li>
+              ))}
+            </ol>
+          </nav>
+        )
+      }
+      <div class="prose legal-body min-w-0">
+        <Content />
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .legal-body :global(h2),
+  .legal-body :global(h3) {
+    scroll-margin-top: calc(var(--header-h) + 1rem);
+  }
+  .legal-body :global(h2) {
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+  }
+  .legal-body :global(h2:first-of-type) {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .legal-body :global(table) {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+  }
+  .legal-body :global(td) {
+    min-width: 9rem;
+  }
+  @media (min-width: 1024px) {
+    .legal-toc {
+      position: sticky;
+      top: calc(var(--header-h) + 1.5rem);
+      align-self: start;
+      max-height: calc(100dvh - var(--header-h) - 3rem);
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+  }
+  .legal-toc ol {
+    display: grid;
+    gap: 0.125rem;
+    list-style: none;
+    padding: 0;
+  }
+  .legal-toc a {
+    display: flex;
+    align-items: center;
+    min-height: 2.25rem;
+    padding: 0.375rem 0.5rem;
+    border-radius: 6px;
+    font-size: var(--fs-small);
+    line-height: 1.35;
+    color: var(--color-muted);
+    text-decoration: none;
+  }
+  @media (pointer: coarse) {
+    .legal-toc a {
+      min-height: 44px;
+    }
+  }
+  .legal-toc a:hover {
+    color: var(--color-fg);
+    background: var(--color-surface-2);
+  }
+  @media print {
+    .legal-body :global(strong) {
+      color: #000;
+    }
+  }
+</style>
