@@ -10,7 +10,7 @@ import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
 import Forbidden from '~/components/admin/raceday/Forbidden.astro';
 import StepList from '~/components/admin/raceday/StepList.astro';
 import { url } from '~/i18n/routes';
-import { SESSION_LABEL } from '~/lib/admin/raceday/labels';
+import { countText, SESSION_LABEL } from '~/lib/admin/raceday/labels';
 import { roundHub } from '~/lib/admin/raceday/queries';
 import { raceDaySteps } from '~/lib/admin/raceday/steps';
 import { formatDateTime } from '~/lib/domain/time';
@@ -47,7 +47,7 @@ const publicVisible = hub != null && hub.round.status !== 'scheduled';
           <span class="text-muted">{seasonLabel(hub.season, 'de')}</span>
           {hub.facts.frozen && <span class="badge badge-muted">Saison abgeschlossen – eingefroren</span>}
           {publicVisible && publicUrl && (
-            <a href={publicUrl} class="text-sm underline hover:text-teal">
+            <a href={publicUrl} class="inline-flex min-h-11 items-center text-sm underline hover:text-teal">
               Öffentliche Rennseite
             </a>
           )}
@@ -91,14 +91,14 @@ const publicVisible = hub != null && hub.round.status !== 'scheduled';
             <div class="card p-4">
               <dt class="micro">Aufstellung</dt>
               <dd>
-                {hub.facts.entries} Cockpits · {hub.reserves} Ersatz · {hub.absences} Abmeldungen
+                {hub.facts.entries} Cockpits · {countText(hub.reserves, 'Ersatzfahrer', 'Ersatzfahrer')} · {countText(hub.absences, 'Abmeldung', 'Abmeldungen')}
               </dd>
             </div>
             <div class="card p-4">
               <dt class="micro">Stewards</dt>
               <dd>
-                {hub.incidents} Vorfälle ({hub.facts.openIncidents} offen) · {hub.publishedDecisions} Urteile ·{' '}
-                {hub.facts.draftDecisions} Entwürfe
+                {countText(hub.incidents, 'Vorfall', 'Vorfälle')} ({hub.facts.openIncidents} offen) · {countText(hub.publishedDecisions, 'Urteil', 'Urteile')} ·{' '}
+                {countText(hub.facts.draftDecisions, 'Entwurf', 'Entwürfe')}
               </dd>
             </div>
           </dl>

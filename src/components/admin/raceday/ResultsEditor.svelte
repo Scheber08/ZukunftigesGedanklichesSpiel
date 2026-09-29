@@ -26,6 +26,7 @@
   } from '~/lib/admin/raceday/results-map';
   import {
     COMPUTE_WARNING_TEXT,
+    countText,
     draftDecisionsText,
     openIncidentsText,
     RESULT_STATUS_HINT,
@@ -227,7 +228,7 @@
     for (const r of s.rows) r.gridPosition = grid.get(r.driverId) ?? ++next;
     touch(s);
     error = null;
-    say(`Startplätze aus dem Qualifying übernommen${gridPenalties.length > 0 ? ` (inkl. ${gridPenalties.length} Grid-Strafe(n))` : ''}.`);
+    say(`Startplätze aus dem Qualifying übernommen${gridPenalties.length > 0 ? ` (inkl. ${countText(gridPenalties.length, 'Grid-Strafe', 'Grid-Strafen')})` : ''}.`);
   }
 
   function sortByGrid(s: EditState) {
@@ -822,8 +823,17 @@
               <div class="alert alert-warning">
                 <p>
                   Noch offen:
-                  {#if protestOpen}Protestfrist läuft{protestDeadline ? ` bis ${protestDeadline}` : ''}.{/if}
-                  {openIncidentsText(openIncidents)}, {draftDecisionsText(draftDecisions)}.
+                  {#if finalizeBlockers && finalizeBlockers.length > 0}
+                    {finalizeBlockers.join(' · ')}.
+                  {:else}
+                    {[
+                      protestOpen ? `Protestfrist läuft${protestDeadline ? ` bis ${protestDeadline}` : ''}` : null,
+                      openIncidents > 0 ? openIncidentsText(openIncidents) : null,
+                      draftDecisions > 0 ? draftDecisionsText(draftDecisions) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}.
+                  {/if}
                   <a href={stewardsUrl} class="underline">Zum Steward-Werkzeug</a>
                 </p>
                 <label class="checkbox mt-2">

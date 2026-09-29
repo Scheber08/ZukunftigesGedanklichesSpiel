@@ -135,6 +135,24 @@ describe('Ergebnisse', () => {
     expect(await raceRows(r4.id)).toHaveLength(21);
   });
 
+  it('übernimmt Team, Rolle und Eintrag aus der Aufstellung statt aus dem Browser', async () => {
+    const r4 = await roundOf(2, 4);
+    const payload = await payloadFor(r4.id, 'race');
+    const reserve = payload.rows.find((r) => r.role === 'reserve')!;
+    const tampered = payload.rows.map((r) => (r.driverId === reserve.driverId ? { ...r, role: 'regular' as const, teamId: 1, roundEntryId: 1 } : r));
+    await saveResults(store, r4.id, [{ ...payload, rows: tampered }], admin);
+    const row = (await raceRows(r4.id)).find((r) => r.driver_id === reserve.driverId)!;
+    expect(row).toMatchObject({ role: 'reserve', team_id: reserve.teamId, round_entry_id: reserve.roundEntryId });
+  });
+
+  it('Korrektur-Ablauf speichert vor „final“ nichts', async () => {
+    const r4 = await roundOf(2, 4);
+    const before = await raceRows(r4.id);
+    const payload = await payloadFor(r4.id, 'race', (ids) => [...ids].reverse());
+    await expectError(saveResults(store, r4.id, [payload], admin, { allowFinal: true }), 'PRECONDITION_FAILED');
+    expect((await raceRows(r4.id)).map((r) => r.driver_id)).toEqual(before.map((r) => r.driver_id));
+  });
+
   it('Wertungsvorschau zeigt die Top 10 mit Veränderung', async () => {
     const r4 = await roundOf(2, 4);
     const preview = await previewStandings(store, r4.id);
@@ -275,6 +293,58 @@ describe('Stewards', () => {
     await revokeDecision(store, stewardA, d.id, null);
     const back = (await raceRows(r3.id)).find((r) => r.driver_id === winner.driver_id)!;
     expect(back).toMatchObject({ status: 'classified', position: 1 });
+  });
+
+  it('Zurücknehmen einer DSQ stellt den vorherigen Status (DNF) wieder her', async () => {
+    const r4 = await roundOf(2, 4);
+    const race = await sessionOf(r4.id, 'race');
+    // Fahrer auf P5 als DNF eintragen, danach DSQ per Urteil und wieder zurück
+    const payload = await payloadFor(r4.id, 'race');
+    const target = payload.rows[4]!;
+    target.status = 'dnf';
+    await saveResults(store, r4.id, [payload], admin);
+    const d = await saveDecision(store, stewardA, null, {
+      incidentId: null,
+      roundId: r4.id,
+      sessionId: race.id,
+      driverId: target.driverId,
+      verdict: 'dsq',
+      timeSeconds: null,
+      positions: null,
+      penaltyPoints: null,
+      reasoningDe: 'Unerlaubte Fahrhilfe laut Replay (V-17).',
+      reasoningEn: null,
+      ruleRef: null,
+      clipUrl: null,
+    });
+    await publishDecision(store, stewardB, d.id);
+    expect((await raceRows(r4.id)).find((r) => r.driver_id === target.driverId)!.status).toBe('dsq');
+    await revokeDecision(store, stewardA, d.id, null);
+    expect((await raceRows(r4.id)).find((r) => r.driver_id === target.driverId)).toMatchObject({ status: 'dnf', position: null, points: 0 });
+  });
+
+  it('ein Entwurf bleibt bei seiner Runde und seinem Vorfall', async () => {
+    const r4 = await roundOf(2, 4);
+    const r3 = await roundOf(2, 3);
+    const [draft] = await store.select('decisions', { eq: { round_id: r4.id, status: 'draft' } });
+    const base = {
+      incidentId: draft!.incident_id,
+      roundId: r4.id,
+      sessionId: draft!.session_id,
+      driverId: draft!.driver_id,
+      verdict: 'time_penalty' as const,
+      timeSeconds: 10,
+      positions: null,
+      penaltyPoints: null,
+      reasoningDe: 'Unsicheres Wiedereinfahren, erhöhte Strafe.',
+      reasoningEn: null,
+      ruleRef: null,
+      clipUrl: null,
+    };
+    await expectError(saveDecision(store, stewardA, draft!.id, { ...base, roundId: r3.id, sessionId: null }), 'BAD_REQUEST');
+    await expectError(saveDecision(store, stewardA, draft!.id, { ...base, incidentId: null }), 'BAD_REQUEST');
+    const saved = await saveDecision(store, stewardA, draft!.id, base);
+    expect(saved).toMatchObject({ round_id: r4.id, incident_id: draft!.incident_id, time_seconds: 10, decided_by: [stewardA.userId] });
   });
 
   it('befangene Stewards können nicht entscheiden', async () => {

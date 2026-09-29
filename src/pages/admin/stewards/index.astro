@@ -200,7 +200,7 @@ const newHref = `/admin/stewards/neu${roundFromParam ? `?runde=${roundFromParam.
                         <ul>
                           {decisions.map((d) => (
                             <li>
-                              <a href={`/admin/stewards/entscheidung/${d.id}`} class="underline hover:text-teal">
+                              <a href={`/admin/stewards/entscheidung/${d.id}`} class="inline-flex min-h-11 items-center underline hover:text-teal">
                                 {d.public_ref}
                               </a>{' '}
                               <span class="muted">{verdictText(d)}</span>{' '}
@@ -227,7 +227,7 @@ const newHref = `/admin/stewards/neu${roundFromParam ? `?runde=${roundFromParam.
                 const round = inbox.rounds.find((r) => r.id === d.round_id);
                 return (
                   <li class="card flex flex-wrap items-center gap-x-3 gap-y-1 p-3">
-                    <a href={`/admin/stewards/entscheidung/${d.id}`} class="font-semibold underline hover:text-teal">
+                    <a href={`/admin/stewards/entscheidung/${d.id}`} class="inline-flex min-h-11 items-center font-semibold underline hover:text-teal">
                       {d.public_ref}
                     </a>
                     <span>{driverLabel(d.driver_id)}</span>

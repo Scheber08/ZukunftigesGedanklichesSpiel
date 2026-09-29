@@ -112,11 +112,11 @@ const publicUrl = ctx ? url('de', 'race', { season: ctx.basics.season.slug, roun
             {ctx.basics.scheme.name}
             {ctx.basics.season.reserve_points_for_constructors ? ' · Reservepunkte zählen für Teams' : ' · Reservepunkte zählen nicht für Teams'}
           </span>
-          <a href={`/admin/runden/${ctx.basics.round.id}/grid`} class="underline hover:text-teal">
+          <a href={`/admin/runden/${ctx.basics.round.id}/grid`} class="inline-flex min-h-11 items-center underline hover:text-teal">
             Zum Grid-Builder
           </a>
           {ctx.basics.round.status !== 'scheduled' && publicUrl && (
-            <a href={publicUrl} class="underline hover:text-teal">
+            <a href={publicUrl} class="inline-flex min-h-11 items-center underline hover:text-teal">
               Öffentliche Rennseite
             </a>
           )}

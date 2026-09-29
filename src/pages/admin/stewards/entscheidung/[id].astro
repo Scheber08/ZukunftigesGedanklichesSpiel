@@ -140,7 +140,7 @@ if (decision && r.save?.error && Astro.request.method === 'POST') {
           <RoundStatusBadge status={ctx.round.status} lang="de" />
           <span class="text-muted">{label}</span>
           {incident ? (
-            <a href={`/admin/stewards/${incident.id}`} class="underline hover:text-teal">
+            <a href={`/admin/stewards/${incident.id}`} class="inline-flex min-h-11 items-center underline hover:text-teal">
               Zum Vorfall #{incident.id}
             </a>
           ) : (
@@ -154,6 +154,7 @@ if (decision && r.save?.error && Astro.request.method === 'POST') {
         )}
         {!isSteward && <p class="alert mb-6">Als Admin kannst du die Entscheidung ansehen. Entscheiden können nur Stewards.</p>}
 
+        <h2 class="sr-only">Entscheidung und nächste Schritte</h2>
         <DecisionCard
           decision={decision}
           driverLabel={driverLabel(decision.driver_id)}

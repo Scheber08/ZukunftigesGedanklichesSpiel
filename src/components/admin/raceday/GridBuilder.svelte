@@ -176,6 +176,14 @@
     }
   }
 
+  /** Escape hebt eine begonnene Auswahl („Cockpit wählen → Fahrer wählen“) auf. */
+  function cancelSelection(e: KeyboardEvent) {
+    if (e.key !== 'Escape' || (selectedSeat == null && selectedDriver == null)) return;
+    selectedSeat = null;
+    selectedDriver = null;
+    announce = 'Auswahl aufgehoben.';
+  }
+
   function removeFromSeat(seat: SeatSlot) {
     if (seat.driverId == null) return;
     const who = seat.driverId;
@@ -268,6 +276,8 @@
   }
 </script>
 
+<svelte:window onkeydown={cancelSelection} />
+
 <div class="gb">
   <p class="sr-only" role="status" aria-live="polite">{announce}</p>
 
@@ -289,7 +299,7 @@
         </h2>
         <p class="hint">
           Reservefahrer auf ein freies Cockpit ziehen – oder per Tastatur/Touch: erst „Cockpit wählen“, dann den Fahrer im
-          Reservepool.
+          Reservepool (Esc hebt die Auswahl auf).
         </p>
       </div>
 
@@ -734,7 +744,7 @@
     cursor: grab;
   }
   .pool-driver:hover:not(:disabled) {
-    border-color: #3a3a42;
+    border-color: color-mix(in srgb, var(--color-muted) 35%, var(--color-border));
   }
   .pool-driver[aria-pressed='true'] {
     border-color: var(--color-teal);

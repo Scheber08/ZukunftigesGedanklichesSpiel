@@ -10,6 +10,7 @@ import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
 import Forbidden from '~/components/admin/raceday/Forbidden.astro';
 import GridBuilder from '~/components/admin/raceday/GridBuilder.svelte';
 import { RacedayError } from '~/lib/admin/raceday/errors';
+import { countText } from '~/lib/admin/raceday/labels';
 import { formatDateTime } from '~/lib/domain/time';
 import { numberAt } from '~/lib/domain/numbers';
 import { hasRole } from '~/lib/server/auth';
@@ -88,9 +89,9 @@ const props = ctx && {
           </span>
           {ctx.entries.length === 0 && <span class="badge badge-muted">Vorbelegt aus der Saisonaufstellung</span>}
           {ctx.bannedForRound.length > 0 && (
-            <span class="badge badge-danger">{ctx.bannedForRound.length} Rennsperre(n) aus der Vorrunde</span>
+            <span class="badge badge-danger">{countText(ctx.bannedForRound.length, 'Rennsperre', 'Rennsperren')} aus der Vorrunde</span>
           )}
-          <a href={`/admin/runden/${ctx.basics.round.id}/ergebnisse`} class="underline hover:text-teal">
+          <a href={`/admin/runden/${ctx.basics.round.id}/ergebnisse`} class="inline-flex min-h-11 items-center underline hover:text-teal">
             Zur Ergebnis-Eingabe
           </a>
         </div>

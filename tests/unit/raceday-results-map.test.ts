@@ -7,6 +7,7 @@ import {
   formatGapInput,
   inputToEntered,
   inputToResultInsert,
+  linkRowsToEntries,
   moveItem,
   parseEditorRow,
   parseGap,
@@ -134,6 +135,17 @@ describe('Prüfung und Vorbelegung', () => {
     expect(positionChange('sprint', 2, 4)).toBe(-2);
     expect(positionChange('qualifying', 2, 1)).toBeNull();
     expect(positionChange('race', null, 1)).toBeNull();
+  });
+
+  it('verknüpft Zeilen mit der Aufstellung der Runde', () => {
+    const entries = [{ id: 50, driver_id: 7, team_id: 4, role: 'reserve' as const, race_number: 33 }];
+    const rows = [
+      parseEditorRow(editor(7, { role: 'regular', roundEntryId: 999, raceNumber: 1 })).input,
+      parseEditorRow(editor(8, { roundEntryId: 998 })).input,
+    ];
+    const [linked, loose] = linkRowsToEntries(rows, entries);
+    expect(linked).toMatchObject({ driverId: 7, roundEntryId: 50, teamId: 4, role: 'reserve', raceNumber: 33 });
+    expect(loose).toMatchObject({ driverId: 8, roundEntryId: null, teamId: 4, role: 'regular' });
   });
 
   it('verschiebt Zeilen innerhalb der Grenzen', () => {

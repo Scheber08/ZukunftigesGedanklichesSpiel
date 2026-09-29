@@ -14,6 +14,7 @@ import { standingsPreview } from '../admin/raceday/preview';
 import {
   computedToPatch,
   inputToResultInsert,
+  linkRowsToEntries,
   resultRowToEntered,
   validateSessionInput,
   type ComputedPatch,
@@ -311,16 +312,23 @@ export interface SessionPayload {
 export async function saveResults(
   store: Store,
   roundId: Id,
-  payload: SessionPayload[],
+  input: SessionPayload[],
   staff: Actor,
   opts: { allowFinal?: boolean } = {},
 ): Promise<{ warnings: RecomputeWarning[]; round: RoundRow }> {
   const b = await loadRoundBasics(store, roundId);
   assertOpen(b);
-  if (FINAL_STATUSES.includes(b.round.status) && !opts.allowFinal) {
+  const isFinal = FINAL_STATUSES.includes(b.round.status);
+  if (isFinal && !opts.allowFinal) {
     throw new RacedayError('CONFLICT', 'Das Ergebnis ist final. Änderungen nur noch als Korrektur mit Grund.');
   }
+  // Korrektur-Ablauf nur nach „final“ – sonst würde gespeichert und erst danach die Korrektur abgelehnt
+  if (!isFinal && opts.allowFinal) {
+    throw new RacedayError('PRECONDITION_FAILED', 'Korrekturen gibt es erst nach „final“ – vorher einfach speichern.');
+  }
 
+  const roundEntries = await store.select('round_entries', { eq: { round_id: roundId } });
+  const payload = input.map((p) => ({ ...p, rows: linkRowsToEntries(p.rows, roundEntries) }));
   const allDriverIds = payload.flatMap((p) => p.rows.map((r) => r.driverId));
   const names = await driverNameMap(store, allDriverIds);
   const known = allDriverIds.length > 0 ? await store.select('drivers', { in: { id: [...new Set(allDriverIds)] } }) : [];

@@ -18,7 +18,8 @@ import { decisionEmbed } from '../admin/raceday/embeds';
 import { notFound, RacedayError } from '../admin/raceday/errors';
 import { verdictText } from '../admin/raceday/labels';
 import { selectOne, StoreError, UNIQUE_VIOLATION, type Store } from '../db/store';
-import type { DecisionRow, Id, IncidentRow, IncidentStatus, RoundRow, SeasonRow, SessionType } from '../db/types';
+import type { DecisionRow, Id, IncidentRow, IncidentStatus, ResultStatus, RoundRow, SeasonRow, SessionType } from '../db/types';
+import { RESULT_STATUSES } from '../db/types';
 import { formatDecisionRef, isConflicted, nextDecisionSequence, RESULT_AFFECTING_VERDICTS } from '../domain/decisions';
 import { roundLabel } from '../view';
 import { audit } from './audit';
@@ -56,6 +57,22 @@ async function roundAndSeason(store: Store, roundId: Id): Promise<{ round: Round
   const season = await selectOne(store, 'seasons', { id: round.season_id });
   if (!season) throw notFound('Saison');
   return { round, season };
+}
+
+/** Aktueller Status der Zeile, die eine DSQ trifft (Session der Entscheidung, sonst das Rennen). */
+async function dsqTargetStatus(store: Store, d: DecisionRow): Promise<ResultStatus | null> {
+  const sessionId = d.session_id ?? (await selectOne(store, 'sessions', { round_id: d.round_id, type: 'race' }))?.id ?? null;
+  if (sessionId == null) return null;
+  const row = await selectOne(store, 'results', { session_id: sessionId, driver_id: d.driver_id });
+  return row?.status ?? null;
+}
+
+/** Status der Ergebniszeile vor der DSQ – steht im Audit-Eintrag der Veröffentlichung. */
+async function statusBeforeDsq(store: Store, decisionId: Id): Promise<ResultStatus | null> {
+  const rows = await store.select('audit_log', { eq: { entity: 'decisions', entity_id: String(decisionId), action: 'publish' } });
+  const latest = rows.sort((a, b) => (b.at ?? '').localeCompare(a.at ?? '') || b.id - a.id)[0];
+  const value = (latest?.diff as { before?: { result_status_before?: unknown } } | null | undefined)?.before?.result_status_before;
+  return typeof value === 'string' && (RESULT_STATUSES as readonly string[]).includes(value) ? (value as ResultStatus) : null;
 }
 
 // ---------------------------------------------------------------------------- Vorfälle
@@ -121,6 +138,11 @@ export async function openInvestigation(store: Store, staff: StewardActor, input
 
 /** Entwurf anlegen oder bearbeiten. Speichern zählt als Stimme; inhaltliche Änderungen setzen andere Stimmen zurück. */
 export async function saveDecision(store: Store, staff: StewardActor, decisionId: Id | null, input: DecisionInput): Promise<DecisionRow> {
+  const existing = decisionId != null ? await loadDecision(store, decisionId) : null;
+  // Ein Entwurf bleibt bei seiner Runde und seinem Vorfall (die Referenz S2-R04-02 hängt daran)
+  if (existing && (existing.round_id !== input.roundId || (existing.incident_id ?? null) !== (input.incidentId ?? null))) {
+    throw new RacedayError('BAD_REQUEST', 'Runde und Vorfall einer Entscheidung lassen sich nicht ändern. Bitte eine neue Entscheidung anlegen.');
+  }
   const { round, season } = await roundAndSeason(store, input.roundId);
   const incident = input.incidentId != null ? await selectOne(store, 'incidents', { id: input.incidentId }) : null;
   if (input.incidentId != null && !incident) throw notFound('Vorfall');
@@ -138,8 +160,7 @@ export async function saveDecision(store: Store, staff: StewardActor, decisionId
   const fields = normalized.fields;
 
   let saved: DecisionRow;
-  if (decisionId != null) {
-    const existing = await loadDecision(store, decisionId);
+  if (decisionId != null && existing) {
     if (existing.status !== 'draft') throw new RacedayError('CONFLICT', 'Nur Entwürfe können bearbeitet werden. Veröffentlichte Entscheidungen bitte zurücknehmen.');
     assertNotConflicted(staff, await incidentOf(store, existing), existing.driver_id);
     const changed = decisionContentChanged(existing, fields);
@@ -201,7 +222,8 @@ export type DecisionEffect = 'none' | 'recomputed' | 'corrected';
 
 /**
  * Wirkung auf das Ergebnis: Neuberechnung, bei finaler Runde als Korrektur mit Grund „Urteil <ref>“.
- * Beim Zurücknehmen einer DSQ wird der Status der betroffenen Zeile wieder auf „gewertet“ gesetzt.
+ * Beim Zurücknehmen einer DSQ bekommt die betroffene Zeile ihren Status von vor dem Urteil zurück
+ * (aus dem Audit-Log der Veröffentlichung, sonst „gewertet“).
  */
 async function applyDecisionEffect(store: Store, staff: StewardActor, d: DecisionRow, mode: 'publish' | 'revoke'): Promise<DecisionEffect> {
   if (!RESULT_AFFECTING_VERDICTS.includes(d.verdict)) return 'none';
@@ -217,7 +239,8 @@ async function applyDecisionEffect(store: Store, staff: StewardActor, d: Decisio
       (x) => x.id !== d.id && (x.session_id ?? target) === target,
     );
     if (target != null && others.length === 0) {
-      await store.update('results', { session_id: target, driver_id: d.driver_id, status: 'dsq' }, { status: 'classified' });
+      const restore = (await statusBeforeDsq(store, d.id)) ?? 'classified';
+      if (restore !== 'dsq') await store.update('results', { session_id: target, driver_id: d.driver_id, status: 'dsq' }, { status: restore });
     }
   }
 
@@ -293,7 +316,17 @@ export async function publishDecision(store: Store, staff: StewardActor, decisio
   if (incident && (incident.status === 'new' || incident.status === 'in_review')) {
     await store.update('incidents', { id: incident.id }, { status: 'decided' });
   }
-  await audit(store, staff, 'publish', 'decisions', decisionId, { status: 'draft' }, { status: 'published', public_ref: d.public_ref, decided_by });
+  // Bei DSQ den bisherigen Status merken (z. B. DNF), damit Zurücknehmen ihn wiederherstellt
+  const priorStatus = decision.verdict === 'dsq' ? await dsqTargetStatus(store, decision) : null;
+  await audit(
+    store,
+    staff,
+    'publish',
+    'decisions',
+    decisionId,
+    { status: 'draft', ...(priorStatus ? { result_status_before: priorStatus } : {}) },
+    { status: 'published', public_ref: d.public_ref, decided_by },
+  );
   const effect = await applyDecisionEffect(store, staff, decision, 'publish');
   const discord = await postDecision(store, decision, false);
   await requestRebuild(store, `Urteil ${d.public_ref}`);

@@ -194,6 +194,23 @@ export function validateSessionInput(rows: readonly ResultInput[], name: (id: Id
   return issues;
 }
 
+/**
+ * Zeilen mit der Aufstellung der Runde verknüpfen: Eintrag, Team, Rolle und Startnummer kommen
+ * aus `round_entries` (Quelle der Wahrheit, nicht der Browser). Fahrer ohne Eintrag in dieser Runde
+ * behalten Team und Rolle, verlieren aber eine fremde Verknüpfung.
+ */
+export function linkRowsToEntries<R extends Pick<ResultInput, 'driverId' | 'teamId' | 'role' | 'roundEntryId' | 'raceNumber'>>(
+  rows: readonly R[],
+  entries: ReadonlyArray<{ id: Id; driver_id: Id; team_id: Id; role: EntryRole; race_number: number | null }>,
+): R[] {
+  const byDriver = new Map(entries.map((e) => [e.driver_id, e]));
+  return rows.map((r) => {
+    const e = byDriver.get(r.driverId);
+    if (!e) return { ...r, roundEntryId: null };
+    return { ...r, roundEntryId: e.id, teamId: e.team_id, role: e.role, raceNumber: e.race_number ?? r.raceNumber };
+  });
+}
+
 /** Eingabezeile → Eingabe der Punktelogik. */
 export function inputToEntered(r: ResultInput, index: number): EnteredResult {
   return {
