@@ -7,6 +7,7 @@ import NoAccess from '~/components/admin/content/NoAccess.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import { fieldErrors, submittedValues } from '~/lib/admin/content/form';
 import { loadRoundGroups, newsWebhookConfigured, type RoundGroup } from '~/lib/admin/content/loaders';
+import { reservedNewsSlugs } from '~/lib/admin/content/news';
 import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 
@@ -31,10 +32,17 @@ let webhook = false;
 let taken = { de: [] as string[], en: [] as string[] };
 if (allowed) {
   const store = getServiceStore();
-  const [groups, hook, news] = await Promise.all([loadRoundGroups(store), newsWebhookConfigured(store), store.select('news')]);
+  const [groups, hook, news, redirects] = await Promise.all([
+    loadRoundGroups(store),
+    newsWebhookConfigured(store),
+    store.select('news'),
+    store.select('slug_redirects', { eq: { entity: 'news' } }),
+  ]);
   roundGroups = groups;
   webhook = hook;
-  taken = { de: news.map((n) => n.slug_de), en: news.map((n) => n.slug_en) };
+  // Alte Adressen anderer Artikel zählen als vergeben (sie leiten per 301 weiter)
+  const reserved = reservedNewsSlugs(redirects);
+  taken = { de: [...news.map((n) => n.slug_de), ...reserved.de], en: [...news.map((n) => n.slug_en), ...reserved.en] };
 }
 ---
 

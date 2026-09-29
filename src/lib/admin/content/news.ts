@@ -30,15 +30,36 @@ export function resolveNewsSlugs(
   existing: ReadonlyArray<Pick<NewsRow, 'id' | 'slug_de' | 'slug_en'>>,
   selfId?: number | null,
   previous?: Pick<NewsRow, 'status' | 'slug_de' | 'slug_en'> | null,
+  /** Alte Adressen anderer Artikel (leiten per 301 weiter) – nicht neu vergeben, siehe reservedNewsSlugs() */
+  reserved: { de: readonly string[]; en: readonly string[] } = { de: [], en: [] },
 ): { slug_de: string; slug_en: string } {
   const others = existing.filter((n) => n.id !== selfId);
   const keep = isPublicNews(previous) ? previous : null;
   const baseDe = newsSlug(input.slugDe?.trim() || keep?.slug_de || input.titleDe);
   const baseEn = newsSlug(input.slugEn?.trim() || keep?.slug_en || input.titleEn?.trim() || input.titleDe);
   return {
-    slug_de: uniqueSlug(baseDe, others.map((n) => n.slug_de)),
-    slug_en: uniqueSlug(baseEn, others.map((n) => n.slug_en)),
+    slug_de: uniqueSlug(baseDe, [...others.map((n) => n.slug_de), ...reserved.de]),
+    slug_en: uniqueSlug(baseEn, [...others.map((n) => n.slug_en), ...reserved.en]),
   };
+}
+
+/**
+ * Alte Slugs, die per 301 auf einen ANDEREN Artikel weiterleiten (Plan §2.2 stabile URLs):
+ * Würde ein neuer Artikel so einen Slug bekommen, landeten geteilte Links auf dem falschen
+ * Artikel. Weiterleitungen auf den eigenen Artikel (`self`) sind frei – der Artikel darf zu
+ * einem früheren Slug zurückkehren (recordSlugChange räumt die Weiterleitung dann auf).
+ */
+export function reservedNewsSlugs(
+  redirects: ReadonlyArray<{ entity: string; old_slug: string; new_slug: string; lang: 'de' | 'en' | null }>,
+  self?: Pick<NewsRow, 'slug_de' | 'slug_en'> | null,
+): { de: string[]; en: string[] } {
+  const out = { de: [] as string[], en: [] as string[] };
+  for (const r of redirects) {
+    if (r.entity !== 'news' || (r.lang !== 'de' && r.lang !== 'en')) continue;
+    if (self && r.new_slug === (r.lang === 'de' ? self.slug_de : self.slug_en)) continue;
+    out[r.lang].push(r.old_slug);
+  }
+  return out;
 }
 
 export interface NewsSlugChange {

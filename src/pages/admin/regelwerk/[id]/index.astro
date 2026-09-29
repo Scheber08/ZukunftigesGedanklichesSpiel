@@ -311,7 +311,8 @@ const BADGE = { draft: 'badge-teal', published: 'badge-green', archived: 'badge-
                       Beim Veröffentlichen wird {currentPublished ? `Version ${currentPublished.version} archiviert (bleibt unter /liga/regelwerk/v/${currentPublished.version} abrufbar)` : 'die Version zur gültigen Fassung'}. Danach ist diese Version eingefroren.
                     </p>
                     <div class="flex flex-wrap gap-2">
-                      <button type="submit" class="btn btn-secondary">
+                      {/* Changelog ist erst zum Veröffentlichen Pflicht – der Entwurf speichert auch ohne (Server prüft) */}
+                      <button type="submit" class="btn btn-secondary" formnovalidate>
                         Entwurf speichern
                       </button>
                       <button type="submit" class="btn btn-primary" formaction={actions.admin.rulesVersionPublish}>

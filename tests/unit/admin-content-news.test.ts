@@ -7,6 +7,7 @@ import {
   newsSlug,
   newsSlugChanges,
   publishProblems,
+  reservedNewsSlugs,
   resolveNewsSlugs,
 } from '~/lib/admin/content/news';
 import { dateToLocalInput, localInputToDate, pick, pickChecked } from '~/lib/admin/content/form';
@@ -75,6 +76,19 @@ describe('News-Slugs', () => {
       { lang: 'de', path: '/news/alt' },
       { lang: 'en', path: '/en/news/old' },
     ]);
+  });
+
+  it('vergibt alte Adressen anderer Artikel nicht neu, die eigenen schon', () => {
+    const redirects = [
+      { entity: 'news', old_slug: 'alt', new_slug: 'neu', lang: 'de' as const },
+      { entity: 'news', old_slug: 'old', new_slug: 'new', lang: 'en' as const },
+      { entity: 'driver', old_slug: 'fahrer-alt', new_slug: 'fahrer-neu', lang: null },
+    ];
+    expect(reservedNewsSlugs(redirects)).toEqual({ de: ['alt'], en: ['old'] });
+    // Der Artikel, auf den „alt“ weiterleitet, darf zu „alt“ zurückkehren
+    expect(reservedNewsSlugs(redirects, { slug_de: 'neu', slug_en: 'other' })).toEqual({ de: [], en: ['old'] });
+    // Ein neuer Artikel „Alt“ bekommt „alt-2“, damit geteilte Links nicht auf ihm landen
+    expect(resolveNewsSlugs({ titleDe: 'Alt', titleEn: 'Old' }, [], null, null, reservedNewsSlugs(redirects))).toEqual({ slug_de: 'alt-2', slug_en: 'old-2' });
   });
 });
 

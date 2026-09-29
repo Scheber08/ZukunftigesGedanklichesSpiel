@@ -112,23 +112,25 @@ const err = (name: string) => errors[name]?.[0] ?? null;
           {!draft ? (
             <div class="grid gap-6">
               <p class="alert alert-warning">Version {version.version} ist nicht mehr änderbar. Lege auf der Versionsseite eine neue Version an.</p>
-              <div class="grid gap-6 lg:grid-cols-2">
-                <section class="card p-4 md:p-6" lang="de" aria-labelledby="h-de">
-                  <h2 id="h-de" class="mb-3 text-2xl">
-                    {section?.number} {section?.title_de}
-                  </h2>
-                  <div class="prose" set:html={renderMarkdown(section?.body_de)} />
-                </section>
-                <section class="card p-4 md:p-6" lang="en" aria-labelledby="h-en">
-                  <h2 id="h-en" class="mb-3 text-2xl">
-                    {section?.number} {section?.title_en ?? '(EN fehlt)'}
-                  </h2>
-                  <div class="prose" set:html={renderMarkdown(section?.body_en)} />
-                </section>
-              </div>
+              {section && (
+                <div class="grid gap-6 lg:grid-cols-2">
+                  <section class="card p-4 md:p-6" lang="de" aria-labelledby="h-de">
+                    <h2 id="h-de" class="mb-3 text-2xl">
+                      {section.number} {section.title_de}
+                    </h2>
+                    <div class="prose" set:html={renderMarkdown(section.body_de)} />
+                  </section>
+                  <section class="card p-4 md:p-6" lang="en" aria-labelledby="h-en">
+                    <h2 id="h-en" class="mb-3 text-2xl">
+                      {section.number} {section.title_en ?? <span lang="de">(EN fehlt)</span>}
+                    </h2>
+                    <div class="prose" set:html={renderMarkdown(section.body_en)} />
+                  </section>
+                </div>
+              )}
             </div>
           ) : (
-            <form method="POST" action={actions.admin.rulesSectionSave} class="grid gap-6" data-section-form>
+            <form method="POST" action={actions.admin.rulesSectionSave} class="grid gap-6" data-section-form data-new={isNew ? 'true' : undefined}>
               <input type="hidden" name="version_id" value={version.id} />
               {section && <input type="hidden" name="id" value={section.id} />}
 
@@ -150,7 +152,16 @@ const err = (name: string) => errors[name]?.[0] ?? null;
                       aria-invalid={err('number') ? 'true' : undefined}
                     />
                   </Field>
-                  <Field id="anchor" label="Anker" hint="Für Links wie /liga/regelwerk#p3-2 – eindeutig je Version, nach Veröffentlichung stabil halten." error={err('anchor')}>
+                  <Field
+                    id="anchor"
+                    label="Anker"
+                    hint={
+                      isNew
+                        ? 'Für Links wie /liga/regelwerk#p3-2 – eindeutig je Version, wird aus der Nummer gebildet.'
+                        : 'Für Links wie /liga/regelwerk#p3-2 – bleibt beim Umnummerieren gleich, damit geteilte Links weiter funktionieren.'
+                    }
+                    error={err('anchor')}
+                  >
                     <input
                       class="input"
                       id="anchor"
@@ -231,8 +242,10 @@ const err = (name: string) => errors[name]?.[0] ?? null;
   const number = form?.querySelector<HTMLInputElement>('[data-anchor-source]');
   const anchor = form?.querySelector<HTMLInputElement>('[data-anchor-target]');
   if (number && anchor) {
-    // Anker folgt der Nummer, solange er nicht von Hand geändert wurde
-    let auto = anchor.value === '' || anchor.value === anchorFromNumber(number.value);
+    // Anker folgt der Nummer, solange er nicht von Hand geändert wurde – nur bei neuen Abschnitten:
+    // Bestehende Anker (meist aus der gültigen Fassung kopiert) sollen beim Umnummerieren stabil bleiben,
+    // sonst zeigen geteilte Links wie /liga/regelwerk#p3-2 ins Leere.
+    let auto = form?.dataset.new === 'true' && (anchor.value === '' || anchor.value === anchorFromNumber(number.value));
     number.addEventListener('input', () => {
       if (auto) anchor.value = anchorFromNumber(number.value);
     });

@@ -18,7 +18,7 @@ import {
 } from '~/lib/db/types';
 import { localInputToDate, orNull } from '~/lib/admin/content/form';
 import { DEMO_MAX_DATA_URL_CHARS, normalizeImageValue, redactDataUrl } from '~/lib/admin/content/media';
-import { decideNewsStatus, isPublicNews, newsSlugChanges, publishProblems, resolveNewsSlugs } from '~/lib/admin/content/news';
+import { decideNewsStatus, isPublicNews, newsSlugChanges, publishProblems, reservedNewsSlugs, resolveNewsSlugs } from '~/lib/admin/content/news';
 import { moveInList, nextSort, type SortUpdate } from '~/lib/admin/content/order';
 import { exclusionHits, normalizePartnerUrl } from '~/lib/admin/content/partners';
 import {
@@ -215,12 +215,13 @@ const newsActions = {
           throw fieldError({ round_id: 'Diese Runde gibt es nicht.' });
         }
 
-        const existing = await store.select('news');
+        const [existing, redirects] = await Promise.all([store.select('news'), store.select('slug_redirects', { eq: { entity: 'news' } })]);
         const slugs = resolveNewsSlugs(
           { slugDe: input.slug_de, slugEn: input.slug_en, titleDe: input.title_de, titleEn: input.title_en },
           existing,
           before?.id ?? null,
           before,
+          reservedNewsSlugs(redirects, before),
         );
 
         const row = {
@@ -875,8 +876,8 @@ const inhalteActions = {
   pageTextsSave: defineAction({
     accept: 'form',
     input: z.object({
-      claim_de: req('Claim (DE)', 200),
-      claim_en: req('Claim (EN)', 200),
+      claim_de: req('Claim (DE)', 160),
+      claim_en: req('Claim (EN)', 160),
       registration_state: z.enum(['open', 'waitlist', 'closed'], { error: 'Bitte einen Anmeldestatus wählen.' }),
       free_seats: z.number({ error: 'Zahl angeben.' }).int('Ganze Zahl angeben.').min(0, 'Mindestens 0.').max(22, 'Höchstens 22 – das Grid hat 22 Cockpits.'),
       free_reserve: z.number({ error: 'Zahl angeben.' }).int('Ganze Zahl angeben.').min(0, 'Mindestens 0.').max(99, 'Höchstens 99.'),

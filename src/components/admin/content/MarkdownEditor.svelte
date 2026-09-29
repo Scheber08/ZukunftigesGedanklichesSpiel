@@ -145,6 +145,10 @@
         aria-invalid={error ? 'true' : undefined}
         aria-describedby={describedBy}
         onkeydown={onKeydown}
+        oninvalid={() => {
+          // Pflichtfeld leer, aber nur die Vorschau sichtbar: Textfeld wieder zeigen, damit der Browser es markieren kann
+          if (mode === 'preview') mode = 'split';
+        }}
       ></textarea>
       <p class="md-meta">
         <span>{text.length.toLocaleString('de-DE')} Zeichen{maxlength ? ` von ${maxlength.toLocaleString('de-DE')}` : ''}</span>
@@ -176,8 +180,17 @@
     justify-content: space-between;
     gap: 0.5rem;
   }
+  .md-editor {
+    min-width: 0;
+  }
+  /* Ansichtsumschalter darf ab 320 px umbrechen, statt die Karte (und die Seite) zu verbreitern */
+  .md-head :global(.segmented) {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
   .md-head :global(.segmented > button) {
     min-height: 44px;
+    padding-inline: 0.625rem;
   }
   .md-body {
     display: grid;
@@ -211,6 +224,8 @@
     font-weight: 600;
   }
   .md-textarea {
+    width: 100%;
+    min-width: 0;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.9375rem;
     line-height: 1.55;

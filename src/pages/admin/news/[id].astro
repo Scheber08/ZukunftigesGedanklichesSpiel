@@ -8,7 +8,7 @@ import NoAccess from '~/components/admin/content/NoAccess.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import { fieldErrors, flashMessage, submittedValues } from '~/lib/admin/content/form';
 import { loadRoundGroups, newsWebhookConfigured, type RoundGroup } from '~/lib/admin/content/loaders';
-import { NEWS_STATE_LABELS, newsListState, newsRedirectsFor } from '~/lib/admin/content/news';
+import { NEWS_STATE_LABELS, newsListState, newsRedirectsFor, reservedNewsSlugs } from '~/lib/admin/content/news';
 import { selectOne } from '~/lib/db/store';
 import type { NewsRow } from '~/lib/db/types';
 import { formatDateTime } from '~/lib/domain/time';
@@ -55,7 +55,9 @@ if (allowed && newsId != null) {
     roundGroups = groups;
     webhook = hook;
     const others = all.filter((n) => n.id !== newsId);
-    taken = { de: others.map((n) => n.slug_de), en: others.map((n) => n.slug_en) };
+    // Alte Adressen anderer Artikel zählen als vergeben (sie leiten per 301 weiter)
+    const reserved = reservedNewsSlugs(slugRedirects, news);
+    taken = { de: [...others.map((n) => n.slug_de), ...reserved.de], en: [...others.map((n) => n.slug_en), ...reserved.en] };
     redirects = newsRedirectsFor(news, slugRedirects);
   }
 }

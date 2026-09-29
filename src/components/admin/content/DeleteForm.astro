@@ -1,7 +1,9 @@
 ---
 /**
- * Löschen mit Rückfrage ohne JavaScript: Der eigentliche Knopf steckt in einem
- * aufklappbaren Bereich („Löschen …“ → „Ja, endgültig löschen“).
+ * Löschen mit Rückfrage ohne JavaScript: Der Knopf „Löschen“ öffnet ein natives Popover
+ * („Ja, endgültig löschen“ / „Abbrechen“). Das Popover liegt in der obersten Ebene des
+ * Browsers – es wird weder von scrollbaren Tabellen (`.table-wrap`) abgeschnitten noch
+ * ragt es auf schmalen Bildschirmen seitlich aus dem Fenster.
  */
 import Trash from '@lucide/astro/icons/trash';
 
@@ -17,49 +19,58 @@ interface Props {
   compact?: boolean;
 }
 const { action, id, label, note, extra = {}, compact = false } = Astro.props;
+// Eindeutig je Seite: Action + ID (+ Zusatzfelder, z. B. version_id)
+const uid = `del-${[action, id, ...Object.values(extra)].join('-')}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
 ---
 
-<details class="delete">
-  <summary class:list={['btn btn-ghost', compact ? 'btn-icon' : 'btn-sm']} title="Löschen">
-    <Trash size={18} aria-hidden="true" />
-    {compact ? <span class="sr-only">{label} löschen</span> : <span>Löschen</span>}
-  </summary>
-  <form method="POST" action={action} class="delete-panel card">
+<button type="button" class:list={['btn btn-ghost delete-trigger', compact ? 'btn-icon' : 'btn-sm']} popovertarget={uid} title="Löschen">
+  <Trash size={18} aria-hidden="true" />
+  {compact ? <span class="sr-only">{label} löschen</span> : <span>Löschen</span>}
+</button>
+<div id={uid} popover="auto" class="delete-pop card" role="dialog" aria-labelledby={`${uid}-q`} data-delete-pop>
+  <form method="POST" action={action} class="grid gap-3">
     <input type="hidden" name="id" value={id} />
     {Object.entries(extra).map(([k, v]) => <input type="hidden" name={k} value={v} />)}
-    <p class="text-sm">{label} wirklich löschen?</p>
+    <p class="font-semibold" id={`${uid}-q`}>{label} wirklich löschen?</p>
     {note && <p class="field-hint">{note}</p>}
-    <button type="submit" class="btn btn-danger btn-sm">Ja, endgültig löschen</button>
+    <div class="flex flex-wrap gap-2">
+      <button type="submit" class="btn btn-danger btn-sm">Ja, endgültig löschen</button>
+      <button type="button" class="btn btn-ghost btn-sm" popovertarget={uid} popovertargetaction="hide" data-delete-cancel>Abbrechen</button>
+    </div>
   </form>
-</details>
+</div>
 
 <style>
-  .delete {
-    position: relative;
-    display: inline-block;
-  }
-  .delete > summary {
-    list-style: none;
+  .delete-trigger {
     min-height: 44px;
   }
-  .delete > summary::-webkit-details-marker {
-    display: none;
-  }
-  .delete[open] > summary {
-    color: var(--color-danger);
-  }
-  .delete-panel {
-    position: absolute;
-    right: 0;
-    z-index: 20;
-    display: grid;
-    gap: 0.5rem;
-    width: min(18rem, 80vw);
-    margin-top: 0.25rem;
-    padding: 0.875rem;
+  .delete-pop {
+    /* Mittig im Fenster (Tailwinds Preflight setzt margin: 0 und hebt die Browser-Zentrierung auf) */
+    inset: 0;
+    margin: auto;
+    width: min(24rem, calc(100vw - 2rem));
+    height: fit-content;
+    max-height: calc(100dvh - 2rem);
+    padding: 1rem;
+    color: var(--color-fg);
+    /* Nicht von der Tabellenzelle erben (nowrap, rechtsbündig) */
+    white-space: normal;
+    text-align: start;
     box-shadow: 0 10px 30px rgb(0 0 0 / 0.5);
   }
-  .delete-panel .btn {
+  .delete-pop::backdrop {
+    background: rgb(0 0 0 / 0.55);
+  }
+  .delete-pop .btn {
     min-height: 44px;
   }
 </style>
+
+<script>
+  // Fokus beim Öffnen auf „Abbrechen“ (sichere Wahl); beim Schließen gibt der Browser ihn an den Auslöser zurück
+  for (const pop of document.querySelectorAll<HTMLElement>('[data-delete-pop]')) {
+    pop.addEventListener('toggle', (event) => {
+      if ((event as Event & { newState?: string }).newState === 'open') pop.querySelector<HTMLElement>('[data-delete-cancel]')?.focus();
+    });
+  }
+</script>

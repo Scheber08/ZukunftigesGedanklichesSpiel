@@ -65,10 +65,10 @@ const flash = flashMessage(Astro.url, { saved: 'Texte gespeichert – sichtbar n
             <p class="mb-4 text-sm text-muted">Der Claim steht groß im Hero-Bereich unter dem Liganamen.</p>
             <div class="grid gap-4">
               <Field id="claim_de" label="Claim (DE)" required error={err('claim_de')}>
-                <input class="input" id="claim_de" name="claim_de" required maxlength="200" lang="de" value={v.claim_de} aria-invalid={err('claim_de') ? 'true' : undefined} aria-describedby={err('claim_de') ? 'claim_de-error' : undefined} />
+                <input class="input" id="claim_de" name="claim_de" required maxlength="160" lang="de" value={v.claim_de} aria-invalid={err('claim_de') ? 'true' : undefined} aria-describedby={err('claim_de') ? 'claim_de-error' : undefined} />
               </Field>
               <Field id="claim_en" label="Claim (EN)" required error={err('claim_en')}>
-                <input class="input" id="claim_en" name="claim_en" required maxlength="200" lang="en" value={v.claim_en} aria-invalid={err('claim_en') ? 'true' : undefined} aria-describedby={err('claim_en') ? 'claim_en-error' : undefined} />
+                <input class="input" id="claim_en" name="claim_en" required maxlength="160" lang="en" value={v.claim_en} aria-invalid={err('claim_en') ? 'true' : undefined} aria-describedby={err('claim_en') ? 'claim_en-error' : undefined} />
               </Field>
             </div>
           </section>
