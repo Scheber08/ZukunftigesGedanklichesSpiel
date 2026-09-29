@@ -10,6 +10,7 @@ import DecisionCard from '~/components/stewards/DecisionCard.astro';
 import DecisionFilters from '~/components/stewards/DecisionFilters.astro';
 import { decisionItems } from '~/components/stewards/model';
 import Procedure from '~/components/stewards/Procedure.astro';
+import { catalogueLink, procedureLinks } from '~/components/stewards/rules';
 import { roundFilterValue } from '~/components/stewards/utils';
 import EmptyState from '~/components/ui/EmptyState.astro';
 import LocalTime from '~/components/ui/LocalTime.astro';
@@ -19,7 +20,7 @@ import { alternates, url, useT, type Lang } from '~/i18n';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { VERDICTS } from '~/lib/db/types';
 import { loadLeague } from '~/lib/server/league';
-import { roundLabel } from '~/lib/view';
+import { breadcrumbJsonLd, roundLabel, seasonLabel } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -30,6 +31,18 @@ const league = await loadLeague();
 const items = decisionItems(league, lang);
 const season = league.currentSeason;
 const multiSeason = new Set(items.map((i) => i.season.id)).size > 1;
+const catalogue = catalogueLink(league, lang);
+const procedure = procedureLinks(league, lang);
+
+const site = Astro.site ?? new URL(Astro.url.origin);
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('nav.stewards'), href: url(lang, 'stewards') },
+];
+const jsonLd = breadcrumbJsonLd(
+  site,
+  crumbs.map((c) => ({ name: c.label, href: c.href })),
+);
 
 // Runden mit laufender Protestfrist (zum Build-Zeitpunkt; das Skript blendet abgelaufene aus)
 const openRounds = league.data.rounds
@@ -39,12 +52,12 @@ const openRounds = league.data.rounds
 // Filter-Optionen aus den vorhandenen Entscheidungen
 const seasonOptions = league.seasons
   .filter((s) => items.some((i) => i.season.id === s.id))
-  .map((s) => ({ value: s.slug, label: t('common.seasonN', { n: s.number }) }));
+  .map((s) => ({ value: s.slug, label: seasonLabel(s, lang) }));
 const roundOptions = [...new Map(items.map((i) => [i.round.id, i])).values()]
   .sort((a, b) => b.season.number - a.season.number || a.round.number - b.round.number)
   .map((i) => ({
     value: roundFilterValue(i.season.slug, i.round.number),
-    label: multiSeason ? `${roundLabel(i.round, i.track, lang)} (${t('common.seasonN', { n: i.season.number })})` : roundLabel(i.round, i.track, lang),
+    label: multiSeason ? `${roundLabel(i.round, i.track, lang)} (${seasonLabel(i.season, lang)})` : roundLabel(i.round, i.track, lang),
     season: i.season.slug,
   }));
 const driverOptions = [...new Map(items.filter((i) => i.driver && !i.driver.anonymized).map((i) => [i.driver!.id, i.driver!])).values()]
@@ -56,16 +69,23 @@ const verdictOptions = VERDICTS.filter((v) => items.some((i) => i.decision.verdi
 }));
 ---
 
-<BaseLayout lang={lang} title={t('stewards.meta.title')} description={t('stewards.meta.description')} alternates={alternates('stewards')}>
-  <PageHeader lang={lang} title={t('stewards.title')} eyebrow={t('stewards.eyebrow')} lead={t('stewards.lead')} updated={league.lastUpdated(league.decisions)}>
+<BaseLayout lang={lang} title={t('stewards.meta.title')} description={t('stewards.meta.description')} alternates={alternates('stewards')} jsonLd={jsonLd}>
+  <PageHeader
+    lang={lang}
+    title={t('stewards.title')}
+    eyebrow={t('stewards.eyebrow')}
+    lead={t('stewards.lead')}
+    breadcrumbs={crumbs}
+    updated={league.lastUpdated(league.decisions)}
+  >
     <div class="mt-6 flex flex-wrap gap-3">
       <a href={url(lang, 'stewardsReport')} class="btn btn-primary">
         <Flag size={18} aria-hidden="true" />
         {t('stewards.reportCta')}
       </a>
-      <a href={`${url(lang, 'rules')}#p8`} class="btn btn-secondary">
+      <a href={catalogue.href} class="btn btn-secondary">
         <BookOpen size={18} aria-hidden="true" />
-        {t('stewards.catalogueLink')}
+        {catalogue.number ? t('stewards.catalogueLinkN', { n: catalogue.number }) : t('stewards.catalogueLink')}
       </a>
     </div>
   </PageHeader>
@@ -125,7 +145,7 @@ const verdictOptions = VERDICTS.filter((v) => items.some((i) => i.decision.verdi
     </section>
 
     <div class="pb-16">
-      <Procedure lang={lang} hours={season?.protest_window_hours ?? 48} />
+      <Procedure lang={lang} hours={season?.protest_window_hours ?? 48} links={procedure} />
     </div>
   </div>
 </BaseLayout>

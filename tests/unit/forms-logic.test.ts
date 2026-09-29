@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { countryOptions, isKnownCountry } from '~/lib/forms/countries';
 import { collectErrors, errorText, fieldForCode, translateFieldErrors } from '~/lib/forms/errors';
-import { checkParticipants, isProtestOpen, isValidClipTimestamp, normalizeClipTimestamp, openProtestRounds } from '~/lib/forms/incident';
+import { checkParticipants, isProtestOpen, isValidClipTimestamp, mergeGrid, normalizeClipTimestamp, openProtestRounds } from '~/lib/forms/incident';
 import { discordKey, findRegistrationDuplicate, isValidDiscordName, normalizeDiscordName } from '~/lib/forms/registration';
 import { positiveInt } from '~/lib/forms/values';
 
@@ -133,5 +133,31 @@ describe('Fehlertexte', () => {
     expect(positiveInt('0')).toBeNull();
     expect(positiveInt('1e3')).toBeNull();
     expect(positiveInt(null)).toBeNull();
+  });
+});
+
+describe('Grid einer Runde', () => {
+  it('nimmt die Aufstellung und ergänzt Fahrer, die nur in den Ergebnissen stehen', () => {
+    const grid = mergeGrid(
+      [
+        { driver_id: 1, race_number: 4, team_id: 10, role: 'regular' },
+        { driver_id: 2, race_number: null, team_id: 10, role: 'reserve' },
+      ],
+      [
+        { driver_id: 1, race_number: 4, team_id: 10, role: 'regular' },
+        { driver_id: 2, race_number: 31, team_id: 10, role: 'reserve' },
+        { driver_id: 3, race_number: 7, team_id: 11, role: 'reserve' },
+        { driver_id: 3, race_number: 7, team_id: 11, role: 'reserve' },
+      ],
+    );
+    expect(grid).toEqual([
+      { driverId: 1, number: 4, teamId: 10, reserve: false },
+      { driverId: 2, number: 31, teamId: 10, reserve: true },
+      { driverId: 3, number: 7, teamId: 11, reserve: true },
+    ]);
+  });
+
+  it('ist leer ohne Aufstellung und Ergebnisse', () => {
+    expect(mergeGrid([], [])).toEqual([]);
   });
 });

@@ -9,10 +9,9 @@ import Video from '@lucide/astro/icons/video';
 import DriverLink from '~/components/ui/DriverLink.astro';
 import { url, useT, type Lang } from '~/i18n';
 import { formatDate } from '~/lib/domain/time';
-import { markdownToText } from '~/lib/util/markdown';
-import { roundLabel } from '~/lib/view';
+import { roundLabel, seasonLabel } from '~/lib/view';
 import type { DecisionItem } from './model';
-import { penaltyOf, ruleAnchor } from './utils';
+import { penaltyOf, plainExcerpt } from './utils';
 import VerdictBadge from './VerdictBadge.astro';
 
 interface Props {
@@ -23,12 +22,11 @@ interface Props {
 }
 const { lang, item, showSeason = true } = Astro.props;
 const t = useT(lang);
-const { decision: d, round, track, season, sessionType, driver, team, number } = item;
+const { decision: d, round, track, season, sessionType, driver, team, number, rule } = item;
 const penalty = penaltyOf(d);
 const detailHref = url(lang, 'decision', { ref: d.public_ref });
 const raceHref = url(lang, 'race', { season: season.slug, round: round.number });
-const anchor = ruleAnchor(d.rule_ref);
-const excerpt = markdownToText(item.reasoning.text, 220);
+const excerpt = plainExcerpt(item.reasoning.text, 220);
 const headingId = `d-${d.public_ref.toLowerCase()}`;
 ---
 
@@ -59,7 +57,7 @@ const headingId = `d-${d.public_ref.toLowerCase()}`;
         <>
           <span aria-hidden="true"> · </span>
           <span class="sr-only">, </span>
-          {t('common.seasonN', { n: season.number })}
+          {seasonLabel(season, lang)}
         </>
       )
     }
@@ -73,7 +71,13 @@ const headingId = `d-${d.public_ref.toLowerCase()}`;
     </p>
   </div>
 
-  {excerpt && <p class="mt-3 text-sm text-muted">{excerpt}</p>}
+  {
+    excerpt && (
+      <p class="mt-3 text-sm text-muted" lang={item.reasoning.fallback ? 'de' : undefined}>
+        {excerpt}
+      </p>
+    )
+  }
 
   <ul class="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
     <li>
@@ -98,9 +102,9 @@ const headingId = `d-${d.public_ref.toLowerCase()}`;
       )
     }
     {
-      d.rule_ref && anchor && (
+      d.rule_ref && rule && (
         <li>
-          <a href={`${url(lang, 'rules')}#${anchor}`} class="link-action">
+          <a href={rule.href} class="link-action">
             <BookOpen size={16} aria-hidden="true" />
             <span class="sr-only">{t('stewards.field.rule')}: </span>
             {d.rule_ref}

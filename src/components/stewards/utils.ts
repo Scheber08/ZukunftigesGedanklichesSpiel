@@ -53,6 +53,32 @@ export const VERDICT_VARIANT: Record<Verdict, BadgeVariant> = {
   race_ban: 'danger',
 };
 
+/**
+ * Kurzbegründung als Klartext fürs Register: Markdown-Auszeichnung entfernen, aber Zeichen
+ * innerhalb von Wörtern erhalten – Gamertags wie „Oversteer_Olli“, „V-02“ oder „Car #10“.
+ */
+export function plainExcerpt(source: string | null | undefined, maxLength = 200): string {
+  if (!source) return '';
+  const text = source
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^\s*\|?[\s:|-]*-{3,}[\s:|-]*$/gm, ' ')
+    .replace(/^\s*(?:\*\s*){3,}$/gm, ' ')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s{0,3}>\s?/gm, '')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/gm, '')
+    .replace(/\|/g, ' ')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, '$2')
+    .replace(/(^|[^\w*])\*(?=\S)([^*\n]*?\S)\*(?![\w*])/g, '$1$2')
+    .replace(/(^|[^\w_])_(?=\S)([^_\n]*?\S)_(?![\w_])/g, '$1$2')
+    .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1).trimEnd()}…` : text;
+}
+
 // ---------------------------------------------------------------------------- Filter
 
 /** Filter-Status (leer = alle). Werte: Saison-Slug, „<saison>-<runde>“, Fahrer-Slug, Verdikt. */

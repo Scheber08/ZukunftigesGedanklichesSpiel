@@ -8,7 +8,7 @@ import BookOpen from '@lucide/astro/icons/book-open';
 import Flag from '@lucide/astro/icons/flag';
 import Video from '@lucide/astro/icons/video';
 import { decisionItem, decisionItems } from '~/components/stewards/model';
-import { penaltyOf, ruleAnchor } from '~/components/stewards/utils';
+import { penaltyOf } from '~/components/stewards/utils';
 import VerdictBadge from '~/components/stewards/VerdictBadge.astro';
 import DriverLink from '~/components/ui/DriverLink.astro';
 import Markdown from '~/components/ui/Markdown.astro';
@@ -21,7 +21,7 @@ import { alternates, url, useT, type Lang } from '~/i18n';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { formatDate, formatDateLong } from '~/lib/domain/time';
 import { loadLeague } from '~/lib/server/league';
-import { breadcrumbJsonLd, roundLabel } from '~/lib/view';
+import { breadcrumbJsonLd, roundLabel, seasonLabel } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -37,13 +37,11 @@ if (!decision || !item) {
   throw new Error(`Entscheidung ${ref} nicht gefunden`);
 }
 
-const { round, track, season, sessionType, driver, team, number, reasoning } = item;
+const { round, track, season, sessionType, driver, team, number, reasoning, rule } = item;
 const driverName = league.driverName(decision.driver_id, lang);
 const label = roundLabel(round, track, lang);
 const verdictText = t(`stewards.verdict.${decision.verdict}`);
 const penalty = penaltyOf(decision);
-const anchor = ruleAnchor(decision.rule_ref);
-const rulesHref = `${url(lang, 'rules')}${anchor ? `#${anchor}` : ''}`;
 const raceHref = url(lang, 'race', { season: season.slug, round: round.number });
 const registerHref = url(lang, 'stewards');
 const selfHref = url(lang, 'decision', { ref: decision.public_ref });
@@ -129,7 +127,7 @@ const jsonLd = breadcrumbJsonLd(site, [
           <dt>{t('stewards.field.round')}</dt>
           <dd>
             <a href={raceHref} class="underline hover:text-teal">{label}</a>
-            <span class="text-muted"> · {t('common.seasonN', { n: season.number })}</span>
+            <span class="text-muted"> · {seasonLabel(season, lang)}</span>
           </dd>
         </div>
         <div>
@@ -147,17 +145,17 @@ const jsonLd = breadcrumbJsonLd(site, [
         {
           decision.penalty_points != null && season.penalty_points_enabled && (
             <div>
-              <dt>{t('stewards.field.penalty')}</dt>
+              <dt>{t('stewards.field.penaltyPoints')}</dt>
               <dd>{t('stewards.penalty.points', { n: decision.penalty_points })}</dd>
             </div>
           )
         }
         {
-          decision.rule_ref && (
+          decision.rule_ref && rule && (
             <div>
               <dt>{t('stewards.field.rule')}</dt>
               <dd>
-                <a href={rulesHref} class="inline-flex items-center gap-1.5 underline hover:text-teal">
+                <a href={rule.href} class="inline-flex items-center gap-1.5 underline hover:text-teal">
                   <BookOpen size={16} aria-hidden="true" />
                   {t('stewards.decision.ruleLink', { rule: decision.rule_ref })}
                 </a>

@@ -34,6 +34,7 @@ import { LIMITS } from '~/lib/forms/schemas';
 import { posted, postedChecked, postedForm } from '~/lib/forms/values';
 import { REQUIREMENTS } from '~/lib/seed/content/guide';
 import { loadPublicSettings } from '~/lib/server/league';
+import { breadcrumbJsonLd } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -69,13 +70,22 @@ const labels = {
   rules: `${t('forms.join.rules.rulesLink')} / ${t('forms.join.rules.termsLink')}`,
 };
 
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('forms.join.title'), href: url(lang, 'join') },
+];
+const jsonLd = breadcrumbJsonLd(
+  Astro.site ?? new URL(Astro.url.origin),
+  crumbs.map((c) => ({ name: c.label, href: c.href })),
+);
+
 const statusVariant = reg.state === 'open' ? 'green' : reg.state === 'waitlist' ? 'warning' : 'danger';
 const REQUIREMENT_ICONS = { game: Gamepad2, crossplay: Shuffle, ea_id: IdCard, discord: MessageCircle, age: Cake, input: Joystick } as const;
 const steps = [1, 2, 3, 4] as const;
 ---
 
-<BaseLayout lang={lang} title={t('forms.join.metaTitle')} description={t('forms.join.metaDescription')} alternates={alternates('join')}>
-  <PageHeader lang={lang} title={t('forms.join.title')} eyebrow={t('forms.join.eyebrow')} lead={t('forms.join.lead')}>
+<BaseLayout lang={lang} title={t('forms.join.metaTitle')} description={t('forms.join.metaDescription')} alternates={alternates('join')} jsonLd={jsonLd}>
+  <PageHeader lang={lang} title={t('forms.join.title')} eyebrow={t('forms.join.eyebrow')} lead={t('forms.join.lead')} breadcrumbs={crumbs}>
     {
       !success && open && (
         <a href="#anmeldung" class="btn btn-primary mt-6">

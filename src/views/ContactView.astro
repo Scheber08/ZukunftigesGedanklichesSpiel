@@ -19,6 +19,7 @@ import { collectErrors } from '~/lib/forms/errors';
 import { LIMITS } from '~/lib/forms/schemas';
 import { posted, postedForm } from '~/lib/forms/values';
 import { loadPublicSettings } from '~/lib/server/league';
+import { breadcrumbJsonLd } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -33,6 +34,15 @@ const success = result && !result.error ? result.data : null;
 const form = result?.error ? await postedForm(Astro.request) : null;
 const { fields: errors, form: formError } = collectErrors(lang, result?.error, isInputError(result?.error));
 
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('forms.contact.title'), href: url(lang, 'contact') },
+];
+const jsonLd = breadcrumbJsonLd(
+  Astro.site ?? new URL(Astro.url.origin),
+  crumbs.map((c) => ({ name: c.label, href: c.href })),
+);
+
 const labels = {
   name: t('forms.contact.name'),
   email: t('forms.contact.email'),
@@ -41,8 +51,8 @@ const labels = {
 };
 ---
 
-<BaseLayout lang={lang} title={t('forms.contact.metaTitle')} description={t('forms.contact.metaDescription')} alternates={alternates('contact')}>
-  <PageHeader lang={lang} title={t('forms.contact.title')} eyebrow={t('forms.contact.eyebrow')} lead={t('forms.contact.lead')} />
+<BaseLayout lang={lang} title={t('forms.contact.metaTitle')} description={t('forms.contact.metaDescription')} alternates={alternates('contact')} jsonLd={jsonLd}>
+  <PageHeader lang={lang} title={t('forms.contact.title')} eyebrow={t('forms.contact.eyebrow')} lead={t('forms.contact.lead')} breadcrumbs={crumbs} />
 
   <div class="container-page section grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
     <section aria-labelledby="contact-form-title" class="min-w-0">

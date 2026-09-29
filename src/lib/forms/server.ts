@@ -4,7 +4,7 @@
  */
 import type { Store } from '../db/store';
 import type { DriverRow, Id, RoundRow, SessionRow, SessionType, TrackRow } from '../db/types';
-import { openProtestRounds } from './incident';
+import { mergeGrid, openProtestRounds } from './incident';
 
 export interface OpenRound {
   round: RoundRow;
@@ -45,23 +45,24 @@ export interface GridDriver {
   reserve: boolean;
 }
 
-/** Grid einer Runde (round_entries) mit Gamertags, alphabetisch. */
+/**
+ * Grid einer Runde mit Gamertags, alphabetisch: die Aufstellung (round_entries) plus alle
+ * Fahrer mit Ergebnis in einer Session der Runde (falls die Aufstellung unvollständig ist).
+ */
 export async function loadRoundGrid(store: Store, roundId: Id): Promise<GridDriver[]> {
-  const entries = await store.select('round_entries', { eq: { round_id: roundId } });
-  if (entries.length === 0) return [];
-  const drivers = await store.select('drivers', { in: { id: [...new Set(entries.map((e) => e.driver_id))] } });
+  const [entries, sessions] = await Promise.all([
+    store.select('round_entries', { eq: { round_id: roundId } }),
+    store.select('sessions', { eq: { round_id: roundId } }),
+  ]);
+  const results = sessions.length > 0 ? await store.select('results', { in: { session_id: sessions.map((s) => s.id) } }) : [];
+  const grid = mergeGrid(entries, results);
+  if (grid.length === 0) return [];
+  const drivers = await store.select('drivers', { in: { id: grid.map((g) => g.driverId) } });
   const byId = new Map<Id, DriverRow>(drivers.map((d) => [d.id, d]));
-  return entries
-    .map((e) => {
-      const d = byId.get(e.driver_id);
-      return {
-        driverId: e.driver_id,
-        gamertag: d?.gamertag ?? `#${e.driver_id}`,
-        anonymized: d?.anonymized ?? false,
-        number: e.race_number,
-        teamId: e.team_id,
-        reserve: e.role === 'reserve',
-      };
+  return grid
+    .map((g) => {
+      const d = byId.get(g.driverId);
+      return { ...g, gamertag: d?.gamertag ?? `#${g.driverId}`, anonymized: d?.anonymized ?? false };
     })
     .sort((a, b) => a.gamertag.localeCompare(b.gamertag, 'de', { sensitivity: 'base' }));
 }

@@ -3,6 +3,7 @@
  */
 import type { DecisionRow, DriverRow, RoundRow, SeasonRow, SessionType, TeamRow, TrackRow } from '~/lib/db/types';
 import { localized, type Lang, type League, type Localized } from '~/lib/league/league';
+import { decisionRuleLink, type RuleLink } from './rules';
 
 export interface DecisionItem {
   decision: DecisionRow;
@@ -16,6 +17,8 @@ export interface DecisionItem {
   /** Startnummer in dieser Runde */
   number: number | null;
   reasoning: Localized;
+  /** Link zur Regel (Fassung der Saison); null ohne Regel-Referenz */
+  rule: RuleLink | null;
 }
 
 export function decisionItem(league: League, decision: DecisionRow, lang: Lang): DecisionItem | null {
@@ -35,6 +38,7 @@ export function decisionItem(league: League, decision: DecisionRow, lang: Lang):
     team: teamId != null ? league.team(teamId) : undefined,
     number: entry?.race_number ?? league.numberAt(decision.driver_id, new Date(round.start_utc)),
     reasoning: localized(decision, 'reasoning', lang),
+    rule: decisionRuleLink(league, lang, season, decision.rule_ref),
   };
 }
 

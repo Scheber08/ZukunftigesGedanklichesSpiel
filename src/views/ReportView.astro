@@ -26,7 +26,7 @@ import { LIMITS } from '~/lib/forms/schemas';
 import { loadOpenRounds, loadRoundGrid, loadRoundSessions, type GridDriver } from '~/lib/forms/server';
 import { positiveInt, posted, postedAll, postedForm } from '~/lib/forms/values';
 import { getPublicStore } from '~/lib/server/db';
-import { roundLabel } from '~/lib/view';
+import { breadcrumbJsonLd, roundLabel } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -44,9 +44,13 @@ const success = result && !result.error ? result.data : null;
 const form = result?.error ? await postedForm(Astro.request) : null;
 const { fields: errors, form: formError } = collectErrors(lang, result?.error, isInputError(result?.error));
 
-// Gewählte Runde: aus dem abgeschickten Formular, aus ?round= oder die einzige offene
-const requested = positiveInt(posted(form, 'round_id') ?? Astro.url.searchParams.get('round'));
-const selected = openRounds.find((o) => o.round.id === requested) ?? (openRounds.length === 1 ? openRounds[0] : undefined);
+// Gewählte Runde: aus dem abgeschickten Formular, aus ?round= oder die einzige offene.
+// Ist die abgeschickte Runde inzwischen zu, wird nicht stillschweigend eine andere gewählt.
+const postedRound = positiveInt(posted(form, 'round_id'));
+const requested = postedRound ?? positiveInt(Astro.url.searchParams.get('round'));
+const selected =
+  openRounds.find((o) => o.round.id === requested) ?? (postedRound == null && openRounds.length === 1 ? openRounds[0] : undefined);
+const postedDescription = selected ? null : posted(form, 'description');
 const [sessions, grid] = selected
   ? await Promise.all([loadRoundSessions(store, selected.round.id), loadRoundGrid(store, selected.round.id)])
   : [[], [] as GridDriver[]];
@@ -60,6 +64,16 @@ if (success) {
 
 const driverName = (g: GridDriver) => (g.anonymized ? `${t('common.formerDriver')} #${g.driverId}` : g.gamertag);
 const defaultSession = sessions.find((s) => s.type === 'race')?.id ?? sessions[0]?.id;
+
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('nav.stewards'), href: url(lang, 'stewards') },
+  { label: t('stewards.report.title'), href: reportUrl },
+];
+const jsonLd = breadcrumbJsonLd(
+  Astro.site ?? new URL(Astro.url.origin),
+  crumbs.map((c) => ({ name: c.label, href: c.href })),
+);
 
 const labels = {
   round_id: t('stewards.report.round'),
@@ -75,17 +89,13 @@ const labels = {
 };
 ---
 
-<BaseLayout lang={lang} title={t('stewards.report.metaTitle')} description={t('stewards.report.metaDescription')} alternates={alternates('stewardsReport')}>
+<BaseLayout lang={lang} title={t('stewards.report.metaTitle')} description={t('stewards.report.metaDescription')} alternates={alternates('stewardsReport')} jsonLd={jsonLd}>
   <PageHeader
     lang={lang}
     title={t('stewards.report.title')}
     eyebrow={t('stewards.report.eyebrow')}
     lead={t('stewards.report.lead')}
-    breadcrumbs={[
-      { label: t('nav.home'), href: url(lang, 'home') },
-      { label: t('nav.stewards'), href: url(lang, 'stewards') },
-      { label: t('stewards.report.title') },
-    ]}
+    breadcrumbs={crumbs}
   />
 
   <div class="container-page section grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
@@ -127,7 +137,18 @@ const labels = {
             <h2 id="report-title" class="text-xl uppercase">
               {t('stewards.report.closed.title')}
             </h2>
+            {formError && (
+              <p class="mt-2 font-semibold" role="alert">
+                {formError}
+              </p>
+            )}
             <p class="mt-2">{t('stewards.report.closed.text')}</p>
+            {postedDescription && (
+              <details class="accordion mt-4">
+                <summary>{t('stewards.report.closed.yourText')}</summary>
+                <p class="whitespace-pre-line break-words pb-4 text-sm">{postedDescription}</p>
+              </details>
+            )}
             <div class="mt-4 flex flex-wrap gap-3">
               <a href={url(lang, 'contact')} class="btn btn-secondary btn-sm">
                 {t('stewards.report.closed.contact')}
@@ -142,6 +163,13 @@ const labels = {
             <h2 id="report-title" class="sr-only">
               {t('stewards.report.formTitle')}
             </h2>
+            <ErrorSummary lang={lang} errors={{}} labels={labels} formError={formError ?? (errors.round_id ? errors.round_id : null)} />
+            {postedDescription && (
+              <details class="accordion">
+                <summary>{t('stewards.report.closed.yourText')}</summary>
+                <p class="whitespace-pre-line break-words pb-4 text-sm">{postedDescription}</p>
+              </details>
+            )}
             <ChoiceGroup
               lang={lang}
               name="round"

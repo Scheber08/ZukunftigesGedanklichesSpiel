@@ -2,7 +2,7 @@
  * Vorfall melden (Plan §4.6): Protestfrist, Zeitstempel im Clip, Beteiligte.
  * Reine Funktionen ohne I/O – Seite und Action nutzen dieselbe Logik.
  */
-import type { Id, RoundRow } from '../db/types';
+import type { Id, ResultRow, RoundEntryRow, RoundRow } from '../db/types';
 
 /** Offene Protestfrist: Ergebnis vorläufig und Frist in der Zukunft (wie League.protestOpen). */
 export function isProtestOpen(round: Pick<RoundRow, 'status' | 'protest_deadline'>, now: Date): boolean {
@@ -54,4 +54,31 @@ export function checkParticipants(gridDriverIds: Iterable<Id>, reporterId: Id, i
 /** Beteiligte ohne Duplikate, Reihenfolge wie ausgewählt. */
 export function uniqueIds(ids: readonly Id[]): Id[] {
   return [...new Set(ids)];
+}
+
+export interface GridSlot {
+  driverId: Id;
+  number: number | null;
+  teamId: Id;
+  reserve: boolean;
+}
+
+/**
+ * Wer stand in der Runde am Start? Die Aufstellung, ergänzt um Fahrer, die nur in den
+ * Ergebnissen stehen (z. B. kurzfristiger Ersatz ohne gepflegte Aufstellung). Je Fahrer ein Eintrag.
+ */
+export function mergeGrid(
+  entries: ReadonlyArray<Pick<RoundEntryRow, 'driver_id' | 'race_number' | 'team_id' | 'role'>>,
+  results: ReadonlyArray<Pick<ResultRow, 'driver_id' | 'race_number' | 'team_id' | 'role'>>,
+): GridSlot[] {
+  const out = new Map<Id, GridSlot>();
+  for (const e of entries) {
+    if (!out.has(e.driver_id)) out.set(e.driver_id, { driverId: e.driver_id, number: e.race_number, teamId: e.team_id, reserve: e.role === 'reserve' });
+  }
+  for (const r of results) {
+    const known = out.get(r.driver_id);
+    if (!known) out.set(r.driver_id, { driverId: r.driver_id, number: r.race_number, teamId: r.team_id, reserve: r.role === 'reserve' });
+    else if (known.number == null && r.race_number != null) known.number = r.race_number;
+  }
+  return [...out.values()];
 }

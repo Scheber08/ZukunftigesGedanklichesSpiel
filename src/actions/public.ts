@@ -14,6 +14,7 @@ import { insertOne } from '~/lib/db/store';
 import { isNumberAvailable, MIN_PUBLIC_NUMBER } from '~/lib/domain/numbers';
 import { contactSchema, incidentSchema, registrationSchema } from '~/lib/forms/schemas';
 import { findRegistrationDuplicate } from '~/lib/forms/registration';
+import { contactEmbed, incidentEmbed, registrationEmbed } from '~/lib/forms/discord';
 import { checkParticipants, isProtestOpen, uniqueIds } from '~/lib/forms/incident';
 import { currentRulesVersion, loadRoundGrid, loadRoundSessions } from '~/lib/forms/server';
 import { getServiceStore } from '~/lib/server/db';
@@ -118,7 +119,6 @@ const reportIncident = defineAction({
 
       // Discord #stewards-intern: Runde, Beteiligte, Clip, Link in den Admin-Bereich (Plan §8.1)
       const [track] = await store.select('tracks', { eq: { id: round.track_id }, limit: 1 });
-      const label = roundLabel(round, track, 'de');
       const nameOf = (id: number) => {
         const g = grid.find((x) => x.driverId === id);
         if (!g) return `#${id}`;
@@ -126,23 +126,17 @@ const reportIncident = defineAction({
         return g.number != null ? `#${g.number} ${name}` : name;
       };
       const adminUrl = siteUrl(`/admin/stewards/${incident.id}`, context.url.origin);
-      await notify(store, 'incidents', {
-        title: t('de', 'forms.discord.incident.title', { round: label }),
-        url: adminUrl,
-        color: EMBED_WARNING,
-        fields: [
-          { name: t('de', 'forms.discord.incident.session'), value: t('de', `session.${session.type}`), inline: true },
-          {
-            name: t('de', 'forms.discord.incident.where'),
-            value: [input.lap != null ? `Lap ${input.lap}` : null, input.corner].filter(Boolean).join(' · '),
-            inline: true,
-          },
-          { name: t('de', 'forms.discord.incident.involved'), value: involved.map(nameOf).join(', ') },
-          { name: t('de', 'forms.discord.incident.clip'), value: `${input.clip_url} (${input.clip_timestamp})` },
-          { name: t('de', 'forms.discord.incident.link'), value: adminUrl },
-        ],
-        timestamp: incident.submitted_at,
+      const embed = incidentEmbed({
+        round: roundLabel(round, track, 'de'),
+        session: session.type,
+        lap: input.lap ?? null,
+        corner: input.corner,
+        involved: involved.map(nameOf),
+        clipUrl: input.clip_url,
+        clipTimestamp: input.clip_timestamp,
+        adminUrl,
       });
+      await notify(store, 'incidents', { ...embed, color: EMBED_WARNING, timestamp: incident.submitted_at });
 
       return { id: incident.id, roundId: round.id, roundNumber: round.number, trackId: round.track_id };
     } catch (err) {
@@ -201,18 +195,8 @@ const registerDriver = defineAction({
       });
 
       // Discord #anmeldungen: nur Gamertag, Plattform, Wunschnummer und Link – kein Discord-Name (Plan §4.9)
-      const adminUrl = siteUrl('/admin/anmeldungen', context.url.origin);
-      await notify(store, 'registrations', {
-        title: t('de', 'forms.discord.registration.title', { gamertag: registration.gamertag }),
-        url: adminUrl,
-        color: EMBED_GREEN,
-        fields: [
-          { name: t('de', 'forms.discord.registration.platform'), value: t('de', `platform.long.${registration.platform}`), inline: true },
-          { name: t('de', 'forms.discord.registration.number'), value: String(registration.desired_number), inline: true },
-          { name: t('de', 'forms.discord.registration.link'), value: adminUrl },
-        ],
-        timestamp: now,
-      });
+      const adminUrl = siteUrl(`/admin/anmeldungen/${registration.id}`, context.url.origin);
+      await notify(store, 'registrations', { ...registrationEmbed(registration, adminUrl), color: EMBED_GREEN, timestamp: now });
 
       return { id: registration.id, gamertag: registration.gamertag, waitlist: settings.registration.state === 'waitlist' };
     } catch (err) {
@@ -240,17 +224,8 @@ const sendContact = defineAction({
       });
 
       // Discord: nur Betreff und Link – keine E-Mail-Adresse im Klartext
-      const adminUrl = siteUrl('/admin/kontakt', context.url.origin);
-      await notify(store, 'contact', {
-        title: t('de', 'forms.discord.contact.title'),
-        url: adminUrl,
-        color: EMBED_TEAL,
-        fields: [
-          { name: t('de', 'forms.discord.contact.subject'), value: message.subject },
-          { name: t('de', 'forms.discord.contact.link'), value: adminUrl },
-        ],
-        timestamp: message.created_at,
-      });
+      const adminUrl = siteUrl(`/admin/kontakt/${message.id}`, context.url.origin);
+      await notify(store, 'contact', { ...contactEmbed(message, adminUrl), color: EMBED_TEAL, timestamp: message.created_at });
 
       return { id: message.id };
     } catch (err) {
