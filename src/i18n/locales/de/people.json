@@ -8,7 +8,6 @@
   "people.role.regular": "Stammfahrer",
   "people.role.reserve": "Reservefahrer",
   "people.role.former": "Ehemaliger Fahrer",
-
   "people.drivers.title": "Fahrer",
   "people.drivers.metaDescription": "Alle Fahrer der {season}: Stammfahrer nach Team, Reservepool in Wartelisten-Reihenfolge und ehemalige Fahrer – mit Startnummer, Flagge und Plattform.",
   "people.drivers.lead": "Stammfahrer nach Team, der Reservepool in Wartelisten-Reihenfolge und alle, die schon bei uns gefahren sind.",
@@ -32,7 +31,6 @@
   "people.drivers.joinTitle": "Du willst mitfahren?",
   "people.drivers.joinText": "Melde dich für ein Cockpit oder den Reservepool an – ganz ohne Login.",
   "people.drivers.joinLink": "Zur Anmeldung",
-
   "people.driver.metaDescription": "Profil von {name} ({role}): Kennzahlen, Ergebnisse, Teamkollegen-Duell, Nummern-Historie und Strafenregister.",
   "people.driver.facts": "Steckbrief",
   "people.driver.number": "Startnummer",
@@ -40,13 +38,13 @@
   "people.driver.country": "Land",
   "people.driver.team": "Aktuelles Team",
   "people.driver.noTeam": "kein festes Cockpit",
+  "people.driver.lastTeam": "Letztes Team",
   "people.driver.role": "Rolle",
   "people.driver.since": "Dabei seit",
   "people.driver.links": "Kanäle",
   "people.driver.twitch": "Twitch-Kanal von {name}",
   "people.driver.youtube": "YouTube-Kanal von {name}",
   "people.driver.notFound": "Diesen Fahrer gibt es nicht (mehr).",
-
   "people.stats.title": "Kennzahlen",
   "people.stats.scope": "Zeitraum der Kennzahlen",
   "people.stats.career": "Karriere",
@@ -72,14 +70,12 @@
   "people.stats.asTable": "Kennzahlen als Tabelle",
   "people.stats.tableCaption": "Kennzahlen: Karriere und aktuelle Saison",
   "people.stats.metric": "Kennzahl",
-
   "people.chart.title": "Punkteverlauf {season}",
   "people.chart.description": "Liniendiagramm: kumulierte Punkte von {name} nach jeder gewerteten Runde.",
   "people.chart.roundPoints": "Punkte der Runde",
   "people.chart.total": "Gesamt",
   "people.chart.position": "WM-Position",
   "people.chart.none": "In dieser Saison gibt es noch keine gewertete Runde.",
-
   "people.duel.title": "Teamkollegen-Duell",
   "people.duel.teamTitle": "Internes Duell",
   "people.duel.lead": "Nur Runden, in denen beide für {team} gefahren sind.",
@@ -90,7 +86,6 @@
   "people.duel.caption": "Duell {a} gegen {b}, Runde für Runde",
   "people.duel.versus": "gegen",
   "people.duel.score": "{a}: {x}, {b}: {y}",
-
   "people.results.title": "Ergebnisse",
   "people.results.caption": "Ergebnisse {season}",
   "people.results.none": "Noch keine veröffentlichten Ergebnisse.",
@@ -99,7 +94,6 @@
   "people.results.grid": "Start",
   "people.results.marks": "Extras",
   "people.results.seasonPoints": "{n} Punkte",
-
   "people.numbers.title": "Nummern-Historie",
   "people.numbers.caption": "Startnummern von {name}",
   "people.numbers.number": "Nummer",
@@ -111,7 +105,6 @@
   "people.numbers.state.past": "früher",
   "people.numbers.none": "Noch keine Startnummer vergeben.",
   "people.numbers.note": "Jeder Fahrer behält seine Nummer. Ein Wechsel geht nur mit Admin-OK und gilt ab dem nächsten Rennen.",
-
   "people.reserve.title": "Einsätze als Ersatz",
   "people.reserve.caption": "Einsätze von {name} als Ersatzfahrer",
   "people.reserve.for": "Eingesprungen für",
@@ -121,7 +114,6 @@
   "people.reserve.teamNone": "Bisher musste niemand für {team} einspringen.",
   "people.reserve.driver": "Reservefahrer",
   "people.reserve.replaced": "Ersetzt",
-
   "people.penalties.title": "Strafenregister",
   "people.penalties.caption": "Veröffentlichte Steward-Entscheidungen zu {name}",
   "people.penalties.ref": "Referenz",
@@ -129,6 +121,7 @@
   "people.penalties.none": "Keine veröffentlichten Steward-Entscheidungen.",
   "people.penalties.pointsSoon": "Ein Strafpunkte-Konto ist vorbereitet und erscheint hier, sobald die Liga Strafpunkte einführt.",
   "people.penalties.pointsTotal": "Strafpunkte {season}",
+  "people.penalties.pointsColumn": "Strafpunkte",
   "people.penalties.all": "Zum Steward-Register",
   "people.penalties.seconds": "+{n} s",
   "people.penalties.positions": "{n} Plätze",
@@ -140,7 +133,6 @@
   "people.verdict.grid_penalty_next": "Grid-Strafe (nächstes Rennen)",
   "people.verdict.dsq": "Disqualifikation",
   "people.verdict.race_ban": "Rennsperre",
-
   "people.teams.title": "Teams",
   "people.teams.metaDescription": "Die {n} Teams der {season} mit Fahrern, Punkten und Position in der Konstrukteurswertung.",
   "people.teams.lead": "Echte Teams, ein Grid: je zwei Stammfahrer pro Team, dazu die Konstrukteurswertung.",
@@ -151,7 +143,6 @@
   "people.teams.none": "Für diese Saison sind noch keine Teams eingetragen.",
   "people.teams.reserveNote": "Punkte von Reservefahrern zählen in der {season} für die Konstrukteurswertung.",
   "people.teams.reserveNoteNot": "Punkte von Reservefahrern zählen in der {season} nicht für die Konstrukteurswertung.",
-
   "people.team.eyebrow": "Team",
   "people.team.metaDescription": "{team} in der Liga: aktuelle Fahrer, Punkte, Punkteverlauf, internes Duell und Saisonbilanzen.",
   "people.team.currentDrivers": "Aktuelle Fahrer",
@@ -167,7 +158,6 @@
   "people.team.recordsNone": "Noch keine Saisonbilanz.",
   "people.team.inProgress": "läuft",
   "people.team.drivers": "Stammfahrer",
-
   "people.hof.title": "Hall of Fame",
   "people.hof.metaDescription": "Alle Champions der Liga – Fahrer und Teams – und die ewigen Bestenlisten: Titel, Siege, Podien, Poles, schnellste Runden, Starts und Punkte.",
   "people.hof.lead": "Die Champions jeder Saison und die ewigen Bestenlisten der Liga.",
@@ -191,7 +181,6 @@
   "people.hof.boardEmpty": "Noch keine Einträge.",
   "people.hof.rank": "Rang",
   "people.hof.value": "Anzahl",
-
   "people.archive.title": "Archiv",
   "people.archive.metaDescription": "Alle Saisons der Liga mit Zeitraum, Spielversion, Endstand und Links zu Wertungen und Rennen.",
   "people.archive.lead": "Jede Saison bleibt erhalten. Abgeschlossene Saisons sind eingefroren und nur noch lesbar.",

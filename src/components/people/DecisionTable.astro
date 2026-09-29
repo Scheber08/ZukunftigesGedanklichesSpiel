@@ -37,7 +37,7 @@ const severe = new Set(['time_penalty', 'position_penalty', 'grid_penalty_next',
         <th scope="col">{t('common.round')}</th>
         <th scope="col">{t('people.results.session')}</th>
         <th scope="col">{t('people.penalties.verdict')}</th>
-        {penaltyPoints && <th scope="col" class="num">{t('people.penalties.pointsTotal', { season: '' }).trim()}</th>}
+        {penaltyPoints && <th scope="col" class="num">{t('people.penalties.pointsColumn')}</th>}
         <th scope="col" class="num">{t('common.date')}</th>
       </tr>
     </thead>

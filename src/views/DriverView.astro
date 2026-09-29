@@ -19,6 +19,7 @@ import DriverLink from '~/components/ui/DriverLink.astro';
 import EmptyState from '~/components/ui/EmptyState.astro';
 import Flag from '~/components/ui/Flag.astro';
 import PlatformBadge from '~/components/ui/PlatformBadge.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
 import SectionTitle from '~/components/ui/SectionTitle.astro';
 import TeamName from '~/components/ui/TeamName.astro';
 import { alternates, url, useT, type Lang } from '~/i18n';
@@ -27,6 +28,7 @@ import { formatDate } from '~/lib/domain/time';
 import {
   driverDuels,
   driverRole,
+  hasStats,
   numberPeriods,
   penaltyPointsTotal,
   progressionSteps,
@@ -55,12 +57,16 @@ const role = driver ? driverRole(league, driver, season?.id) : 'former';
 const since = driver?.joined_season_id != null ? league.season(driver.joined_season_id) : undefined;
 
 const career = driver ? league.driverCareer(driver.id) : undefined;
-const seasonStats = driver && season && season.status !== 'planned' ? league.driverCareer(driver.id, season.id) : null;
+const seasonStatsRaw = driver && season && season.status !== 'planned' ? league.driverCareer(driver.id, season.id) : null;
+// Ehemalige ohne Einsatz in der laufenden Saison brauchen keinen Umschalter
+const seasonStats = seasonStatsRaw && (role !== 'former' || hasStats(seasonStatsRaw)) ? seasonStatsRaw : null;
 const standing = driver && season ? league.driverStandings(season.id).find((s) => s.driverId === driver.id) : undefined;
 const steps = driver && season && standing ? progressionSteps(league, 'driver', season.id, driver.id) : [];
 const standingTeam = standing?.teamId != null ? league.team(standing.teamId) : undefined;
 const duels = driver && season ? driverDuels(league, driver.id, season.id) : [];
 const resultGroups = driver ? resultsBySeason(league.driverResults(driver.id)) : [];
+// Ehemalige ohne Cockpit: Team des letzten Einsatzes anzeigen
+const lastTeam = !team && role === 'former' ? league.team(resultGroups[0]?.rows.at(-1)?.result.team_id ?? -1) : undefined;
 const numbers = driver ? numberPeriods(league, driver.id) : [];
 const reserveApps = driver ? league.reserveAppearances(driver.id) : [];
 const decisions = driver ? league.decisionsForDriver(driver.id) : [];
@@ -129,7 +135,7 @@ if (!driver) Astro.response.status = 404;
           eyebrow={roleLabel}
           breadcrumbs={breadcrumbs}
           team={team ?? standingTeam}
-          number={number}
+          number={number ?? undefined}
           numberLabel={t('people.driver.number')}
         >
           <Fragment slot="badges">
@@ -141,8 +147,10 @@ if (!driver) Astro.response.status = 404;
           <h2 class="sr-only">{t('people.driver.facts')}</h2>
           <dl class="facts">
             <div>
-              <dt class="micro">{t('people.driver.team')}</dt>
-              <dd>{team ? <TeamName lang={lang} team={team} /> : <span class="text-muted">{t('people.driver.noTeam')}</span>}</dd>
+              <dt class="micro">{lastTeam ? t('people.driver.lastTeam') : t('people.driver.team')}</dt>
+              <dd>
+                {team || lastTeam ? <TeamName lang={lang} team={team ?? lastTeam} /> : <span class="text-muted">{t('people.driver.noTeam')}</span>}
+              </dd>
             </div>
             <div>
               <dt class="micro">{t('people.driver.number')}</dt>
@@ -268,13 +276,16 @@ if (!driver) Astro.response.status = 404;
                         return (
                           <tr>
                             <th scope="row" class="sticky-col font-normal">
-                              {s ? (
-                                <a href={url(lang, 'race', { season: s.slug, round: round.number })} class="hover:text-teal">
-                                  {roundLabel(round, league.track(round.track_id), lang)}
-                                </a>
-                              ) : (
-                                roundLabel(round, league.track(round.track_id), lang)
-                              )}
+                              <span class="flex flex-wrap items-center gap-2">
+                                {s ? (
+                                  <a href={url(lang, 'race', { season: s.slug, round: round.number })} class="hover:text-teal">
+                                    {roundLabel(round, league.track(round.track_id), lang)}
+                                  </a>
+                                ) : (
+                                  roundLabel(round, league.track(round.track_id), lang)
+                                )}
+                                {!league.hasResults(round.id) && <RoundStatusBadge status={round.status} lang={lang} />}
+                              </span>
                             </th>
                             <td class="muted">{s ? seasonLabel(s, lang) : '–'}</td>
                             <td>

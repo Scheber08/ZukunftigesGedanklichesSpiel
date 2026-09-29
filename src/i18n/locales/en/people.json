@@ -8,7 +8,6 @@
   "people.role.regular": "Race driver",
   "people.role.reserve": "Reserve driver",
   "people.role.former": "Former driver",
-
   "people.drivers.title": "Drivers",
   "people.drivers.metaDescription": "Every driver in {season}: race drivers by team, the reserve pool in waiting-list order and former drivers – with race number, flag and platform.",
   "people.drivers.lead": "Race drivers by team, the reserve pool in waiting-list order and everyone who has raced with us before.",
@@ -32,7 +31,6 @@
   "people.drivers.joinTitle": "Fancy racing with us?",
   "people.drivers.joinText": "Sign up for a seat or the reserve pool – no login needed.",
   "people.drivers.joinLink": "Sign up",
-
   "people.driver.metaDescription": "Profile of {name} ({role}): key stats, results, team-mate battle, number history and penalty record.",
   "people.driver.facts": "Driver facts",
   "people.driver.number": "Race number",
@@ -40,13 +38,13 @@
   "people.driver.country": "Country",
   "people.driver.team": "Current team",
   "people.driver.noTeam": "no permanent seat",
+  "people.driver.lastTeam": "Last team",
   "people.driver.role": "Role",
   "people.driver.since": "With us since",
   "people.driver.links": "Channels",
   "people.driver.twitch": "{name} on Twitch",
   "people.driver.youtube": "{name} on YouTube",
   "people.driver.notFound": "This driver doesn’t exist (any more).",
-
   "people.stats.title": "Key stats",
   "people.stats.scope": "Period for the key stats",
   "people.stats.career": "Career",
@@ -64,7 +62,7 @@
   "people.stats.championship": "Championship position",
   "people.stats.sprintWins": "Sprint wins",
   "people.stats.reserveStarts": "{n} of them as a reserve",
-  "people.stats.dnfDetail": "{n} of {starts} races",
+  "people.stats.dnfDetail": "{n} of {starts}",
   "people.stats.avgDetail": "in classified races",
   "people.stats.gainedDetail": "grid to chequered flag",
   "people.stats.none": "No races yet.",
@@ -72,14 +70,12 @@
   "people.stats.asTable": "Key stats as a table",
   "people.stats.tableCaption": "Key stats: career and current season",
   "people.stats.metric": "Stat",
-
   "people.chart.title": "Points progression {season}",
   "people.chart.description": "Line chart: cumulative points for {name} after each scored round.",
   "people.chart.roundPoints": "Points scored",
   "people.chart.total": "Total",
   "people.chart.position": "Standing",
   "people.chart.none": "No round has been scored this season yet.",
-
   "people.duel.title": "Team-mate battle",
   "people.duel.teamTitle": "Head to head",
   "people.duel.lead": "Only rounds in which both drove for {team}.",
@@ -90,7 +86,6 @@
   "people.duel.caption": "{a} vs {b}, round by round",
   "people.duel.versus": "vs",
   "people.duel.score": "{a}: {x}, {b}: {y}",
-
   "people.results.title": "Results",
   "people.results.caption": "Results {season}",
   "people.results.none": "No published results yet.",
@@ -99,7 +94,6 @@
   "people.results.grid": "Grid",
   "people.results.marks": "Extras",
   "people.results.seasonPoints": "{n} points",
-
   "people.numbers.title": "Number history",
   "people.numbers.caption": "Race numbers of {name}",
   "people.numbers.number": "Number",
@@ -111,7 +105,6 @@
   "people.numbers.state.past": "previous",
   "people.numbers.none": "No race number assigned yet.",
   "people.numbers.note": "Every driver keeps their number. A change needs admin approval and applies from the next race.",
-
   "people.reserve.title": "Reserve appearances",
   "people.reserve.caption": "Appearances by {name} as a reserve driver",
   "people.reserve.for": "Stood in for",
@@ -121,7 +114,6 @@
   "people.reserve.teamNone": "Nobody has had to stand in for {team} so far.",
   "people.reserve.driver": "Reserve driver",
   "people.reserve.replaced": "Replaced",
-
   "people.penalties.title": "Penalty record",
   "people.penalties.caption": "Published stewards’ decisions concerning {name}",
   "people.penalties.ref": "Reference",
@@ -129,6 +121,7 @@
   "people.penalties.none": "No published stewards’ decisions.",
   "people.penalties.pointsSoon": "A penalty-points account is ready and will appear here once the league introduces penalty points.",
   "people.penalties.pointsTotal": "Penalty points {season}",
+  "people.penalties.pointsColumn": "Penalty points",
   "people.penalties.all": "Go to the stewards’ register",
   "people.penalties.seconds": "+{n} s",
   "people.penalties.positions": "{n} places",
@@ -140,7 +133,6 @@
   "people.verdict.grid_penalty_next": "Grid penalty (next race)",
   "people.verdict.dsq": "Disqualification",
   "people.verdict.race_ban": "Race ban",
-
   "people.teams.title": "Teams",
   "people.teams.metaDescription": "The {n} teams of {season} with their drivers, points and position in the constructors’ championship.",
   "people.teams.lead": "Real teams, one grid: two race drivers per team, plus the constructors’ championship.",
@@ -151,7 +143,6 @@
   "people.teams.none": "No teams have been entered for this season yet.",
   "people.teams.reserveNote": "In {season}, points scored by reserve drivers count towards the constructors’ championship.",
   "people.teams.reserveNoteNot": "In {season}, points scored by reserve drivers do not count towards the constructors’ championship.",
-
   "people.team.eyebrow": "Team",
   "people.team.metaDescription": "{team} in the league: current drivers, points, points progression, head to head and season records.",
   "people.team.currentDrivers": "Current drivers",
@@ -167,7 +158,6 @@
   "people.team.recordsNone": "No season records yet.",
   "people.team.inProgress": "in progress",
   "people.team.drivers": "Race drivers",
-
   "people.hof.title": "Hall of Fame",
   "people.hof.metaDescription": "Every champion in the league – drivers and teams – plus the all-time leaderboards: titles, wins, podiums, poles, fastest laps, starts and points.",
   "people.hof.lead": "The champions of every season and the league’s all-time leaderboards.",
@@ -191,7 +181,6 @@
   "people.hof.boardEmpty": "No entries yet.",
   "people.hof.rank": "Rank",
   "people.hof.value": "Total",
-
   "people.archive.title": "Archive",
   "people.archive.metaDescription": "Every season of the league with dates, game version, final standings and links to standings and races.",
   "people.archive.lead": "Every season is kept. Completed seasons are frozen and read-only.",

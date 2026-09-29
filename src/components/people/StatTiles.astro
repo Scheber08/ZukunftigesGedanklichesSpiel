@@ -55,7 +55,8 @@ function tiles(stats: CareerStats, withChampionship: boolean): Tile[] {
     list.push({
       key: 'championship',
       label: t('people.stats.championship'),
-      value: `${championship.tied ? '=' : ''}${t('people.pos', { n: championship.position })}`,
+      value: championship.tied ? `=${championship.position}` : t('people.pos', { n: championship.position }),
+      detail: championship.tied ? t('standings.tied') : undefined,
       highlight: true,
     });
   }
@@ -143,7 +144,7 @@ const name = `${id}-scope`;
                 <tr>
                   <th scope="row" class="sticky-col font-normal">{t('people.stats.championship')}</th>
                   <td class="num muted">–</td>
-                  <td class="num">{`${championship.tied ? '=' : ''}${t('people.pos', { n: championship.position })}`}</td>
+                  <td class="num">{championship.tied ? `=${championship.position}` : t('people.pos', { n: championship.position })}</td>
                 </tr>
               )}
               {STAT_KEYS.map((key) => (
