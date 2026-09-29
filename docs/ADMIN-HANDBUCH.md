@@ -71,7 +71,8 @@ Namen erzeugt.
 - **Umbenennen ist erlaubt.** Änderst du den Slug eines Fahrers, Teams, einer Saison oder eines
   veröffentlichten News-Artikels, merkt sich die Website die alte Adresse und **leitet sie dauerhaft
   auf die neue weiter** – geteilte Links und Suchmaschinen-Einträge funktionieren weiter.
-- Die neue Adresse ist nach dem nächsten Rebuild (1–3 Minuten) online; die Weiterleitung gilt sofort.
+- Nach dem nächsten Rebuild (1–3 Minuten) ist die neue Adresse online und die alte leitet weiter.
+  Bis dahin zeigt die alte Adresse noch die bisherige Seite, die neue ist noch nicht erreichbar.
 - Einen Slug nicht „im Kreis“ tauschen (A → B und B → A zwischen zwei Fahrern) – das verwirrt Besucher.
 - Ändert sich nur der **Anzeigename** (z. B. Gamertag), bleibt der Slug gleich, solange du ihn
   nicht selbst änderst.

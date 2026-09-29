@@ -35,10 +35,25 @@ test.describe('320 px ohne horizontales Scrollen', () => {
     });
   }
 
-  test('Admin-Dashboard und Rundenliste am Handy', async ({ page }) => {
+  // Plan §10: „Admin-Bereich am Handy benutzbar“ – auch Grid-Builder und Ergebnis-Eingabe am Renntag
+  test('Admin: Dashboard, Runden, Grid-Builder und Ergebnis-Eingabe am Handy', async ({ page }) => {
     await demoLogin(page, 'Admin', '/admin/runden');
     await expectNoHorizontalScroll(page);
-    await page.goto('/admin');
+    for (const path of ['/admin', '/admin/runden/12/grid', '/admin/runden/12/ergebnisse']) {
+      await page.goto(path);
+      await waitForIslands(page);
+      await expectNoHorizontalScroll(page);
+    }
+  });
+
+  test('Admin: Steward-Eingang am Handy', async ({ page }) => {
+    await demoLogin(page, 'Steward', '/admin/stewards');
+    await expectNoHorizontalScroll(page);
+  });
+
+  test('Admin: News-Editor am Handy', async ({ page }) => {
+    await demoLogin(page, 'Redaktion', '/admin/news/neu');
+    await waitForIslands(page);
     await expectNoHorizontalScroll(page);
   });
 });

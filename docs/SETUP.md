@@ -278,6 +278,11 @@ Workers & Pages → `liga-web` → Settings:
 - **workers.dev** und **Preview URLs** eingeschaltet lassen – darüber laufen die Demo-Vorschauen der
   Pull Requests (`https://pr-12-liga-web.<konto>.workers.dev`). Wer die Vorschauen nicht öffentlich
   haben will: Cloudflare Access (Zero Trust, kostenlos bis 50 Personen) davorschalten.
+  Gut zu wissen: Eine Vorschau ist eine hochgeladene, nicht ausgerollte **Version desselben Workers**
+  und sieht dieselben Worker-Secrets. Sie ist im Demo-Modus gebaut und nutzt diese nicht – trotzdem
+  gibt es Vorschauen nur für Pull Requests aus dem eigenen Repository (Forks und Dependabot bekommen
+  keinen Cloudflare-Zugang, die CI überspringt die Vorschau dann). Code in Pull Requests deshalb
+  wie Code auf `main` behandeln: nur Personen mit Schreibrecht, Review vor dem Merge.
 - **Observability** (Logs) ist in `wrangler.jsonc` bereits aktiviert.
 
 ---

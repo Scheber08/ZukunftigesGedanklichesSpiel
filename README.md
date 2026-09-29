@@ -53,7 +53,7 @@ Mit echter Datenbank arbeiten: `.env.example` nach `.env` kopieren und ausfülle
 | `npm test` | Unit-Tests (Vitest): Punkte, Wertung, Spam-Schutz, Markdown-Sicherheit, i18n … |
 | `npm run test:e2e` | Browser-Tests (Playwright + axe): baut die Website im Demo-Modus und testet sie mit `astro preview` auf Port 4322 (läuft neben dem Dev-Server). `E2E_SKIP_BUILD=true` nutzt den vorhandenen Build |
 | `npm run test:e2e:install` | Einmalig: Chromium für Playwright herunterladen |
-| `npm run test:links` | nur den Link-Check: crawlt alle internen Links, Ressourcen und #Sprungziele über den Demo-Build (Teil von `test:e2e`) |
+| `npm run test:links` | nur den Link-Check: crawlt alle internen Links, Ressourcen und #Sprungziele über den Demo-Build und prüft nebenbei, dass keine privaten Daten (Anmeldungen, Kontaktanfragen, Entwürfe) öffentlich auftauchen (Teil von `test:e2e`) |
 | `npm run db:seed:generate` | `supabase/seed.sql` aus `src/lib/seed/base.ts` neu erzeugen |
 | `npm run db:seed:demo` | zusätzlich `supabase/demo.sql` (Demo-Liga für eine Test-Datenbank) |
 | `npm run db:seed:check` | prüft, ob `seed.sql` aktuell ist (läuft in der CI) |
@@ -109,6 +109,9 @@ Typprüfung, Unit-Tests, Build, Link-Check, ein Test der Migrationen und der Zug
 Browser-Tests des Produktions-Builds mit Barrierefreiheits-Prüfung (axe, WCAG 2.2 AA) und ein
 Lighthouse-Budget (JS < 50 KB, Seite < 300 KB, LCP < 2 s, CLS < 0,05). Pull Requests bekommen
 zusätzlich eine Demo-Vorschau auf Cloudflare (sobald der Cloudflare-Zugang als Secret hinterlegt ist).
+Statische Leitplanken (`tests/unit/infra-guards.test.ts`) schlagen Alarm, wenn eine neue Admin-Action
+die Rollenprüfung vergisst, ein öffentliches Formular ohne Spam-Schutz läuft, eine Admin-Seite
+vorgerendert würde, ein Inline-Skript die CSP bricht oder Client-Code Server-Module importiert.
 
 ## Rechtliches
 

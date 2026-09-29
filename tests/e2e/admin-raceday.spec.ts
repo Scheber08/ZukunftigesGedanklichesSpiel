@@ -257,6 +257,32 @@ test.describe('Zugriffsschutz', () => {
     expect(response?.status()).toBe(403);
   });
 
+  test('Admin-Actions prüfen Anmeldung und Rolle auf dem Server', async ({ request, baseURL }) => {
+    // Direkter Aufruf ohne Oberfläche – so, wie ein Angreifer es versuchen würde
+    const call = (cookie?: string) =>
+      request.post('/_actions/admin.decisionPublish', {
+        headers: { origin: new URL(baseURL!).origin, ...(cookie ? { cookie } : {}) },
+        multipart: { decisionId: '999999' },
+        failOnStatusCode: false,
+      });
+    const anonymous = await call();
+    expect(anonymous.status()).toBe(401);
+    expect(await anonymous.text()).toContain('UNAUTHORIZED');
+    // Redaktion darf keine Steward-Entscheidungen veröffentlichen
+    const editor = await call('liga_demo_staff=redakteur');
+    expect(editor.status()).toBe(403);
+    expect(await editor.text()).toContain('FORBIDDEN');
+  });
+
+  test('Formulare von fremden Websites werden abgelehnt (Origin-Prüfung)', async ({ request }) => {
+    const res = await request.post('/_actions/sendContact', {
+      headers: { origin: 'https://evil.example' },
+      form: { name: 'x', email: 'x@example.org', subject: 'x', message: 'x' },
+      failOnStatusCode: false,
+    });
+    expect(res.status()).toBe(403);
+  });
+
   test('Admin-Seiten sind nicht indexierbar', async ({ page }) => {
     const response = await page.goto('/admin/login');
     expect(response?.headers()['x-robots-tag']).toContain('noindex');

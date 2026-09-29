@@ -102,6 +102,9 @@ describe.skipIf(!yaml)('GitHub-Workflows', () => {
       expect(runs.some((r) => r.includes(cmd)), cmd).toBe(true);
     }
     expect(ci.jobs.lighthouse?.['continue-on-error']).toBe(true);
+    // Verletzte Budgets landen als Warnung/Zusammenfassung im Lauf (nicht nur im Log)
+    expect(runs.some((r) => r.includes('.github/scripts/lhci-summary.mjs'))).toBe(true);
+    expect(existsSync(join(ROOT, '.github', 'scripts', 'lhci-summary.mjs'))).toBe(true);
     expect(ci.jobs.preview?.if).toContain('pull_request');
   });
 
@@ -124,6 +127,54 @@ describe.skipIf(!yaml)('GitHub-Workflows', () => {
     expect(all).toContain('age --encrypt');
     expect(all).toContain('r2.cloudflarestorage.com');
     expect(all).toContain('RETENTION_DAYS');
+  });
+
+  it('Secrets nur in den Schritten, die sie brauchen (nie neben npm ci/Build)', () => {
+    type Job = { env?: Record<string, string>; permissions?: Record<string, string>; steps?: Array<{ run?: string; uses?: string; env?: Record<string, string>; with?: Record<string, unknown> }> };
+    const deployJobs = (workflows['deploy.yml'] as unknown as { jobs: Record<string, Job> }).jobs;
+    const ciJobs = (workflows['ci.yml'] as unknown as { jobs: Record<string, Job> }).jobs;
+    const usesCfToken = (env?: Record<string, string>) => Object.values(env ?? {}).some((v) => /secrets\.CLOUDFLARE_API_TOKEN/.test(v));
+
+    // Deploy: Token nur im Schritt mit `wrangler deploy`, Job selbst nur mit Leserecht
+    const deploy = deployJobs.deploy!;
+    expect(usesCfToken(deploy.env)).toBe(false);
+    expect(deploy.permissions).toEqual({ contents: 'read' });
+    for (const step of deploy.steps ?? []) {
+      expect(usesCfToken(step.env), step.run ?? step.uses).toBe(/wrangler deploy/.test(step.run ?? ''));
+    }
+    expect(deploy.steps?.find((s) => s.uses?.startsWith('actions/checkout'))?.with?.['persist-credentials']).toBe(false);
+
+    // Tag „production“: Schreibrecht nur in einem Job ohne npm
+    const tag = deployJobs.tag!;
+    expect(tag.permissions).toEqual({ contents: 'write' });
+    expect((tag.steps ?? []).some((s) => /\bnpm\b|npx/.test(s.run ?? ''))).toBe(false);
+    expect(JSON.stringify(tag)).toContain('refs/tags/production');
+
+    // Backup: Datenbank-URL (mit Passwort) nur beim Dump, R2-Schlüssel nur bei Upload/Aufräumen
+    const backupJobs = (workflows['backup.yml'] as unknown as { jobs: Record<string, Job> }).jobs;
+    const backup = backupJobs.backup!;
+    const secretRef = (env: Record<string, string> | undefined, name: string) =>
+      Object.values(env ?? {}).some((v) => new RegExp(`secrets\\.${name}\\s*\\}\\}`).test(v));
+    for (const name of ['SUPABASE_DB_URL', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY']) expect(secretRef(backup.env, name), name).toBe(false);
+    const dbSteps = (backup.steps ?? []).filter((s) => secretRef(s.env, 'SUPABASE_DB_URL'));
+    expect(dbSteps.length).toBe(1);
+    expect(dbSteps[0]?.run).toContain('supabase db dump');
+    for (const step of (backup.steps ?? []).filter((s) => secretRef(s.env, 'R2_SECRET_ACCESS_KEY'))) {
+      expect(step.run, 'R2-Schlüssel nur für aws s3').toMatch(/aws s3/);
+    }
+
+    // PR-Vorschau: Token nur in der Prüfung und beim Hochladen
+    const preview = ciJobs.preview!;
+    expect(usesCfToken(preview.env)).toBe(false);
+    for (const step of preview.steps ?? []) {
+      const allowed = /CLOUDFLARE_API_TOKEN" \]|wrangler versions upload/.test(step.run ?? '');
+      expect(usesCfToken(step.env), step.run?.slice(0, 40) ?? step.uses).toBe(allowed);
+    }
+  });
+
+  it('CI bricht nur Pull-Request-Läufe ab, main läuft zu Ende', () => {
+    const ci = workflows['ci.yml']!;
+    expect(String(ci.concurrency?.['cancel-in-progress'])).toContain("github.event_name == 'pull_request'");
   });
 
   it('laufen mit minimalen Standardrechten', () => {

@@ -3,7 +3,7 @@
  * jeweils nach der Hydrierung der Islands, dazu genau eine h1 pro Seite.
  */
 import { expect, test } from '@playwright/test';
-import { demoLogin, expectNoA11yViolations, expectSingleH1, waitForIslands } from './helpers';
+import { demoLogin, expectNoA11yViolations, expectSingleH1, waitForIslands, type DemoRole } from './helpers';
 
 const PUBLIC_PAGES = [
   '/',
@@ -59,9 +59,27 @@ test.describe('axe – Admin-Bereich', () => {
     await expectNoA11yViolations(page);
   });
 
-  for (const path of ['/admin', '/admin/runden']) {
-    test(`${path} (Demo-Admin)`, async ({ page }) => {
-      await demoLogin(page, 'Admin', path);
+  // WCAG 2.2 AA gilt auch im Admin (Plan §10, inkl. Grid-Builder und Editor). Nur lesende Aufrufe;
+  // R4 der Demo-Saison (Runde 12) hat ein vorläufiges Ergebnis und bleibt vom Renntag-Test unberührt.
+  const ADMIN_PAGES: Array<[DemoRole, string]> = [
+    ['Admin', '/admin'],
+    ['Admin', '/admin/runden'],
+    ['Admin', '/admin/runden/12/grid'],
+    ['Admin', '/admin/runden/12/ergebnisse'],
+    ['Admin', '/admin/fahrer'],
+    ['Admin', '/admin/kalender'],
+    ['Admin', '/admin/anmeldungen'],
+    ['Admin', '/admin/einstellungen'],
+    ['Steward', '/admin/stewards'],
+    ['Steward', '/admin/stewards/neu'],
+    ['Redaktion', '/admin/news'],
+    ['Redaktion', '/admin/news/neu'],
+    ['Redaktion', '/admin/regelwerk'],
+  ];
+
+  for (const [role, path] of ADMIN_PAGES) {
+    test(`${path} (Demo-${role})`, async ({ page }) => {
+      await demoLogin(page, role, path);
       await expect(page).toHaveURL(new RegExp(`${path.replace(/\//g, '\\/')}$`));
       await waitForIslands(page);
       await expectSingleH1(page);

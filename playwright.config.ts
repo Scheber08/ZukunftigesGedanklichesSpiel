@@ -24,6 +24,8 @@ const external = process.env.E2E_BASE_URL;
 const baseURL = external ?? `http://127.0.0.1:${PORT}`;
 const CI = Boolean(process.env.CI);
 const skipBuild = process.env.E2E_SKIP_BUILD === 'true';
+/** Basis-URL, mit der gebaut wird (Platzhalter-Domain wie in astro.config.mjs ohne Konfiguration). */
+const SITE_URL = process.env.PUBLIC_SITE_URL || 'https://liga.example';
 
 // Eigene Astro-Konfiguration nur mit separatem Vite-Cache (siehe tests/e2e/astro.config.e2e.mjs),
 // damit der Build die vorgebündelten Module eines laufenden Dev-Servers nicht austauscht.
@@ -62,7 +64,9 @@ export default defineConfig({
     : {
         command: skipBuild ? preview : `npx astro build ${config} && ${preview}`,
         url: `${baseURL}/`,
-        env: { DEMO_MODE: 'true', SITE_NOINDEX: 'true', ASTRO_TELEMETRY_DISABLED: '1' },
+        // PUBLIC_SITE_URL fest (überschreibt eine lokale .env): Canonical/hreflang/Sitemap zeigen auf
+        // diese Adresse, der Link-Check (links.spec.ts) prüft sie gegen den Test-Server.
+        env: { DEMO_MODE: 'true', SITE_NOINDEX: 'true', PUBLIC_SITE_URL: SITE_URL, ASTRO_TELEMETRY_DISABLED: '1' },
         reuseExistingServer: !CI,
         // Build (ca. 1–3 Minuten) + Start von workerd
         timeout: 420_000,

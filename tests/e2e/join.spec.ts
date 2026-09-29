@@ -60,6 +60,22 @@ test.describe('Mitfahren', () => {
     await expect(page.getByText(/Das ging sehr schnell/)).toBeVisible();
   });
 
+  test('lehnt Einsendungen mit ausgefülltem Honeypot ab', async ({ page }) => {
+    await page.goto('/mitfahren');
+    await waitForIslands(page);
+    await fillRegistration(page, unique(), '56');
+    // Das Feld ist für Menschen unsichtbar (aria-hidden, tabindex=-1) – nur Bots füllen es aus
+    const honeypot = page.locator('input[name="website"]');
+    await expect(honeypot).toHaveCount(1);
+    await honeypot.evaluate((el) => {
+      (el as HTMLInputElement).value = 'https://spam.example';
+    });
+    await page.waitForTimeout(4_000);
+    await page.getByRole('button', { name: 'Anmeldung absenden' }).click();
+    await expect(page.getByText(/Deine Einsendung konnte nicht verarbeitet werden/).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Wie geht es weiter?' })).toHaveCount(0);
+  });
+
   test('Anmeldung absenden (Demo-Modus) zeigt die Bestätigung', async ({ page }) => {
     await page.goto('/mitfahren');
     await waitForIslands(page);

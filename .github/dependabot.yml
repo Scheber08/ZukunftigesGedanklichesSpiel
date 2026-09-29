@@ -1,6 +1,7 @@
 # Dependabot (Plan §11.4 Monitoring): wöchentliche Update-Vorschläge für npm-Pakete und
 # GitHub Actions. Kleine Updates werden gebündelt, damit nicht jede Woche zehn PRs warten.
-# Jeder PR läuft durch die komplette CI inkl. E2E und bekommt eine Demo-Vorschau.
+# Jeder PR läuft durch die komplette CI inkl. Datenbank-Test und E2E. Eine Demo-Vorschau gibt es für
+# Dependabot-PRs nicht: Dependabot sieht die Actions-Secrets (Cloudflare-Token) bewusst nicht.
 version: 2
 updates:
   - package-ecosystem: npm

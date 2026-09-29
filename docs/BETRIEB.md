@@ -99,7 +99,13 @@ täglicher Zeitplan und manueller Start.
   - **Inhalts-Rebuilds** laufen weiter, bauen aber den zuletzt ausgerollten Code-Stand – den Git-Tag
     **`production`**. So kommt kein neuer Code „durch die Hintertür“ mit einem Ergebnis live.
 - **Notfall-Hotfix:** Actions → Deploy → „Run workflow“ → Häkchen „Renntags-Freeze ignorieren“.
-- Der Tag `production` wird nach jedem erfolgreichen Deploy auf den ausgerollten Commit gesetzt.
+- Der Tag `production` wird nach jedem erfolgreichen Deploy auf den ausgerollten Commit gesetzt
+  (eigener kleiner Job „Tag production setzen“).
+
+**Rechte im Workflow:** Der Build-Job hat nur Leserecht aufs Repository, der Cloudflare-Token steht nur
+im Schritt „Worker ausrollen“ (nicht in `npm ci` oder im Build, wo Install-Skripte von Abhängigkeiten
+laufen). Schreibrecht hat nur der Tag-Job, der keinen fremden Code ausführt. Nach dem Ausrollen prüft ein
+Smoke-Test `/`, `/kalender`, `/wertung`, `/en`, `/kalender.ics` und `/admin/login` (Worker).
 
 **Zurückrollen:** Cloudflare → Workers → `liga-web` → Deployments → ältere Version → „Rollback“.
 Das wirkt sofort, auch für statische Seiten. Danach den Fehler im Code beheben; der nächste Deploy
@@ -253,7 +259,10 @@ nach einer Umbenennung ankommen. Ändert sich im Admin der **Slug** (der Adresst
   wenigen Umbenennungen einer Liga vernachlässigbar.
 
 **Test:** Die Demo-Daten enthalten die Weiterleitung `/fahrer/kurvenkoenig-alt` → `/fahrer/kurvenkoenig`;
-der E2E-Test prüft sie (auch für `/en/drivers/…`).
+der E2E-Test prüft sie gegen den Produktions-Build (auch für `/en/drivers/…`). Online nach einer
+Umbenennung: `curl -I https://<domain>/fahrer/<alter-slug>` muss `301` und `location: /fahrer/<neuer-slug>`
+zeigen. Kommt stattdessen `404`, erreicht die Anfrage die Weiterleitung im Worker nicht (Fehler im Code,
+nicht in den Daten) – die Zeile in `slug_redirects` prüfen und die Technik informieren.
 
 ---
 
@@ -310,8 +319,12 @@ Dependabot (`.github/dependabot.yml`) öffnet **montags** Pull Requests für npm
 Actions, gebündelt nach Bereichen (Astro, Svelte, Tailwind, Supabase, Cloudflare, Tests, sonstige
 Minor/Patch-Updates).
 
-- Jeder PR durchläuft die komplette CI und bekommt eine **Demo-Vorschau** (Link im PR).
-- Grüne Patch/Minor-Updates: Vorschau kurz ansehen, mergen – **nicht am Renntag**.
+- Jeder PR durchläuft die komplette CI (Unit-Tests, Build, Datenbank-Test, E2E mit axe und Link-Check).
+  Eine **Demo-Vorschau** gibt es für Dependabot-PRs nicht: Dependabot bekommt bewusst keinen Zugriff auf
+  die Actions-Secrets (also auch nicht auf den Cloudflare-Token) – die Cloudflare-Secrets deshalb
+  **nicht** zusätzlich als Dependabot-Secrets hinterlegen. Wer ein Update ansehen will: Branch lokal
+  auschecken, `npm ci` und `npm run dev`.
+- Grüne Patch/Minor-Updates: mergen – **nicht am Renntag**.
 - Major-Updates (z. B. Astro 7 → 8): Changelog lesen, lokal testen (`npm install`, `npm run dev`,
   `npm test`, `npm run test:e2e`), dann mergen. `test:e2e` baut die Website selbst und startet
   `astro preview` auf Port 4322 – ein laufender Dev-Server (4321) darf dabei weiterlaufen.

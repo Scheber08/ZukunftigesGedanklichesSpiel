@@ -135,8 +135,10 @@ jobs:
     environment:
       name: production
       url: ${{ vars.PUBLIC_SITE_URL }}
+    # Nur lesen: Der Tag „production“ wird im eigenen Job „tag“ gesetzt – so hat kein Schritt,
+    # der fremden Code ausführt (npm ci, Build), ein Token mit Schreibrecht aufs Repository.
     permissions:
-      contents: write # nur für den Tag „production“ (zuletzt ausgerollter Code-Stand)
+      contents: read
     env:
       # --- Build-Zeit (öffentlich bzw. ins Server-Bundle eingebettet) ---
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -147,13 +149,11 @@ jobs:
       SITE_NOINDEX: ${{ vars.SITE_NOINDEX || 'false' }}
       DEMO_MODE: 'false'
       # GITHUB_REPOSITORY setzt GitHub Actions automatisch (Ziel des Rebuild-Dispatch)
-      # --- Deploy ---
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v5
         with:
           ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -166,13 +166,17 @@ jobs:
         run: npm test
       - name: Build (statische Seiten aus Supabase)
         run: npm run build
+      # Der Cloudflare-Token steht nur in diesem Schritt – nicht in npm ci oder im Build.
       - name: Worker ausrollen
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           KIND: ${{ needs.plan.outputs.kind }}
           REASON: ${{ github.event.client_payload.reason || github.event_name }}
           REF: ${{ needs.plan.outputs.ref }}
         run: |
           npx wrangler deploy --message "${KIND} – ${REASON} (${REF:0:7})"
+      # Statische Seiten, Worker (Admin-Login rendert serverseitig) und Kalender-Abo
       - name: Smoke-Test
         if: ${{ vars.PUBLIC_SITE_URL != '' }}
         env:
@@ -180,13 +184,27 @@ jobs:
         run: |
           set -euo pipefail
           sleep 10
-          for path in / /kalender /wertung /en; do
+          for path in / /kalender /wertung /en /kalender.ics /admin/login; do
             code=$(curl -s -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 5 "${SITE%/}${path}")
             echo "${path} → ${code}"
             if [ "$code" != "200" ]; then echo "::error::Smoke-Test ${path} liefert ${code}"; exit 1; fi
           done
+
+  # ---------------------------------------------------------------------------
+  tag:
+    name: Tag „production“ setzen
+    needs: [plan, deploy]
+    # Merkt sich den ausgerollten Code-Stand – Inhalts-Rebuilds am Renntag bauen genau diesen.
+    if: ${{ needs.deploy.result == 'success' && (needs.plan.outputs.kind == 'code' || needs.plan.outputs.ref == github.sha) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
       - name: Tag „production“ auf den ausgerollten Code-Stand setzen
-        if: ${{ needs.plan.outputs.kind == 'code' || needs.plan.outputs.ref == github.sha }}
         env:
           REF: ${{ needs.plan.outputs.ref }}
         run: |
