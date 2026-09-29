@@ -86,7 +86,7 @@ const jsonLd = breadcrumbJsonLd(
     breadcrumbs={breadcrumbs}
   >
     <Fragment slot="actions">
-      <ShareButton lang={lang} />
+      <ShareButton lang={lang} class="min-h-11" />
     </Fragment>
     {
       current && (
@@ -110,7 +110,7 @@ const jsonLd = breadcrumbJsonLd(
               </li>
             )}
             {dotd?.driver_id != null && (
-              <li class="inline-flex items-center gap-2">
+              <li class="dotd inline-flex items-center gap-2">
                 <span class="text-muted">{t('standingsPage.after.dotd')}:</span>
                 <DriverLink lang={lang} driver={league.driver(dotd.driver_id)} stripe={false} />
               </li>
@@ -121,7 +121,7 @@ const jsonLd = breadcrumbJsonLd(
     }
   </PageHeader>
 
-  <div class="container-page py-10 md:py-14">
+  <div class="standings-main container-page py-10 md:py-14">
     {
       !season || !current ? (
         <EmptyState title={t('standings.none')} />
@@ -195,6 +195,19 @@ const jsonLd = breadcrumbJsonLd(
 </BaseLayout>
 
 <style>
+  /* Lange Komposita („Konstrukteurswertung“) passen auch bei 320 px */
+  @media (max-width: 479px) {
+    .standings-main :global(.section-title) {
+      font-size: 1.375rem;
+      overflow-wrap: anywhere;
+      hyphens: auto;
+    }
+  }
+  .dotd :global(a) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
   .facts {
     display: flex;
     flex-wrap: wrap;

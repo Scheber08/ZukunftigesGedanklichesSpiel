@@ -28,6 +28,28 @@ const { label, tabs, class: className } = Astro.props;
   }
 </nav>
 
+<style>
+  /* Drei Tabs passen auch bei 320 px nebeneinander */
+  .standings-tabs .tab {
+    flex: 1 1 auto;
+    justify-content: center;
+    padding-inline: 0.75rem;
+  }
+  @media (min-width: 640px) {
+    .standings-tabs .tab {
+      flex: 0 0 auto;
+      padding-inline: 1rem;
+    }
+  }
+  @media (max-width: 380px) {
+    .standings-tabs .tab {
+      padding-inline: 0.4rem;
+      font-size: 0.875rem;
+      letter-spacing: 0.02em;
+    }
+  }
+</style>
+
 <script>
   /** Macht aus der Sprungnavigation eine Tablist nach dem WAI-ARIA-Muster (automatische Aktivierung). */
   function enhance(nav: HTMLElement) {

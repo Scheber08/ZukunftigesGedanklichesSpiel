@@ -99,12 +99,12 @@ const updated = lastRound ? (lastRound.final_at ?? lastRound.provisional_at) : n
       season && (
         <Fragment slot="actions">
           <div class="flex flex-wrap gap-2">
-            <ShareButton lang={lang} />
+            <ShareButton lang={lang} class="min-h-11" />
             {drivers.length > 0 && (
               <a
                 href={url(lang, 'standingsCsv', { season: season.slug })}
                 download={csvFileName(season.slug)}
-                class="btn btn-ghost btn-sm border border-border"
+                class="btn btn-ghost btn-sm min-h-11 border border-border"
                 title={t('standingsPage.csv.hint')}
                 data-track="standings_csv"
               >
@@ -156,7 +156,7 @@ const updated = lastRound ? (lastRound.final_at ?? lastRound.provisional_at) : n
     }
   </PageHeader>
 
-  <div class="container-page py-10 md:py-14">
+  <div class="standings-main container-page py-10 md:py-14">
     {
       !season ? (
         <EmptyState title={t('standingsPage.empty.noSeason')} text={t('standingsPage.empty.noSeasonText')} />
@@ -244,7 +244,7 @@ const updated = lastRound ? (lastRound.final_at ?? lastRound.provisional_at) : n
           <!-- Punkte & Regeln: eine Datenquelle (Saison + Punkteschema) -->
           <section class="mt-16" aria-labelledby="rules-title">
             <SectionTitle id="rules-title" title={t('standingsPage.info.title')} />
-            <div class="grid gap-5 lg:grid-cols-[3fr_2fr]">
+            <div class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
               <PointsSchemeCard lang={lang} league={league} season={season} />
               <TieBreakNote lang={lang} league={league} />
             </div>
@@ -266,6 +266,25 @@ const updated = lastRound ? (lastRound.final_at ?? lastRound.provisional_at) : n
   .tab-panel {
     padding-top: 2rem;
   }
+  /* Lange Komposita („Konstrukteurswertung“) passen auch bei 320 px */
+  @media (max-width: 479px) {
+    .standings-main :global(.section-title) {
+      font-size: 1.375rem;
+      overflow-wrap: anywhere;
+      hyphens: auto;
+    }
+  }
+
+  /* Touch-Ziele ≥ 44 px auch in den gemeinsamen Sport-Komponenten (Diagramm-Tabelle, Matrix-Umschalter) */
+  .standings-main :global(figure details > summary),
+  .standings-main :global(.matrix .segmented label) {
+    min-height: 44px;
+  }
+  .standings-main :global(figure details > summary) {
+    display: flex;
+    align-items: center;
+  }
+
   /* Ohne JS stehen alle Panels untereinander – dann mit etwas mehr Luft */
   .tab-panel + .tab-panel {
     margin-top: 3rem;
