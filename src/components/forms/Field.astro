@@ -60,6 +60,7 @@ const {
   class: className,
 } = Astro.props;
 const t = useT(lang);
+// Textarea-Inhalt per set:text, damit kein Leerraum aus der Formatierung im Feld landet
 const hintId = hint ? `${id}-hint` : undefined;
 const errorId = error ? `${id}-error` : undefined;
 const describedBy = [hintId, describedby, errorId].filter(Boolean).join(' ') || undefined;
@@ -93,9 +94,7 @@ const common = {
   </label>
   {
     type === 'textarea' ? (
-      <textarea class="textarea" rows={rows} {...common}>
-        {value ?? ''}
-      </textarea>
+      <textarea class="textarea" rows={rows} {...common} set:text={value ?? ''} />
     ) : (
       <input class="input" type={type} value={value ?? undefined} inputmode={inputmode} min={min} max={max} step={step} {...common} />
     )
