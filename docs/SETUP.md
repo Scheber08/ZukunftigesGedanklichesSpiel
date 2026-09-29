@@ -69,8 +69,8 @@ Passwortmanager. Details je Dienst: [Abschnitt 12](#12-2fa-für-alle-konten).
 5. **Branch-Schutz für `main`:** Repository → Settings → Rules → Rulesets → „New branch ruleset“:
    - Target: Default branch
    - „Require a pull request before merging“ (mindestens für größere Änderungen)
-   - „Require status checks to pass“ → die CI-Jobs *Lint, Typecheck & Unit-Tests*, *Build (Demo) & Link-Check*,
-     *Datenbank (Migrationen, Seeds, RLS)* und *E2E (Playwright + axe)* auswählen
+   - „Require status checks to pass“ → die CI-Jobs *Lint, Typecheck & Unit-Tests*, *Build (Demo)*,
+     *Datenbank (Migrationen, Seeds, RLS)* und *E2E (Playwright + axe + Link-Check)* auswählen
      (sie erscheinen in der Liste, sobald die CI einmal gelaufen ist)
    - „Block force pushes“
 6. **Actions erlauben:** Settings → Actions → General → „Allow all actions“ und bei
@@ -100,10 +100,15 @@ Passwortmanager. Details je Dienst: [Abschnitt 12](#12-2fa-für-alle-konten).
 1. Supabase → dein Projekt → **SQL Editor** → „New query“.
 2. Nacheinander den **kompletten Inhalt** dieser Dateien einfügen und jeweils „Run“ klicken –
    **genau in dieser Reihenfolge** (sortiert nach Dateinamen):
-   1. `supabase/migrations/20260929120000_init.sql`
-   2. `supabase/migrations/20260929120100_rls.sql`
-   3. `supabase/migrations/20260929120200_maintenance.sql`
-   4. alle weiteren Dateien in `supabase/migrations/`, falls vorhanden, ebenfalls nach Namen sortiert
+   1. `supabase/migrations/20260929120000_init.sql` – Tabellen
+   2. `supabase/migrations/20260929120100_rls.sql` – Zugriffsregeln (Row Level Security)
+   3. `supabase/migrations/20260929120200_maintenance.sql` – Löschfristen, Storage-Bucket
+   4. `supabase/migrations/20260930090000_redirects_maps_views.sql` – Weiterleitungen nach
+      Umbenennungen, Felder für Streckenkarten, öffentliche Fahrer-Sicht `drivers_public`
+   5. alle weiteren Dateien in `supabase/migrations/`, falls vorhanden, ebenfalls nach Namen sortiert
+
+   Später hinzukommende Migrationen genauso einspielen – **vor** dem Deploy des Codes, der sie braucht
+   (sonst fehlen dem Build Spalten oder Views).
 3. Danach **`supabase/seed.sql`** genauso ausführen. Das legt die 11 Teams, 25 Strecken, die
    Punkteschema-Vorlagen, das Regelwerk v1, die FAQ, offene Rollen und alle Einstellungen an.
    Die Datei darf mehrfach laufen – vorhandene Zeilen werden nie überschrieben.
@@ -504,6 +509,9 @@ Außerdem: Verzeichnis von Verarbeitungstätigkeiten (kurze Tabelle genügt) und
 - [ ] Anmeldeformular, Vorfall-Formular und Kontaktformular einmal echt abgeschickt → Einträge im Admin, Meldung in Discord
 - [ ] Staff-Login für jede Rolle getestet; jemand **ohne** Rolle kommt nicht hinein
 - [ ] „Veröffentlichen“ im Admin löst nach ca. 1–3 Minuten einen Deploy aus (GitHub → Actions → Deploy)
+- [ ] Fahrerliste und Profile zeigen alle Fahrer (öffentliche Sicht `drivers_public`; wenn leer:
+      [BETRIEB.md](BETRIEB.md#öffentliche-daten-views-und-row-level-security))
+- [ ] Test-Umbenennung eines Fahrers: alte Profil-Adresse leitet auf die neue weiter (301)
 - [ ] Backup gelaufen **und Wiederherstellung getestet** ([BETRIEB.md](BETRIEB.md#wiederherstellung))
 - [ ] Uptime-Monitor eingerichtet ([BETRIEB.md](BETRIEB.md#monitoring))
 - [ ] Cookie-Banner: ohne Zustimmung keine Google-Requests
@@ -538,6 +546,24 @@ Discord-Login testen will:
 
 Demo-Liga in der lokalen Datenbank: `npm run db:seed:demo`, dann in `supabase/config.toml` bei
 `[db.seed]` `"./demo.sql"` ergänzen und `npx supabase db reset`.
+
+**Hinweise zum Dev-Server (Astro 7):**
+
+- Pro Projekt läuft **ein** `astro dev`. Ein zweiter Start wird mit „Another astro dev server is
+  already running“ abgelehnt. `npx astro dev status` zeigt den laufenden Server, `npx astro dev stop`
+  beendet ihn (nur wenn er im Hintergrund gestartet wurde; sonst im Terminal Strg + C).
+- Die Browser-Tests (`npm run test:e2e`) brauchen keinen Dev-Server: Sie bauen die Website im
+  Demo-Modus und starten `astro preview` auf Port **4322** – parallel zu einem Dev-Server auf 4321.
+  Der E2E-Build nutzt einen eigenen Vite-Cache (`node_modules/.vite-e2e`), damit er die
+  vorgebündelten Module des Dev-Servers nicht austauscht.
+- Im Demo-Modus rendert der Dev-Server öffentliche Seiten bei jedem Aufruf neu – Änderungen im Admin
+  sind sofort sichtbar. Im Build (Produktion, Preview, E2E) sind sie statisch und ändern sich erst mit
+  dem nächsten Rebuild.
+- Seltsame Fehler nach `npm install` oder einem Branch-Wechsel („Outdated Optimize Dep“, 504 auf
+  `/node_modules/.vite/…`): Dev-Server beenden, den Ordner `node_modules/.vite` löschen und neu
+  starten – Vite bündelt die Abhängigkeiten dann frisch vor.
+- Die Seed-Skripte (`npm run db:seed:*`) führen TypeScript direkt mit Node aus und brauchen
+  **Node 22.15 oder neuer** (empfohlen: Node 24).
 
 ## Anhang B: Alle Variablen auf einen Blick
 

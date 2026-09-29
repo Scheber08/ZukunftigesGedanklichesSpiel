@@ -96,6 +96,30 @@ describe('Schema aus den Migrationen', () => {
     expect([...TABLE_ORDER].sort()).toEqual(Object.keys(PRIMARY_KEYS).sort());
   });
 
+  it('übernimmt Spalten aus späteren Migrationen und ignoriert Views, Indizes und Policies', () => {
+    const parsed = parseSchema([
+      `create table public.t (id bigint primary key, name text);`,
+      `alter table public.t add column if not exists extra text;      -- Kommentar
+       alter table public.t enable row level security;
+       alter table public.t add column a text, add column b integer[], drop column name;
+       create unique index t_idx on public.t (extra, coalesce(a, ''));
+       create policy "public read" on public.t for select to anon using (true);
+       create view public.t_public with (security_barrier = true) as select id from public.t;`,
+    ]);
+    expect([...parsed.get('t')!.keys()]).toEqual(['id', 'extra', 'a', 'b']);
+    expect(parsed.get('t')!.get('b')?.type).toBe('integer[]');
+    expect(parsed.has('t_public')).toBe(false);
+  });
+
+  it('kennt die Felder aus Migration 20260930090000 (Weiterleitungen, Streckenkarten, Zeitaufwand EN)', () => {
+    expect(schema.get('tracks')?.has('map_url')).toBe(true);
+    expect(schema.get('tracks')?.has('map_credit')).toBe(true);
+    expect(schema.get('open_positions')?.has('effort_en')).toBe(true);
+    expect([...(schema.get('slug_redirects')?.keys() ?? [])]).toEqual(['id', 'entity', 'old_slug', 'new_slug', 'lang', 'created_at', 'updated_at']);
+    // Views sind keine Tabellen – drivers_public wird nie befüllt
+    expect(schema.has('drivers_public')).toBe(false);
+  });
+
   it('erkennt die Spezialtypen der Liga-Tabellen', () => {
     expect(schema.get('settings')?.get('value')?.type).toBe('jsonb');
     expect(schema.get('points_schemes')?.get('race_points')?.type).toBe('integer[]');
@@ -177,5 +201,8 @@ describe('Seed-Dateien', () => {
     expect(sql.indexOf('insert into public.seasons ')).toBeLessThan(sql.indexOf('insert into public.rounds '));
     expect(sql.indexOf('insert into public.rounds ')).toBeLessThan(sql.indexOf('insert into public.results '));
     expect(sql).toContain("select setval(pg_get_serial_sequence('public.results', 'id')");
+    // Demo-Weiterleitung (E2E-Test /fahrer/kurvenkoenig-alt) und Streckenkarten-Spalten
+    expect(sql).toMatch(/insert into public\.slug_redirects \(id, entity, old_slug, new_slug, lang\) values\n {2}\(1, 'driver', 'kurvenkoenig-alt', 'kurvenkoenig', NULL\)/);
+    expect(sql).toContain("select setval(pg_get_serial_sequence('public.slug_redirects', 'id')");
   });
 });

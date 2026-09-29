@@ -11,6 +11,8 @@ tiefe Vorkenntnisse funktionieren.
 - [Deploy und Renntags-Freeze](#deploy-und-renntags-freeze)
 - [Backups](#backups) · [Wiederherstellung](#wiederherstellung) · [Wiederherstellungstest (vierteljährlich)](#wiederherstellungstest-vierteljährlich)
 - [Keep-alive und Löschfristen](#keep-alive-und-löschfristen)
+- [Weiterleitungen nach Umbenennungen](#weiterleitungen-nach-umbenennungen)
+- [Öffentliche Daten: Views und Row Level Security](#öffentliche-daten-views-und-row-level-security)
 - [Monitoring](#monitoring)
 - [Updates (Dependabot)](#updates-dependabot)
 - [Aktualitäts-Check](#aktualitäts-check)
@@ -31,7 +33,7 @@ tiefe Vorkenntnisse funktionieren.
 | CI mit Tests, Link-Check, Lighthouse | jeder Push/PR | `ci.yml` | bei Fehlern: Entwickler |
 | Backup der Datenbank | täglich 02:17 UTC | `backup.yml` → R2, 30 Tage | niemand; bei Fehlermail: Technik |
 | Keep-alive Supabase, Löschfristen | täglich 03:17 UTC | Worker-Cron | niemand |
-| Twitch-Status, geplante News | jede Minute | Worker-Cron | niemand |
+| Twitch-Status, geplante News, Rebuild nach Ablauf einer Protestfrist | jede Minute | Worker-Cron | niemand |
 | Discord-Mitgliederzahlen | alle 10 Minuten | Worker-Cron | niemand |
 | **Wiederherstellungstest** | **vierteljährlich** | Handarbeit, siehe unten | **Technik** |
 | **Aktualitäts-Check der Inhalte** | **vierteljährlich** | Handarbeit | **Redaktion** |
@@ -58,10 +60,13 @@ Admin klickt „Veröffentlichen“
 - Mehrere Änderungen kurz hintereinander ergeben **einen** Build (Bündelung).
 - Wartende Deploys werden zusammengefasst (Concurrency-Gruppe `deploy-production`): Es läuft nie mehr als
   ein Deploy gleichzeitig, von den wartenden bleibt nur der neueste.
-- Der **tägliche Build** um 03:41 UTC hält Countdown-Startwerte, abgelaufene Protestfristen
-  und Ähnliches frisch, auch wenn niemand etwas veröffentlicht.
-- Dynamisch (ohne Rebuild) sind: Formulare, Admin, Nummern-Prüfung, Discord-Karte, Live-Status,
-  `kalender.ics`.
+- Läuft eine **Protestfrist** ab, fordert der Worker-Cron selbst einen Rebuild an – Banner und
+  „Vorfall melden“ auf der Rennseite stimmen dann ohne Zutun.
+- Der **tägliche Build** um 03:41 UTC hält Countdown-Startwerte und Ähnliches frisch, auch wenn
+  niemand etwas veröffentlicht.
+- Dynamisch (ohne Rebuild) sind: Formulare, Admin, Nummern-Prüfung, Discord-Karte, Live-Status und
+  die [Weiterleitungen alter Adressen](#weiterleitungen-nach-umbenennungen). Die Kalender-Abos
+  (`kalender.ics`, ICS je Rennen) sind statische Dateien und ändern sich mit dem Rebuild.
 
 **Wenn nichts passiert:**
 
@@ -221,6 +226,64 @@ Der Worker-Cron „17 3 * * *“ (täglich 03:17 UTC, `src/lib/server/cron.ts`) 
 Pausiert das Projekt trotzdem (Mail von Supabase): im Dashboard „Restore project“ – die Daten bleiben
 erhalten. Dann prüfen, ob die Crons laufen (Cloudflare → Worker → Settings → Triggers).
 
+> **Öffentliches Repository?** GitHub schaltet zeitgesteuerte Workflows (Backup, täglicher Build)
+> in öffentlichen Repositories nach **60 Tagen ohne Commit** ab und schickt vorher eine Mail.
+> Dann unter Actions → Workflow → „Enable workflow“ wieder einschalten. Der Worker-Keep-alive ist
+> davon nicht betroffen.
+
+---
+
+## Weiterleitungen nach Umbenennungen
+
+Adressen sollen stabil bleiben (Plan §2.2): Wer einen Link auf ein Fahrerprofil teilt, soll auch
+nach einer Umbenennung ankommen. Ändert sich im Admin der **Slug** (der Adressteil, z. B.
+`/fahrer/kurvenkoenig`) eines **Fahrers**, **Teams**, einer **Saison** oder eines **News-Artikels**
+(je Sprache), speichert die Website den alten Slug in der Tabelle `slug_redirects`.
+
+- Die alte Adresse gibt es danach nicht mehr als statische Seite. Anfragen darauf landen im Worker,
+  und die Middleware antwortet mit **301** (dauerhaft umgezogen) auf die neue Adresse – auch für
+  Unterseiten (`/saison/<alt>/wertung` → `/saison/<neu>/wertung`) und die englischen Pfade.
+- Ketten werden aufgelöst (a → b, später b → c ergibt a → c). Wird ein alter Slug wieder vergeben,
+  entfällt seine Weiterleitung automatisch.
+- Unbekannte Adressen bleiben ein normales **404** mit der Liga-Fehlerseite.
+- Einsehen oder von Hand löschen: Supabase → Table Editor → `slug_redirects`
+  (Spalten `entity`, `old_slug`, `new_slug`, `lang`). Löschen ist gefahrlos – die alte Adresse zeigt
+  dann wieder 404.
+- Weiterleitungen zählen als Worker-Anfragen (Free-Tier-Grenze siehe unten); das ist bei den
+  wenigen Umbenennungen einer Liga vernachlässigbar.
+
+**Test:** Die Demo-Daten enthalten die Weiterleitung `/fahrer/kurvenkoenig-alt` → `/fahrer/kurvenkoenig`;
+der E2E-Test prüft sie (auch für `/en/drivers/…`).
+
+---
+
+## Öffentliche Daten: Views und Row Level Security
+
+Der Build liest mit dem **anon-Key** – also genau das, was Besucher sehen dürfen (Plan §6: RLS
+standardmäßig „deny“, private Tabellen ohne Policy). Zwei Punkte für die Technik:
+
+- **Fahrer** liest die Website über die View **`drivers_public`**, nicht über die Tabelle `drivers`
+  (seit Migration `20260930090000_redirects_maps_views.sql`). Die View liefert nur öffentliche Spalten:
+  das Eingabegerät ist leer, Twitch/YouTube nur, wenn der Fahrer „Links zeigen“ gewählt hat. Die
+  Tabelle selbst ist für `anon` gesperrt. Admin und Formulare nutzen den Service-Key und sehen alles.
+- Die View läuft mit den Rechten ihres Eigentümers (`postgres`), weil `anon` die Tabelle nicht lesen
+  darf. Zeigt die Fahrerliste nach einem Deploy **keine Fahrer**, obwohl im Admin welche stehen, im
+  SQL-Editor prüfen:
+
+  ```sql
+  select rolbypassrls from pg_roles where rolname = (
+    select viewowner from pg_views where viewname = 'drivers_public');   -- muss true sein
+  set role anon;
+  select count(*) from public.drivers_public;   -- Anzahl aller Fahrer
+  select count(*) from public.drivers;          -- 0 (gesperrt)
+  reset role;
+  ```
+
+Die CI prüft das bei jedem Push gegen eine echte Postgres-Datenbank (Job „Datenbank“,
+`.github/scripts/db-check-demo.sql`): Was `anon` sieht, dass private Tabellen leer bleiben, dass
+`drivers_public` keine internen Felder verrät und dass niemand über Views oder Weiterleitungen
+schreiben kann.
+
 ---
 
 ## Monitoring
@@ -250,7 +313,8 @@ Minor/Patch-Updates).
 - Jeder PR durchläuft die komplette CI und bekommt eine **Demo-Vorschau** (Link im PR).
 - Grüne Patch/Minor-Updates: Vorschau kurz ansehen, mergen – **nicht am Renntag**.
 - Major-Updates (z. B. Astro 7 → 8): Changelog lesen, lokal testen (`npm install`, `npm run dev`,
-  `npm test`, `npm run test:e2e`), dann mergen.
+  `npm test`, `npm run test:e2e`), dann mergen. `test:e2e` baut die Website selbst und startet
+  `astro preview` auf Port 4322 – ein laufender Dev-Server (4321) darf dabei weiterlaufen.
 - Sicherheitswarnungen (Dependabot alerts) haben Vorrang.
 
 ---
@@ -360,7 +424,7 @@ Grenzen gelegentlich prüfen):
 | Cloudflare Workers | 100.000 Anfragen/Tag an den Worker, ca. 10 ms CPU je Anfrage | Statische Seiten zählen nicht; Worker nur für Formulare, Admin, APIs |
 | Cloudflare R2 | 10 GB Speicher | 30 Nacht-Backups + Snapshots, wenige MB je Backup |
 | Supabase | 500 MB Datenbank, 1 GB Storage, Pause nach 7 Tagen Inaktivität | wenige MB pro Saison; Keep-alive läuft |
-| GitHub Actions | 2.000 Minuten/Monat (privates Repo), unbegrenzt bei öffentlichem Repo | ca. 3–5 Minuten je Deploy, CI ca. 10 Minuten je Push |
+| GitHub Actions | 2.000 Minuten/Monat (privates Repo), unbegrenzt bei öffentlichem Repo | ca. 3–5 Minuten je Deploy (auch jeder Inhalts-Rebuild), CI ca. 15–20 Minuten je Push (Summe der parallelen Jobs) – bei privatem Repo also Pushes bündeln |
 | Turnstile, Email Routing | kostenlos | – |
 
 Wird eine Grenze knapp: zuerst die Ursache prüfen (z. B. Bot-Traffic auf Formularen, zu häufige Deploys),

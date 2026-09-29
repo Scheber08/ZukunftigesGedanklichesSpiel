@@ -3,13 +3,30 @@
  * Scrollen, Demo-Login und das Warten auf Svelte-Islands.
  */
 import AxeBuilder from '@axe-core/playwright';
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 /** axe-Regelsätze bis WCAG 2.2 AA (Plan §10). */
 export const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'];
 
+/**
+ * Endzustand der Seite herstellen, wie ihn Besucher nach dem Scrollen sehen: Scroll-Einblendungen
+ * (`[data-reveal]`, starten mit Deckkraft 0) auslösen und alle endlichen Animationen/Übergänge
+ * abwarten. Sonst misst axe Kontraste mitten im Einblenden (halbe Deckkraft) oder überspringt
+ * noch unsichtbare Abschnitte. Endlos-Animationen (Logo-Glow) laufen weiter.
+ */
+export async function settleAnimations(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    for (const el of document.querySelectorAll('[data-reveal]')) el.classList.add('is-visible');
+    // Übergänge starten erst im nächsten Frame
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const finite = document.getAnimations().filter((a) => Number.isFinite(a.effect?.getComputedTiming().endTime ?? Infinity));
+    await Promise.all(finite.map((a) => a.finished.catch(() => undefined)));
+  });
+}
+
 /** Prüft die Seite mit axe; meldet Verstöße lesbar (Regel, Wirkung, betroffene Elemente). */
 export async function expectNoA11yViolations(page: Page, options: { exclude?: string[] } = {}): Promise<void> {
+  await settleAnimations(page);
   let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
   for (const selector of options.exclude ?? []) builder = builder.exclude(selector);
   const { violations } = await builder.analyze();
@@ -51,6 +68,21 @@ export async function waitForIslands(page: Page): Promise<void> {
   await page.waitForFunction(() => [...document.querySelectorAll('astro-island')].every((el) => !el.hasAttribute('ssr')), null, {
     timeout: 20_000,
   });
+}
+
+/**
+ * Sichtbare Erfolgsmeldung (`.alert-success`). Der Text steht zusätzlich in einer sr-only-Live-Region
+ * (role="status") für Screenreader – getByText allein fände deshalb zwei Elemente.
+ */
+export function successAlert(page: Page, text: RegExp): Locator {
+  return page.locator('.alert-success').filter({ hasText: text });
+}
+
+/** Tab einer Tab-Leiste öffnen (Rennseite, Wertung) – Inhalte anderer Tabs sind verborgen. */
+export async function openTab(page: Page, name: string | RegExp): Promise<void> {
+  const tab = page.getByRole('tab', { name, exact: typeof name === 'string' });
+  await tab.click();
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
 }
 
 export type DemoRole = 'Admin' | 'Steward' | 'Redaktion';

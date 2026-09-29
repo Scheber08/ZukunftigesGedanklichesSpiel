@@ -8,9 +8,9 @@ Den genauen Ablauf eines Renntags mit Uhrzeiten beschreibt das [Renntag-Runbook]
 
 **Inhalt**
 
-- [Grundlagen](#grundlagen): Anmelden, Rollen, Veröffentlichen, Sprachen, Markdown
+- [Grundlagen](#grundlagen): Anmelden, Rollen, Veröffentlichen, Adressen, Sprachen, Markdown
 - Liga: [Dashboard](#dashboard) · [Saisons](#saisons) · [Punkteschemata](#punkteschemata) ·
-  [Kalender](#kalender) · [Teams & Cockpits](#teams--cockpits) · [Fahrer](#fahrer) · [Anmeldungen](#anmeldungen)
+  [Kalender](#kalender) ([Strecken](#strecken)) · [Teams & Cockpits](#teams--cockpits) · [Fahrer](#fahrer) · [Anmeldungen](#anmeldungen)
 - Renntag: [Runden-Übersicht](#runden-übersicht) · [Grid-Builder](#grid-builder) ·
   [Ergebnis-Eingabe](#ergebnis-eingabe) · [Stewards](#stewards)
 - Inhalte: [News](#news) · [Regelwerk](#regelwerk) · [Seiten-Inhalte](#seiten-inhalte)
@@ -61,6 +61,20 @@ sie sich automatisch neu:
 - Entwürfe sind nie öffentlich.
 
 Formulare (Anmeldung, Vorfall melden, Kontakt) und der Admin-Bereich selbst sind immer live.
+
+### Adressen (Slugs) und Umbenennungen
+
+Viele Seiten haben einen sprechenden Adressteil, den **Slug**: `/fahrer/kurvenkoenig`,
+`/teams/mclaren`, `/saison/2/wertung`, `/news/saison-2-startet`. Er wird meist automatisch aus dem
+Namen erzeugt.
+
+- **Umbenennen ist erlaubt.** Änderst du den Slug eines Fahrers, Teams, einer Saison oder eines
+  veröffentlichten News-Artikels, merkt sich die Website die alte Adresse und **leitet sie dauerhaft
+  auf die neue weiter** – geteilte Links und Suchmaschinen-Einträge funktionieren weiter.
+- Die neue Adresse ist nach dem nächsten Rebuild (1–3 Minuten) online; die Weiterleitung gilt sofort.
+- Einen Slug nicht „im Kreis“ tauschen (A → B und B → A zwischen zwei Fahrern) – das verwirrt Besucher.
+- Ändert sich nur der **Anzeigename** (z. B. Gamertag), bleibt der Slug gleich, solange du ihn
+  nicht selbst änderst.
 
 ### Zwei Sprachen
 
@@ -168,6 +182,25 @@ Runden anlegen – einzeln oder im **Stapel** (z. B. „jeden Donnerstag 20:00 a
 Eine **abgesagte** Runde bleibt im Kalender sichtbar (als „abgesagt“ markiert) und zählt nicht zur Wertung.
 Terminverschiebung: Datum/Uhrzeit ändern und speichern – Countdown und Kalender-Abo passen sich an.
 
+### Strecken
+
+*Admin · Liga → Kalender → Strecken*
+
+Die Streckenliste ist mit allen Strecken aus dem Spiel vorbelegt. Je Strecke: Name DE/EN (nach dem
+**Ort**, keine offiziellen Event-Titel), Land (für die Flagge), Länge, Standard-Rundenzahl und die
+Spiel-ID für den späteren Telemetrie-Import.
+
+**Streckenkarte** (optional, erscheint auf der Rennseite und im Kalender):
+
+| Feld | Hinweis |
+|---|---|
+| Karte (SVG-Umriss) | eine eigene Datei, die im Repository unter `public/brand/tracks/<name>.svg` liegt (Technik fragen), **oder** eine `https://…`-Adresse, die auf `.svg` endet. Leer = keine Karte |
+| Quelle / Lizenz | **Pflicht bei fremden Karten**, z. B. „Wikimedia Commons, CC BY-SA 4.0“ – wird unter der Karte angezeigt |
+
+Die Vorschau zeigt die Karte auf dunklem und hellem Grund; beide sollten gut lesbar sein.
+**Kein offizielles F1- oder Spiel-Material** verwenden (Markenrecht, Plan §9.1) – nur selbst
+gezeichnete Umrisse oder Karten aus offenen Quellen mit passender Lizenz.
+
 ---
 
 ## Teams & Cockpits
@@ -191,10 +224,15 @@ Terminverschiebung: Datum/Uhrzeit ändern und speichern – Countdown und Kalend
 | Gamertag | ja | Groß-/Kleinschreibung egal bei der Duplikat-Prüfung |
 | Startnummer | ja | siehe unten |
 | Flagge (Nationalität) | ja, optional | |
-| Plattform, Eingabegerät | ja | PC (Steam), PC (EA App), PlayStation, Xbox |
+| Plattform | ja | PC (Steam), PC (EA App), PlayStation, Xbox – als Text-Badge, keine Konsolen-Logos |
+| Eingabegerät | **nein** | Lenkrad oder Controller – nur für die Orga |
 | Status | ja | aktiv (Stamm), Reserve (mit Position in der Warteliste), inaktiv, gesperrt |
 | Twitch-/YouTube-Link | nur wenn „Links zeigen“ an | nur auf Wunsch des Fahrers |
 | Discord-Name, Discord-ID, EA-ID, Notizen | **nein** | nur im Admin |
+| Slug (Adresse) | ja | aus dem Gamertag erzeugt; bei Änderung leitet die alte Adresse weiter (siehe [Adressen](#adressen-slugs-und-umbenennungen)) |
+
+Technisch sieht die öffentliche Website Fahrer nur über eine eigene, gefilterte Sicht der Datenbank –
+was oben mit „nein“ markiert ist, kann nicht versehentlich auf einer Seite landen.
 
 **Neuer Fahrer aus einer Anmeldung:** in [Anmeldungen](#anmeldungen) auf „Annehmen“ – die Daten
 werden übernommen.
@@ -347,8 +385,9 @@ DSQ-Strafen fließen automatisch ins Ergebnis ein** – die Wertung wird neu ber
 5. Status: **Entwurf** (unsichtbar), **geplant** (mit Datum/Uhrzeit – geht dann automatisch online)
    oder **veröffentlicht**.
 
-Adresse (Slug) je Sprache wird aus dem Titel erzeugt; nach dem Veröffentlichen nicht mehr ändern,
-sonst funktionieren geteilte Links nicht mehr.
+Die Adresse (Slug) je Sprache wird aus dem Titel erzeugt. Nach dem Veröffentlichen ändert sie sich
+**nicht mehr automatisch**, auch wenn du den Titel korrigierst. Änderst du sie selbst, leitet die
+alte Adresse dauerhaft auf die neue weiter (siehe [Adressen](#adressen-slugs-und-umbenennungen)).
 
 ---
 
@@ -374,7 +413,7 @@ sonst funktionieren geteilte Links nicht mehr.
 |---|---|
 | **FAQ** (Kategorien: Allgemein, Voraussetzungen, Renntag, Technik, Stewards) | `/liga/faq` |
 | **Orga-Team** (Gamertag, Rolle, seit Saison, optional Avatar) | `/liga/ueber-uns` |
-| **Offene Rollen** (Aufgabe, Zeitaufwand, aktiv/inaktiv) | `/liga/ueber-uns` |
+| **Offene Rollen** (Aufgabe, Zeitaufwand DE/EN, aktiv/inaktiv) | `/liga/ueber-uns` |
 | **Partner** (Logo, Text, Link, Kennzeichnung „Anzeige“) | `/liga/partner`, Partner-Leiste der Startseite |
 | **Startseite** (Claim DE/EN) und **Anmeldestatus** | Startseite, `/mitfahren` |
 
@@ -445,6 +484,10 @@ die Nummern-Historie prüfen.
 **Ein Fahrer ist doppelt in der Fahrerliste.**
 Nicht löschen, wenn es schon Ergebnisse gibt – Liga-Leitung bzw. Technik ansprechen, die Einträge
 werden zusammengeführt.
+
+**Nach einer Umbenennung zeigt die alte Adresse „Seite nicht gefunden“.**
+Die Weiterleitung entsteht nur, wenn der **Slug** im Admin geändert wurde (nicht bei neu angelegten
+Einträgen). Technik kann sie in der Datenbank nachtragen ([BETRIEB.md](BETRIEB.md#weiterleitungen-nach-umbenennungen)).
 
 **Ein Ergebnis ist falsch, aber schon „final“.**
 „Korrigieren“ mit Grund – nie ein finales Ergebnis stillschweigend ändern.

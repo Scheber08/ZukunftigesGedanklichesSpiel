@@ -39,6 +39,11 @@ begin
 end;
 $$;
 
+-- ------------------------------------------------------------------ Test-Fixture (nur CI-Datenbank)
+-- Ein Fahrer mit Link, der ihn NICHT zeigen will – die View muss den Link verbergen.
+update public.drivers set youtube_url = 'https://www.youtube.com/@ci-verborgen'
+where id = (select min(id) from public.drivers where not show_links);
+
 -- ------------------------------------------------------------------ Erwartungswerte (als Eigentümer)
 create temp table expected as
 select
@@ -49,7 +54,10 @@ select
   (select count(*) from public.settings where is_public)                                      as settings_public,
   (select count(*) from public.registrations)                                                 as registrations_total,
   (select count(*) from public.results res join public.sessions s on s.id = res.session_id
-     join public.rounds r on r.id = s.round_id where r.status in ('provisional', 'final', 'corrected')) as results_visible;
+     join public.rounds r on r.id = s.round_id where r.status in ('provisional', 'final', 'corrected')) as results_visible,
+  (select count(*) from public.drivers)                                                        as drivers_total,
+  (select count(*) from public.drivers where not show_links and (twitch_url is not null or youtube_url is not null)) as drivers_hidden_links,
+  (select count(*) from public.slug_redirects)                                                 as redirects_total;
 grant select on expected to anon, service_role;
 
 -- ------------------------------------------------------------------ Sicht als anon (Besucher, statischer Build)
@@ -91,6 +99,22 @@ begin
   select count(*) into n from public.round_entries re join public.rounds r on r.id = re.round_id where r.status = 'scheduled';
   if n <> 0 then raise exception 'anon sieht Aufstellungen geplanter Runden'; end if;
 
+  -- Fahrer nur über die View drivers_public (Migration 20260930090000): Tabelle gesperrt,
+  -- View vollständig, interne Felder leer, Links nur mit show_links
+  select count(*) into n from public.drivers;
+  if n <> 0 then raise exception 'anon liest die Tabelle drivers direkt (% Zeilen) – nur drivers_public ist öffentlich', n; end if;
+  select count(*) into n from public.drivers_public;
+  if n <> e.drivers_total then raise exception 'drivers_public zeigt % Fahrer, erwartet %', n, e.drivers_total; end if;
+  select count(*) into n from public.drivers_public where input_device is not null;
+  if n <> 0 then raise exception 'drivers_public verrät das Eingabegerät (% Zeilen)', n; end if;
+  select count(*) into n from public.drivers_public where not show_links and (twitch_url is not null or youtube_url is not null);
+  if n <> 0 then raise exception 'drivers_public zeigt Links ohne show_links (% Zeilen)', n; end if;
+  if e.drivers_hidden_links = 0 then raise exception 'Demo-Daten ohne versteckte Fahrer-Links – View-Test wäre wertlos'; end if;
+
+  -- Weiterleitungen alter Slugs sind öffentlich lesbar (Middleware im Worker, Plan §2.2)
+  select count(*) into n from public.slug_redirects;
+  if n <> e.redirects_total or n = 0 then raise exception 'anon sieht % Weiterleitungen, erwartet % (> 0)', n, e.redirects_total; end if;
+
   -- Schreiben ist für anon immer verboten
   begin
     insert into public.teams (slug, name, short_name, color_hex) values ('anon-test', 'X', 'X', '#000000');
@@ -105,6 +129,16 @@ begin
   begin
     perform public.run_retention();
     raise exception 'anon darf run_retention ausführen';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.drivers_public set gamertag = 'gehackt';
+    raise exception 'anon darf über drivers_public schreiben';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.slug_redirects (entity, old_slug, new_slug) values ('driver', 'anon-alt', 'anon-neu');
+    raise exception 'anon darf Weiterleitungen anlegen';
   exception when insufficient_privilege then null;
   end;
 

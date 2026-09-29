@@ -1,7 +1,7 @@
 # =============================================================================
-# CI (Plan §7.6): Lint + Typecheck, Unit-Tests, Seed-Prüfung, Build, Link-Check,
-# Datenbank-Test (Migrationen + Seeds + RLS), Playwright-E2E mit axe,
-# Lighthouse-Budget und Preview-Deployment pro Pull Request.
+# CI (Plan §7.6): Lint + Typecheck, Unit-Tests, Seed-Prüfung, Build, Datenbank-Test
+# (Migrationen + Seeds + RLS), Playwright-E2E mit axe und Link-Check, Lighthouse-Budget
+# und Preview-Deployment pro Pull Request.
 #
 # Alles läuft im Demo-Modus (DEMO_MODE=true) mit den Beispieldaten aus
 # src/lib/seed/demo.ts – die CI braucht keine Secrets und fasst nie die
@@ -51,7 +51,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   build:
-    name: Build (Demo) & Link-Check
+    name: Build (Demo)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -72,8 +72,6 @@ jobs:
             echo "- dist/client gesamt: $(du -sh dist/client | cut -f1)"
             echo "- JavaScript gesamt (unkomprimiert): $(find dist/client -name '*.js' -exec cat {} + | wc -c) Bytes"
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Link-Check (interne Links, externe werden übersprungen)
-        run: npm run test:links
       - name: Statische Seiten für Lighthouse bereitstellen
         uses: actions/upload-artifact@v4
         with:
@@ -134,7 +132,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   e2e:
-    name: E2E (Playwright + axe)
+    name: E2E (Playwright + axe + Link-Check)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -146,7 +144,11 @@ jobs:
       - run: npm ci
       - name: Chromium installieren
         run: npx playwright install --with-deps chromium
-      - name: Playwright-Tests (Dev-Server im Demo-Modus auf Port 4322)
+      # playwright.config.ts baut selbst (astro build, DEMO_MODE=true) und startet `astro preview`
+      # auf Port 4322 – getestet wird also der Produktions-Build mit Worker (workerd).
+      # Enthält den Link-Check (tests/e2e/links.spec.ts): crawlt alle internen Links, Ressourcen
+      # und #Sprungziele über den echten Server (statische Assets + Worker wie auf Cloudflare).
+      - name: Playwright-Tests inkl. Link-Check (Build + Preview im Demo-Modus auf Port 4322)
         run: npm run test:e2e
       - name: Bericht hochladen
         if: ${{ !cancelled() }}
@@ -242,12 +244,26 @@ jobs:
             echo
             if [ -n "$url" ]; then echo "Demo-Vorschau: $url"; else echo 'Version hochgeladen – URL siehe Log (Preview-URLs im Worker aktivieren, siehe docs/SETUP.md).'; fi
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Link im Pull Request posten (einmalig)
-        if: steps.cf.outputs.enabled == 'true' && steps.upload.outputs.url != '' && github.event.action == 'opened'
+      # Ein Kommentar pro Pull Request (erkennbar am Marker), bei jedem Push aktualisiert –
+      # auch wenn der erste Lauf noch ohne Cloudflare-Zugang war.
+      - name: Link im Pull Request posten bzw. aktualisieren
+        if: steps.cf.outputs.enabled == 'true' && steps.upload.outputs.url != ''
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
           PREVIEW_URL: ${{ steps.upload.outputs.url }}
         run: |
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Vorschau (Demo-Daten, noindex): ${PREVIEW_URL}
-          Die Adresse bleibt für alle weiteren Commits in diesem Pull Request gleich."
+          set -euo pipefail
+          marker='<!-- liga-preview -->'
+          body="${marker}
+          **Vorschau** (Demo-Daten, noindex): ${PREVIEW_URL}
+          Stand: ${PR_SHA:0:7} – die Adresse bleibt für alle weiteren Commits in diesem Pull Request gleich."
+          ids=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq ".[] | select(.body | startswith(\"${marker}\")) | .id")
+          id=${ids%%$'\n'*}
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -f body="$body" > /dev/null
+          else
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
+          fi

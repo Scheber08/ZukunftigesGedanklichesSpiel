@@ -14,7 +14,7 @@ Steward-Werkzeug, News in Deutsch und Englisch).
 
 ## Schnellstart (lokal, ohne Datenbank)
 
-Du brauchst nur **Node.js 24** (mindestens 22.12) und **Git**. Eine Datenbank oder Zugangsdaten
+Du brauchst nur **Node.js 24** (mindestens 22.15) und **Git**. Eine Datenbank oder Zugangsdaten
 brauchst du nicht: Ohne Konfiguration startet die Website im **Demo-Modus** mit erfundenen
 Beispieldaten (zwei Saisons, 30 Fahrer, Ergebnisse, Urteile, News).
 
@@ -31,6 +31,12 @@ Dann im Browser öffnen: **http://localhost:4321**
 - **Admin-Bereich:** http://localhost:4321/admin/login → „Als Demo-Admin“ (oder Steward/Redaktion) wählen.
   Im Demo-Modus gehen alle Änderungen beim Neustart des Servers verloren – ideal zum Ausprobieren.
 - Ein Hinweis unten rechts zeigt an, dass du Demo-Daten siehst.
+- Im Dev-Server erscheinen Änderungen aus dem Admin sofort auf den öffentlichen Seiten. Im fertigen
+  Build (Produktion, Vorschau, E2E-Tests) sind diese Seiten statisch und ändern sich erst mit dem
+  nächsten Rebuild – genau wie später online.
+- Astro 7 erlaubt **einen** Dev-Server pro Projekt. Läuft schon einer, einfach dessen Adresse nutzen
+  (`npx astro dev status`) statt einen zweiten zu starten. Weitere Hinweise:
+  [SETUP.md, Anhang A](docs/SETUP.md#anhang-a-lokale-entwicklung-mit-echter-datenbank).
 
 Mit echter Datenbank arbeiten: `.env.example` nach `.env` kopieren und ausfüllen
 (Anleitung in [docs/SETUP.md](docs/SETUP.md)).
@@ -45,9 +51,9 @@ Mit echter Datenbank arbeiten: `.env.example` nach `.env` kopieren und ausfülle
 | `npm run check` | Typprüfung (`astro check`) |
 | `npm run lint` | Typprüfung plus `svelte-check` |
 | `npm test` | Unit-Tests (Vitest): Punkte, Wertung, Spam-Schutz, Markdown-Sicherheit, i18n … |
-| `npm run test:e2e` | Browser-Tests (Playwright + axe) gegen einen eigenen Demo-Server auf Port 4322 |
+| `npm run test:e2e` | Browser-Tests (Playwright + axe): baut die Website im Demo-Modus und testet sie mit `astro preview` auf Port 4322 (läuft neben dem Dev-Server). `E2E_SKIP_BUILD=true` nutzt den vorhandenen Build |
 | `npm run test:e2e:install` | Einmalig: Chromium für Playwright herunterladen |
-| `npm run test:links` | Link-Check über den Build in `dist/client` |
+| `npm run test:links` | nur den Link-Check: crawlt alle internen Links, Ressourcen und #Sprungziele über den Demo-Build (Teil von `test:e2e`) |
 | `npm run db:seed:generate` | `supabase/seed.sql` aus `src/lib/seed/base.ts` neu erzeugen |
 | `npm run db:seed:demo` | zusätzlich `supabase/demo.sql` (Demo-Liga für eine Test-Datenbank) |
 | `npm run db:seed:check` | prüft, ob `seed.sql` aktuell ist (läuft in der CI) |
@@ -99,8 +105,10 @@ docs/             Plan, Architektur, Setup, Handbuch, Runbook, Betrieb
 
 Jeder Push und jeder Pull Request durchläuft die CI (`.github/workflows/ci.yml`):
 Typprüfung, Unit-Tests, Build, Link-Check, ein Test der Migrationen und der Zugriffsregeln
-(Row Level Security) gegen eine echte Postgres-Datenbank, Browser-Tests mit Barrierefreiheits-Prüfung
-(axe, WCAG 2.2 AA) und ein Lighthouse-Budget (JS < 50 KB, Seite < 300 KB, LCP < 2 s, CLS < 0,05).
+(Row Level Security, öffentliche Fahrer-Sicht `drivers_public`) gegen eine echte Postgres-Datenbank,
+Browser-Tests des Produktions-Builds mit Barrierefreiheits-Prüfung (axe, WCAG 2.2 AA) und ein
+Lighthouse-Budget (JS < 50 KB, Seite < 300 KB, LCP < 2 s, CLS < 0,05). Pull Requests bekommen
+zusätzlich eine Demo-Vorschau auf Cloudflare (sobald der Cloudflare-Zugang als Secret hinterlegt ist).
 
 ## Rechtliches
 

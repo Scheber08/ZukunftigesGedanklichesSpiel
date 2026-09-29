@@ -76,7 +76,8 @@ Kurzfristige Absage nach der Veröffentlichung: im Grid-Builder anpassen und ern
 
 **Fahrer** melden unter `/stewards/melden` (Clip-Link Pflicht, mit Zeitstempel).
 Die Stewards sehen neue Meldungen in `#stewards-intern` und im Admin unter **Stewards**.
-Nach Ablauf der Frist schließt das Formular für diese Runde automatisch.
+Nach Ablauf der Frist schließt das Formular für diese Runde automatisch; die Rennseite wird dann
+ohne Zutun neu gebaut, damit Fristhinweis und „Vorfall melden“ stimmen.
 
 ## Bis 72 h nach Fristende: Entscheidungen
 

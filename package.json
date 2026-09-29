@@ -16,7 +16,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
-    "test:links": "linkinator dist/client --recurse --clean-urls --skip \"^(?!http://localhost)\" --skip \"/(en/)?(mitfahren|join|kontakt|contact|admin|api|_actions)(/|$)\" --skip \"/stewards/(melden|report)$\" --skip \"\\.(ics|csv)$\" --verbosity error",
+    "test:links": "playwright test tests/e2e/links.spec.ts",
     "lint": "astro check && svelte-check --tsconfig ./tsconfig.json --threshold error",
     "db:seed:generate": "node --experimental-strip-types scripts/generate-seed-sql.ts",
     "db:seed:demo": "node --experimental-strip-types scripts/generate-seed-sql.ts --demo",

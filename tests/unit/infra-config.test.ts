@@ -97,7 +97,8 @@ describe.skipIf(!yaml)('GitHub-Workflows', () => {
     const ci = workflows['ci.yml']!;
     expect(Object.keys(ci.on)).toEqual(expect.arrayContaining(['push', 'pull_request']));
     const runs = Object.values(ci.jobs).flatMap((j) => (j.steps ?? []).map((s) => s.run ?? ''));
-    for (const cmd of ['npm run lint', 'npm test', 'npm run db:seed:check', 'npm run build', 'npm run test:links', 'npm run test:e2e', '@lhci/cli', 'wrangler versions upload']) {
+    // Der Link-Check ist Teil von test:e2e (tests/e2e/links.spec.ts gegen den echten Server)
+    for (const cmd of ['npm run lint', 'npm test', 'npm run db:seed:check', 'npm run build', 'npm run test:e2e', '@lhci/cli', 'wrangler versions upload']) {
       expect(runs.some((r) => r.includes(cmd)), cmd).toBe(true);
     }
     expect(ci.jobs.lighthouse?.['continue-on-error']).toBe(true);
@@ -123,6 +124,30 @@ describe.skipIf(!yaml)('GitHub-Workflows', () => {
     expect(all).toContain('age --encrypt');
     expect(all).toContain('r2.cloudflarestorage.com');
     expect(all).toContain('RETENTION_DAYS');
+  });
+
+  it('laufen mit minimalen Standardrechten', () => {
+    for (const [file, wf] of Object.entries(workflows)) {
+      expect(wf.permissions, file).toEqual({ contents: 'read' });
+    }
+  });
+
+  it('Preview pro Pull Request nur mit Cloudflare-Zugang, sonst übersprungen', () => {
+    const steps = workflows['ci.yml']!.jobs.preview?.steps ?? [];
+    expect(steps[0]?.run).toContain('CLOUDFLARE_API_TOKEN');
+    for (const step of steps.slice(1)) {
+      expect(step.if, step.name ?? step.uses).toContain("steps.cf.outputs.enabled == 'true'");
+    }
+  });
+
+  it('Datenbank-Job prüft die öffentliche Fahrer-Sicht und die Weiterleitungen', () => {
+    const check = read('.github', 'scripts', 'db-check-demo.sql');
+    expect(check).toContain('public.drivers_public');
+    expect(check).toContain('public.slug_redirects');
+    const ci = JSON.stringify(workflows['ci.yml']!.jobs.database);
+    for (const script of ['db-supabase-stub.sql', 'db-check-base.sql', 'db-check-demo.sql', 'supabase/migrations/*.sql']) {
+      expect(ci, script).toContain(script);
+    }
   });
 
   it('Dependabot aktualisiert npm und GitHub Actions wöchentlich', () => {
@@ -152,6 +177,35 @@ describe.skipIf(!toml)('supabase/config.toml', () => {
     expect(db.seed.enabled).toBe(true);
     expect(db.seed.sql_paths).toContain('./seed.sql');
     expect(existsSync(join(ROOT, 'supabase', 'seed.sql'))).toBe(true);
+  });
+});
+
+describe('Playwright (E2E)', () => {
+  const config = read('playwright.config.ts');
+
+  it('startet keinen zweiten Dev-Server, sondern Build + Preview im Demo-Modus auf eigenem Port', () => {
+    // Astro 7 erlaubt nur einen `astro dev` pro Projekt – ein laufender Dev-Server bleibt unberührt.
+    expect(config).not.toMatch(/npx astro dev|astro dev --port/);
+    expect(config).toMatch(/npx astro build \$\{config\} && \$\{preview\}/);
+    expect(config).toMatch(/npx astro preview \$\{config\} --port \$\{PORT\} --host 127\.0\.0\.1 --ignore-lock/);
+    expect(config).toMatch(/E2E_PORT \?\? 4322/);
+    expect(config).toMatch(/env: \{ DEMO_MODE: 'true'/);
+  });
+
+  it('E2E-Build nutzt die normale Konfiguration mit eigenem Vite-Cache', () => {
+    const e2e = read('tests', 'e2e', 'astro.config.e2e.mjs');
+    expect(config).toContain("'--config tests/e2e/astro.config.e2e.mjs'");
+    expect(e2e).toContain("from '../../astro.config.mjs'");
+    expect(e2e).toContain("cacheDir: 'node_modules/.vite-e2e'");
+  });
+
+  it('npm-Skripte für Tests und Seeds sind vorhanden', () => {
+    const scripts = (JSON.parse(read('package.json')) as { scripts: Record<string, string> }).scripts;
+    expect(scripts['test']).toBe('vitest run');
+    expect(scripts['test:e2e']).toBe('playwright test');
+    expect(scripts['db:seed:check']).toContain('--check');
+    expect(scripts['test:links']).toBe('playwright test tests/e2e/links.spec.ts');
+    expect(existsSync(join(ROOT, 'tests', 'e2e', 'links.spec.ts'))).toBe(true);
   });
 });
 

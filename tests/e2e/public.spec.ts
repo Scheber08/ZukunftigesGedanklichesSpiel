@@ -4,7 +4,7 @@
  * Selektoren über Rollen, Beschriftungen und sichtbaren Text (Plan §7.6).
  */
 import { expect, test } from '@playwright/test';
-import { expectSingleH1, waitForIslands } from './helpers';
+import { expectSingleH1, openTab, waitForIslands } from './helpers';
 
 test.describe('Startseite', () => {
   test('zeigt Hero, genau eine h1 und einen laufenden Countdown', async ({ page }) => {
@@ -142,19 +142,27 @@ test.describe('Rennseite', () => {
     await expect(page.getByText(/vorläufig/i).first()).toBeVisible();
     await expect(page.getByText(/Protestfrist/).first()).toBeVisible();
 
+    // Mit Ergebnis ist der Tab „Rennen“ vorausgewählt
+    await expect(page.getByRole('tab', { name: 'Rennen', exact: true })).toHaveAttribute('aria-selected', 'true');
     const race = page.getByRole('table', { name: /^Rennen – R4/ });
     await expect(race).toBeVisible();
     expect(await race.locator('tbody tr').count()).toBeGreaterThanOrEqual(20);
+
+    await openTab(page, 'Qualifying');
     const quali = page.getByRole('table', { name: /^Qualifying – R4/ });
     await expect(quali).toBeVisible();
+    await expect(race).toBeHidden();
     // Pole mit Kürzel „P“, nicht nur farbig (Plan §3.2)
-    await expect(page.getByText('Pole-Position').first()).toBeVisible();
+    const pole = quali.getByTitle('Pole-Position');
+    await expect(pole).toHaveCount(1);
+    await expect(pole).toHaveText('P');
   });
 
   test('geplante Runde zeigt noch kein Ergebnis', async ({ page }) => {
     await page.goto('/rennen/2/12');
     await expectSingleH1(page);
-    await expect(page.getByRole('table', { name: /^Rennen – / })).toHaveCount(0);
+    // auch nicht in einem verborgenen Tab
+    await expect(page.locator('table caption').filter({ hasText: /^(Rennen|Qualifying|Sprint) – / })).toHaveCount(0);
   });
 });
 
@@ -166,7 +174,14 @@ test.describe('Wertung', () => {
     await expect(drivers).toBeVisible();
     expect(await drivers.locator('tbody tr').count()).toBeGreaterThanOrEqual(22);
     await expect(drivers.locator('thead th', { hasText: 'Punkte' })).toHaveCount(1);
-    await expect(page.getByRole('table', { name: /^Konstrukteurswertung/ })).toHaveCount(1);
+
+    await openTab(page, 'Konstrukteure');
+    const teams = page.getByRole('table', { name: /^Konstrukteurswertung/ });
+    await expect(teams).toBeVisible();
+    expect(await teams.locator('tbody tr').count()).toBe(11);
+
+    await openTab(page, 'Matrix');
+    await expect(page.getByRole('table', { name: /^Positionen je Rennen/ })).toBeVisible();
   });
 
   test('Archiv-Wertung und „Stand nach Runde“', async ({ page }) => {
@@ -205,6 +220,25 @@ test.describe('Fahrer und Teams', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('KerbKiller77');
   });
 
+  test('alte Profil-Adresse nach Umbenennung leitet dauerhaft weiter (301)', async ({ page, request }) => {
+    // Demo-Daten: Weiterleitung kurvenkoenig-alt → kurvenkoenig (Tabelle slug_redirects, Plan §2.2)
+    const moved: Array<[string, string]> = [
+      ['/fahrer/kurvenkoenig-alt', '/fahrer/kurvenkoenig'],
+      ['/en/drivers/kurvenkoenig-alt', '/en/drivers/kurvenkoenig'],
+    ];
+    for (const [from, to] of moved) {
+      const res = await request.get(from, { maxRedirects: 0 });
+      expect(res.status(), from).toBe(301);
+      expect(new URL(res.headers()['location'] ?? '', 'http://x').pathname, from).toBe(to);
+    }
+    await page.goto('/fahrer/kurvenkoenig-alt');
+    await expect(page).toHaveURL(/\/fahrer\/kurvenkoenig$/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kurvenkönig');
+    // Unbekannte Slugs bleiben ein 404 (keine Weiterleitung ins Leere)
+    const unknown = await request.get('/fahrer/gibt-es-nicht-xyz', { maxRedirects: 0 });
+    expect(unknown.status()).toBe(404);
+  });
+
   test('Teamseite ohne Logos, mit Fahrern', async ({ page }) => {
     await page.goto('/teams/mclaren');
     await expectSingleH1(page);
@@ -238,6 +272,16 @@ test.describe('Stewards-Register', () => {
     await page.goto('/stewards/melden');
     await expectSingleH1(page);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Vorfall melden');
+    // Laufen mehrere Protestfristen (z. B. nachdem der Admin-Test ein Ergebnis veröffentlicht hat),
+    // fragt das Formular zuerst nach der Runde.
+    const chooser = page.getByRole('group', { name: 'Zu welcher Runde möchtest du melden?' });
+    if (await chooser.isVisible()) {
+      await chooser.getByRole('radio').first().check();
+      await page.getByRole('button', { name: 'Weiter' }).click();
+    }
     await expect(page.getByText(/Missbrauch führt zu Sanktionen/).first()).toBeVisible();
+    const clip = page.getByRole('textbox', { name: /^Clip-Link/ });
+    await expect(clip).toBeVisible();
+    await expect(clip).toHaveAttribute('required', '');
   });
 });

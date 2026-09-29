@@ -3,11 +3,23 @@
  * veröffentlichen → Strafe veröffentlichen → Wertung prüfen. Läuft gegen die Demo-Daten des
  * Test-Servers und nimmt jeweils die nächste Runde ohne Ergebnis – so bleibt der Test auch bei
  * wiederholten Läufen gegen denselben Server gültig (R5, dann R6 …).
+ *
+ * Öffentliche Seiten sind wie in Produktion statisch gebaut: Eine Veröffentlichung im Admin fordert
+ * einen Rebuild an, ändert die laufende Vorschau aber nicht. Die Wirkung auf die Wertung prüft der
+ * Test deshalb über die serverseitig berechnete Wertungs-Vorschau der Ergebnis-Eingabe (dieselbe
+ * Berechnung wie für /wertung) und die Status-Anzeigen im Admin. Läuft der Test gegen einen
+ * Dev-Server, der öffentliche Seiten live rendert (E2E_LIVE=true), prüft er zusätzlich die
+ * öffentlichen Seiten.
  */
-import { expect, test, type Page } from '@playwright/test';
-import { demoLogin, standingsPoints, waitForIslands } from './helpers';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { demoLogin, openTab, standingsPoints, successAlert, waitForIslands } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
+
+/** Öffentliche Seiten werden live gerendert (Dev-Server) statt beim Build eingefroren. */
+const LIVE_PUBLIC = process.env.E2E_LIVE === 'true';
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 interface RoundRef {
   id: string;
@@ -29,12 +41,54 @@ async function nextOpenRound(page: Page): Promise<RoundRef> {
   return { id, label, number: Number(/^R(\d+)/.exec(label)?.[1]) };
 }
 
+/** Zeile der Runde in der Rundenliste des Admins. */
+async function roundRow(page: Page, round: RoundRef): Promise<Locator> {
+  await page.goto('/admin/runden');
+  const table = page.getByRole('table', { name: /^Runden von/ });
+  const row = table.locator('tbody tr').filter({ has: page.getByRole('link', { name: round.label, exact: true }) });
+  await expect(row).toHaveCount(1);
+  return row;
+}
+
+/** Führender der Fahrerwertung laut /wertung (Rohtext, unabhängig von CSS-Versalien). */
+async function championshipLeader(page: Page): Promise<string> {
+  await page.goto('/wertung');
+  const table = page.getByRole('table', { name: /^Fahrerwertung/ });
+  const name = await table.locator('tbody tr').first().locator('th[scope="row"] .gamertag').first().textContent();
+  return (name ?? '').trim();
+}
+
+/** Zeile eines Fahrers in der Wertungs-Vorschau der Ergebnis-Eingabe: Punkte gesamt und dieser Runde. */
+async function previewRow(page: Page, gamertag: string): Promise<{ points: number; delta: number }> {
+  const table = page.getByRole('table', { name: /^Top 10 der Fahrerwertung/ });
+  await expect(table).toBeVisible();
+  const row = table.locator('tbody tr').filter({ has: page.getByRole('rowheader', { name: gamertag, exact: true }) });
+  await expect(row, `${gamertag} fehlt in der Top 10 der Wertungs-Vorschau`).toHaveCount(1);
+  const cells = row.locator('td');
+  // Spalten: Pos. | (th Fahrer) | Team | Punkte | Diese Runde | Veränderung
+  const num = async (i: number) => Number(((await cells.nth(i).textContent()) ?? '').replace(/[^\d-]/g, '') || '0');
+  return { points: await num(2), delta: await num(3) };
+}
+
+async function openRaceTab(page: Page, round: RoundRef): Promise<Locator> {
+  await page.goto(`/admin/runden/${round.id}/ergebnisse`);
+  await waitForIslands(page);
+  await page.getByRole('tablist', { name: 'Sessions' }).getByRole('tab', { name: /^Rennen/ }).click();
+  return page.getByRole('tabpanel').filter({ visible: true });
+}
+
 test('Renntag: Aufstellung → vorläufiges Ergebnis → Strafe → Wertung', async ({ page, browser }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
   let round!: RoundRef;
   let winner = '';
   let pointsBefore = 0;
   let pointsWithWin = 0;
+
+  await test.step('Führender der Wertung wird der Sieger dieser Runde', async () => {
+    // Der Führende bleibt sicher in der Top 10 der Vorschau – auch nach der Disqualifikation.
+    winner = await championshipLeader(page);
+    expect(winner).not.toBe('');
+  });
 
   await test.step('Demo-Admin meldet sich an und wählt die nächste Runde', async () => {
     await demoLogin(page, 'Admin');
@@ -51,59 +105,66 @@ test('Renntag: Aufstellung → vorläufiges Ergebnis → Strafe → Wertung', as
     const publish = page.getByRole('button', { name: /^(Änderungen )?[Vv]eröffentlichen$/ });
     await expect(publish).toBeEnabled();
     await publish.click();
-    await expect(page.getByText(/^Aufstellung veröffentlicht[ .(]/).filter({ visible: true })).toBeVisible();
+    await expect(successAlert(page, /^Aufstellung veröffentlicht[ .(]/)).toBeVisible();
+
+    const row = await roundRow(page, round);
+    await expect(row).toContainText('Aufstellung steht');
+    await expect(row).toContainText(/2[0-2] Cockpits/);
   });
 
-  await test.step('Aufstellung erscheint auf der öffentlichen Rennseite', async () => {
-    await page.goto(`/rennen/2/${round.number}`);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(round.label);
-    await expect(page.getByRole('heading', { name: 'Aufstellung', exact: true })).toBeVisible();
-    await expect(page.getByText('Aufstellung noch nicht veröffentlicht')).toHaveCount(0);
-  });
+  if (LIVE_PUBLIC) {
+    await test.step('Aufstellung erscheint auf der öffentlichen Rennseite', async () => {
+      await page.goto(`/rennen/2/${round.number}`);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(round.label);
+      await openTab(page, 'Aufstellung');
+      await expect(page.getByRole('heading', { name: 'Aufstellung', exact: true })).toBeVisible();
+      await expect(page.getByText('Aufstellung noch nicht veröffentlicht')).toHaveCount(0);
+    });
+  }
 
-  await test.step('Sieger laut vorbefüllter Reihenfolge und Punkte vorher', async () => {
-    await page.goto(`/admin/runden/${round.id}/ergebnisse`);
-    await waitForIslands(page);
-    await page.getByRole('tab', { name: /^Rennen/ }).click();
-    const firstPosition = page.getByRole('tabpanel').filter({ visible: true }).getByRole('spinbutton', { name: /^Position von / }).first();
-    const aria = (await firstPosition.getAttribute('aria-label')) ?? '';
-    winner = aria.replace(/^Position von /, '').trim();
-    expect(winner).not.toBe('');
+  await test.step('Ergebnis-Eingabe: Sieger nach vorn, speichern, Vorschau der Wertung', async () => {
+    const race = await openRaceTab(page, round);
+    const position = race.getByRole('spinbutton', { name: `Position von ${winner}`, exact: true });
+    await expect(position, `${winner} fehlt in der Aufstellung von ${round.label}`).toBeVisible();
+    await position.fill('1');
+    await position.press('Tab');
+    await expect(race.getByRole('spinbutton', { name: /^Position von / }).first()).toHaveAttribute('aria-label', `Position von ${winner}`);
 
-    await page.goto('/wertung');
-    pointsBefore = (await standingsPoints(page, winner)) ?? 0;
-  });
-
-  await test.step('Ergebnis-Eingabe: speichern, Vorschau, vorläufig veröffentlichen', async () => {
-    await page.goto(`/admin/runden/${round.id}/ergebnisse`);
-    await waitForIslands(page);
     const tabs = page.getByRole('tablist', { name: 'Sessions' }).getByRole('tab');
     const count = await tabs.count();
     expect(count).toBeGreaterThanOrEqual(2);
     for (let i = 0; i < count; i++) {
       await tabs.nth(i).click();
-      const panel = page.getByRole('tabpanel').filter({ visible: true });
-      await panel.getByRole('checkbox', { name: / speichern/ }).check();
+      await page.getByRole('tabpanel').filter({ visible: true }).getByRole('checkbox', { name: / speichern/ }).check();
     }
     await page.getByRole('button', { name: 'Speichern als vorläufig' }).click();
-    await expect(page.getByText(/^Gespeichert \(noch nicht öffentlich\)/).filter({ visible: true })).toBeVisible();
+    await expect(successAlert(page, /^Gespeichert \(noch nicht öffentlich\)/)).toBeVisible();
     await expect(page.getByRole('heading', { name: /^Vorschau: Fahrerwertung/ })).toBeVisible();
 
+    const preview = await previewRow(page, winner);
+    expect(preview.delta, `${winner} bekommt für den Sieg mindestens 25 Punkte`).toBeGreaterThanOrEqual(25);
+    pointsWithWin = preview.points;
+    pointsBefore = preview.points - preview.delta;
+  });
+
+  await test.step('Vorläufig veröffentlichen startet die Protestfrist', async () => {
     await page.getByRole('button', { name: 'Vorläufig veröffentlichen' }).click();
-    await expect(page.getByText(/^Vorläufig veröffentlicht\. Die Protestfrist läuft/).filter({ visible: true })).toBeVisible();
+    await expect(successAlert(page, /^Vorläufig veröffentlicht\. Die Protestfrist läuft/)).toBeVisible();
+    const row = await roundRow(page, round);
+    await expect(row).toContainText('vorläufig');
   });
 
-  await test.step('Rennseite und Wertung zeigen das vorläufige Ergebnis', async () => {
-    await page.goto(`/rennen/2/${round.number}`);
-    await expect(page.getByText(/vorläufig/i).first()).toBeVisible();
-    const race = page.getByRole('table', { name: new RegExp(`^Rennen – R${round.number} `) });
-    await expect(race).toBeVisible();
-    await expect(race.locator('tbody tr').first()).toContainText(winner);
-
-    await page.goto('/wertung');
-    pointsWithWin = (await standingsPoints(page, winner)) ?? 0;
-    expect(pointsWithWin, `${winner} sollte für den Sieg Punkte bekommen`).toBeGreaterThanOrEqual(pointsBefore + 25);
-  });
+  if (LIVE_PUBLIC) {
+    await test.step('Rennseite und Wertung zeigen das vorläufige Ergebnis', async () => {
+      await page.goto(`/rennen/2/${round.number}`);
+      await expect(page.getByText(/vorläufig/i).first()).toBeVisible();
+      const race = page.getByRole('table', { name: new RegExp(`^Rennen – R${round.number} `) });
+      await expect(race).toBeVisible();
+      await expect(race.locator('tbody tr').first()).toContainText(winner);
+      await page.goto('/wertung');
+      expect(await standingsPoints(page, winner)).toBe(pointsWithWin);
+    });
+  }
 
   await test.step('Admin schaltet das Vier-Augen-Prinzip für die Demo-Saison ab', async () => {
     // Im Demo-Modus gibt es nur EINEN Demo-Steward – eine zweite Stimme ist nicht möglich.
@@ -125,12 +186,16 @@ test('Renntag: Aufstellung → vorläufiges Ergebnis → Strafe → Wertung', as
       await steward.goto('/admin/stewards/neu');
       await steward.getByLabel(/^Rennen \(/).selectOption({ label: round.label });
       await steward.getByLabel('Session').selectOption({ label: 'Rennen' });
-      await steward.getByRole('group', { name: /Beteiligte Fahrer/ }).getByRole('checkbox', { name: new RegExp(`^${winner}`) }).check();
+      await steward.getByRole('group', { name: /Beteiligte Fahrer/ }).getByRole('checkbox', { name: new RegExp(`^${escapeRe(winner)}`) }).check();
       await steward.getByLabel(/Was ist passiert/).fill('E2E-Test: Nach Auswertung des Replays unerlaubte Fahrhilfe festgestellt.');
       await steward.getByRole('button', { name: 'Untersuchung eröffnen' }).click();
       await expect(steward).toHaveURL(/\/admin\/stewards\/\d+/);
 
-      await steward.getByLabel('Fahrer', { exact: true }).selectOption({ label: new RegExp(winner).source });
+      // Name ohne das aria-hidden-Pflichtsternchen des Labels
+      const driverSelect = steward.getByRole('combobox', { name: 'Fahrer', exact: true });
+      const option = driverSelect.locator('option').filter({ hasText: new RegExp(`(^|\\s)${escapeRe(winner)}(\\s|$)`) });
+      await expect(option).toHaveCount(1);
+      await driverSelect.selectOption((await option.getAttribute('value')) ?? '');
       await steward.getByLabel(/^Art der Entscheidung/).selectOption({ label: 'Disqualifikation' });
       await steward.getByLabel(/^Begründung \(Deutsch\)/).fill('Unerlaubte Fahrhilfe laut Lobby-Einstellungen (E2E-Test). Disqualifikation nach §10.');
       await steward.getByRole('button', { name: 'Als Entwurf speichern' }).click();
@@ -144,20 +209,39 @@ test('Renntag: Aufstellung → vorläufiges Ergebnis → Strafe → Wertung', as
     }
   });
 
-  await test.step('Register und Wertung spiegeln die Strafe wider', async () => {
-    const ref = new RegExp(`S2-R${String(round.number).padStart(2, '0')}-\\d{2}`);
-    await page.goto('/stewards');
-    await expect(page.getByText(ref).first()).toBeVisible();
+  const ref = () => new RegExp(`S2-R${String(round.number).padStart(2, '0')}-\\d{2}`);
 
-    await page.goto(`/rennen/2/${round.number}`);
-    const race = page.getByRole('table', { name: new RegExp(`^Rennen – R${round.number} `) });
-    await expect(race.locator('tbody tr', { hasText: winner })).toContainText('DSQ');
-
-    await page.goto('/wertung');
-    const pointsAfter = (await standingsPoints(page, winner)) ?? 0;
-    expect(pointsAfter, `${winner} verliert durch die Disqualifikation die Punkte der Runde`).toBeLessThan(pointsWithWin);
-    expect(pointsAfter).toBe(pointsBefore);
+  await test.step('Steward-Register im Admin führt das veröffentlichte Urteil', async () => {
+    await page.goto('/admin/stewards');
+    const decision = page.getByRole('row').filter({ hasText: ref() }).filter({ hasText: 'Disqualifikation' });
+    await expect(decision.first()).toBeVisible();
+    await expect(decision.first()).toContainText('veröffentlicht');
   });
+
+  await test.step('Ergebnis und Wertungs-Vorschau berücksichtigen die Disqualifikation', async () => {
+    const race = await openRaceTab(page, round);
+    const winnerRow = race.locator('tbody tr').filter({ has: page.getByRole('rowheader', { name: new RegExp(escapeRe(winner)) }) });
+    await expect(winnerRow.getByText('DSQ durch Urteil')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Änderungen speichern' }).click();
+    await expect(successAlert(page, /^Gespeichert – die Änderungen sind öffentlich \(Rebuild angefordert\)/)).toBeVisible();
+    const after = await previewRow(page, winner);
+    expect(after.delta, `${winner} bekommt nach der Disqualifikation keine Punkte für die Runde`).toBe(0);
+    expect(after.points).toBe(pointsBefore);
+    expect(after.points).toBeLessThan(pointsWithWin);
+  });
+
+  if (LIVE_PUBLIC) {
+    await test.step('Öffentliches Register, Rennseite und Wertung spiegeln die Strafe wider', async () => {
+      await page.goto('/stewards');
+      await expect(page.getByText(ref()).first()).toBeVisible();
+      await page.goto(`/rennen/2/${round.number}`);
+      const race = page.getByRole('table', { name: new RegExp(`^Rennen – R${round.number} `) });
+      await expect(race.locator('tbody tr', { hasText: winner })).toContainText('DSQ');
+      await page.goto('/wertung');
+      expect(await standingsPoints(page, winner)).toBe(pointsBefore);
+    });
+  }
 });
 
 test.describe('Zugriffsschutz', () => {
