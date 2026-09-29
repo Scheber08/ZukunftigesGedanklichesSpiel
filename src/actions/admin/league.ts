@@ -41,7 +41,7 @@ import {
 import type { AdminActionData } from '~/lib/admin/league/page';
 import { FROZEN_MESSAGE, isSeasonFrozen, openRoundsBeforeFinish } from '~/lib/admin/league/season';
 import { planSeatChange } from '~/lib/admin/league/seats';
-import { insertOne, selectOne, type Store } from '~/lib/db/store';
+import { insertOne, selectOne, UNIQUE_VIOLATION, type Store } from '~/lib/db/store';
 import {
   DRIVER_STATUSES,
   INPUT_DEVICES,
@@ -84,9 +84,23 @@ const conflict = (message: string) => new ActionError({ code: 'CONFLICT', messag
 const notFound = (what: string) => new ActionError({ code: 'NOT_FOUND', message: `${what} nicht gefunden.` });
 
 /** OpError (Fachfehler aus ops.ts) und Store-Fehler in Action-Fehler übersetzen. */
-function fail(err: unknown, conflictMessage?: string): never {
-  if (err instanceof OpError) throw new ActionError({ code: err.code, message: err.message });
+function fail(err: unknown, conflictMessage = 'Eintrag existiert bereits.'): never {
+  if (err instanceof ActionError) throw err;
+  // per Name statt instanceof: nach Hot-Reloads im Dev-Server können Klassen doppelt existieren
+  if (err instanceof Error && err.name === 'OpError') {
+    throw new ActionError({ code: (err as OpError).code, message: err.message });
+  }
+  if (err instanceof Error && (err as { code?: unknown }).code === UNIQUE_VIOLATION) {
+    throw new ActionError({ code: 'CONFLICT', message: conflictMessage });
+  }
   return toActionError(err, conflictMessage);
+}
+
+/** Saisonnummer und Slug müssen eindeutig sein. */
+async function checkSeasonUnique(store: Store, number: number, slug: string, exceptId?: Id): Promise<void> {
+  const all = await store.select('seasons');
+  if (all.some((s) => s.number === number && s.id !== exceptId)) throw fieldError({ number: `Saison ${number} gibt es schon.` });
+  if (all.some((s) => s.slug === slug && s.id !== exceptId)) throw fieldError({ slug: `Der Slug „${slug}“ ist schon vergeben.` });
 }
 
 function requireConfirm(confirm: boolean | undefined): void {
@@ -204,6 +218,7 @@ const seasonSave = defineAction({
     try {
       checkDateOrder(input.starts_on, input.ends_on);
       await checkSeasonRefs(store, input.points_scheme_id, input.rules_version_id);
+      await checkSeasonUnique(store, input.number, input.slug || String(input.number), input.id);
       const before = input.id ? await loadSeason(store, input.id) : null;
       if (before) assertNotFrozen(before);
       if (input.status === 'active') {
@@ -263,6 +278,7 @@ const seasonClone = defineAction({
     const store = getServiceStore();
     try {
       checkDateOrder(input.starts_on, input.ends_on);
+      await checkSeasonUnique(store, input.number, input.slug || String(input.number));
       if (input.rules_version_id != null && !(await selectOne(store, 'rules_versions', { id: input.rules_version_id }))) {
         throw fieldError({ rules_version_id: 'Regelwerk-Version nicht gefunden.' });
       }

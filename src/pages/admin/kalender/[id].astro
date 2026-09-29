@@ -1,0 +1,209 @@
+---
+/**
+ * Runde im Kalender bearbeiten (Plan §5 „Kalender“): Strecke, Datum/Uhrzeit (Liga-Zeit),
+ * Format (Sessions werden angepasst, nie mit Ergebnissen gelöscht), VOD/Highlights,
+ * Absagen und Löschen. Grid und Ergebnisse laufen im Renntag-Modul (/admin/runden/<id>).
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import Badge from '~/components/ui/Badge.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import ConfirmField from '~/components/admin/core/ConfirmField.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import Section from '~/components/admin/core/Section.astro';
+import TrackSelect from '~/components/admin/core/TrackSelect.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { url } from '~/i18n';
+import { splitLocalStart } from '~/lib/admin/league/calendar';
+import { ROUND_FORMAT_SHORT, ROUND_STATUS_BADGE, ROUND_STATUS_LABELS, SESSION_TYPE_LABELS } from '~/lib/admin/league/labels';
+import { actionOutcome, fieldAria, formValues } from '~/lib/admin/league/page';
+import { FROZEN_MESSAGE, isSeasonFrozen } from '~/lib/admin/league/season';
+import { formatDateLong, formatDateTime, formatTime, timeZoneName } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { intParam, roundLabel } from '~/lib/view';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+const A = actions.admin;
+const outcome = await actionOutcome(Astro, [A.roundSave, A.roundMediaSave, A.roundCancel, A.roundDelete]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const store = getServiceStore();
+const roundId = intParam(Astro.params.id);
+const round = roundId ? (await store.select('rounds', { eq: { id: roundId } }))[0] : undefined;
+if (!round) return Astro.redirect('/admin/kalender?fehlt=1');
+const [season] = await store.select('seasons', { eq: { id: round.season_id } });
+const [tracks, sessions, entries, incidents] = await Promise.all([
+  store.select('tracks'),
+  store.select('sessions', { eq: { round_id: round.id } }),
+  store.select('round_entries', { eq: { round_id: round.id } }),
+  store.select('incidents', { eq: { round_id: round.id } }),
+]);
+const results = sessions.length ? await store.select('results', { in: { session_id: sessions.map((s) => s.id) } }) : [];
+const track = tracks.find((t) => t.id === round.track_id);
+const frozen = isSeasonFrozen(season);
+const local = splitLocalStart(round.local_start);
+const label = roundLabel(round, track, 'de');
+const hasResults = results.length > 0;
+const cancellable = !frozen && (round.status === 'scheduled' || round.status === 'lineup_published') && !hasResults;
+const deletable = !frozen && (round.status === 'scheduled' || round.status === 'cancelled') && !hasResults && incidents.length === 0;
+
+const f = formValues(outcome, A.roundSave);
+const m = formValues(outcome, A.roundMediaSave);
+const order = ['qualifying', 'sprint', 'race'];
+const warnings = frozen ? [FROZEN_MESSAGE] : [];
+if (!frozen && (round.status === 'provisional' || round.status === 'final' || round.status === 'corrected')) {
+  warnings.push('Für diese Runde ist bereits ein Ergebnis veröffentlicht. Termin- oder Streckenänderungen erscheinen sofort öffentlich.');
+}
+---
+
+<AdminLayout title={label} breadcrumbs={[{ label: 'Kalender', href: `/admin/kalender?saison=${round.season_id}` }, { label }]}>
+  <div slot="actions" class="flex flex-wrap gap-2">
+    <a class="btn btn-primary" href={`/admin/runden/${round.id}`}>Grid & Ergebnis</a>
+    {season && <a class="btn btn-ghost" href={url('de', 'race', { season: season.slug, round: round.number })}>Rennseite</a>}
+  </div>
+
+  <Notice outcome={outcome} warnings={warnings} />
+
+  <p class="mb-6 flex flex-wrap items-center gap-2 text-sm text-muted">
+    <Badge variant={ROUND_STATUS_BADGE[round.status]}>{ROUND_STATUS_LABELS[round.status]}</Badge>
+    <span>
+      {season?.name} · {formatDateLong(round.start_utc, 'de')}, {formatTime(round.start_utc, 'de')}
+      {timeZoneName(round.start_utc, 'de')} · {ROUND_FORMAT_SHORT[round.format]}
+    </span>
+    {round.protest_deadline && <span>· Protestfrist bis {formatDateTime(round.protest_deadline, 'de')}</span>}
+  </p>
+
+  <Section title="Termin & Strecke" id="termin">
+    <form method="POST" action={A.roundSave}>
+      <input type="hidden" name="id" value={round.id} />
+      <input type="hidden" name="season_id" value={round.season_id} />
+      <input type="hidden" name="vod_url" value={round.vod_url ?? ''} />
+      <input type="hidden" name="highlights_url" value={round.highlights_url ?? ''} />
+      <fieldset disabled={frozen} class="grid gap-4 sm:grid-cols-2">
+        <legend class="sr-only">Termin und Strecke</legend>
+        <Field id="r-track" label="Strecke" required error={f.err('track_id')}>
+          <TrackSelect id="r-track" tracks={tracks} value={f.str('track_id', round.track_id)} attrs={fieldAria('r-track', false, f.err('track_id'))} />
+        </Field>
+        <Field id="r-number" label="Rundennummer" required error={f.err('number')}>
+          <input id="r-number" name="number" type="number" min="1" max="99" class="input" value={f.str('number', round.number)} required {...fieldAria('r-number', false, f.err('number'))} />
+        </Field>
+        <Field id="r-date" label="Datum" required error={f.err('date')}>
+          <input id="r-date" name="date" type="date" class="input" value={f.str('date', local.date)} required {...fieldAria('r-date', false, f.err('date'))} />
+        </Field>
+        <Field id="r-time" label="Uhrzeit (Liga-Zeit)" required hint="Europe/Berlin." error={f.err('time')}>
+          <input id="r-time" name="time" type="time" class="input" value={f.str('time', local.time)} required {...fieldAria('r-time', true, f.err('time'))} />
+        </Field>
+        <Field
+          id="r-format"
+          label="Format"
+          required
+          hint="Beim Wechsel werden Sessions ergänzt bzw. entfernt – Sessions mit Ergebnissen bleiben immer erhalten."
+          error={f.err('format')}
+          class="sm:col-span-2"
+        >
+          <select id="r-format" name="format" class="select" {...fieldAria('r-format', true, f.err('format'))}>
+            <option value="standard" selected={f.str('format', round.format) === 'standard'}>Standard (Quali + Rennen)</option>
+            <option value="sprint" selected={f.str('format', round.format) === 'sprint'}>Sprint (Quali + Sprint + Rennen)</option>
+          </select>
+        </Field>
+        <div class="sm:col-span-2">
+          <button type="submit" class="btn btn-primary">Speichern</button>
+        </div>
+      </fieldset>
+    </form>
+  </Section>
+
+  <Section title="Videos" id="videos" description="VOD (z. B. YouTube-Archiv) und Highlights – auch nach dem Saisonende änderbar.">
+    <form method="POST" action={A.roundMediaSave} class="grid gap-4 sm:grid-cols-2">
+      <input type="hidden" name="id" value={round.id} />
+      <Field id="r-vod" label="VOD-Link" error={m.err('vod_url')}>
+        <input id="r-vod" name="vod_url" type="url" class="input" value={m.str('vod_url', round.vod_url ?? '')} placeholder="https://www.youtube.com/watch?v=…" {...fieldAria('r-vod', false, m.err('vod_url'))} />
+      </Field>
+      <Field id="r-hl" label="Highlights-Link" error={m.err('highlights_url')}>
+        <input id="r-hl" name="highlights_url" type="url" class="input" value={m.str('highlights_url', round.highlights_url ?? '')} placeholder="https://…" {...fieldAria('r-hl', false, m.err('highlights_url'))} />
+      </Field>
+      <div class="sm:col-span-2">
+        <button type="submit" class="btn btn-primary">Links speichern</button>
+      </div>
+    </form>
+  </Section>
+
+  <Section title="Sessions" id="sessions" description="Entstehen automatisch aus dem Format. Ergebnisse trägst du im Renntag-Modul ein.">
+    <div class="table-wrap">
+      <table class="timing-table">
+        <caption class="sr-only">Sessions der Runde</caption>
+        <thead>
+          <tr>
+            <th scope="col">Session</th>
+            <th scope="col">Status</th>
+            <th scope="col" class="num">Ergebnis-Zeilen</th>
+            <th scope="col">Wetter</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            [...sessions]
+              .sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type))
+              .map((s) => (
+                <tr>
+                  <th scope="row">{SESSION_TYPE_LABELS[s.type]}</th>
+                  <td>{s.status === 'entered' ? <Badge variant="green">Eingetragen</Badge> : <Badge variant="muted">Offen</Badge>}</td>
+                  <td class="num">{results.filter((r) => r.session_id === s.id).length}</td>
+                  <td class="muted">{s.weather ?? '–'}</td>
+                </tr>
+              ))
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-3 text-sm text-muted">
+      Aufstellung: {entries.length} Einträge · Vorfälle: {incidents.length}
+    </p>
+  </Section>
+
+  <Section title="Absagen" id="absagen">
+    {
+      round.status === 'cancelled' ? (
+        <form method="POST" action={A.roundCancel} class="grid gap-3">
+          <input type="hidden" name="id" value={round.id} />
+          <input type="hidden" name="restore" value="true" />
+          <p class="text-muted">Die Runde ist abgesagt und erscheint so im öffentlichen Kalender.</p>
+          <div>
+            <button type="submit" class="btn btn-secondary" disabled={frozen}>
+              Absage zurücknehmen
+            </button>
+          </div>
+        </form>
+      ) : cancellable ? (
+        <form method="POST" action={A.roundCancel} class="grid gap-3">
+          <input type="hidden" name="id" value={round.id} />
+          <p class="text-muted">Die Runde bleibt im Kalender sichtbar (als „Abgesagt“) und zählt nicht zur Wertung.</p>
+          <ConfirmField id="cancel-confirm" label={`Ja, ${label} absagen.`} />
+          <div>
+            <button type="submit" class="btn btn-danger">
+              Runde absagen
+            </button>
+          </div>
+        </form>
+      ) : (
+        <p class="text-muted">Nur geplante Runden ohne Ergebnis können abgesagt werden.</p>
+      )
+    }
+  </Section>
+
+  {
+    deletable && (
+      <Section title="Löschen" id="loeschen" description="Nur für versehentlich angelegte Runden. Die Nummern der anderen Runden bleiben unverändert.">
+        <form method="POST" action={A.roundDelete} class="grid gap-3">
+          <input type="hidden" name="id" value={round.id} />
+          <ConfirmField id="delete-confirm" label={`Ja, ${label} endgültig löschen.`} />
+          <div>
+            <button type="submit" class="btn btn-danger">Runde löschen</button>
+          </div>
+        </form>
+      </Section>
+    )
+  }
+</AdminLayout>

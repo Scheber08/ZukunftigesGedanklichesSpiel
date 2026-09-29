@@ -1,0 +1,27 @@
+---
+/** Streckenauswahl, alphabetisch nach deutschem Namen, mit Land. */
+import type { TrackRow } from '~/lib/db/types';
+import { countryName } from '~/lib/view';
+
+interface Props {
+  id: string;
+  name?: string;
+  tracks: TrackRow[];
+  value: string;
+  attrs?: Record<string, string>;
+}
+const { id, name = 'track_id', tracks, value, attrs = {} } = Astro.props;
+const sorted = [...tracks].sort((a, b) => a.name_de.localeCompare(b.name_de, 'de'));
+---
+
+<select id={id} name={name} class="select" required {...attrs}>
+  <option value="">– Strecke wählen –</option>
+  {
+    sorted.map((t) => (
+      <option value={t.id} selected={String(t.id) === value}>
+        {t.name_de}
+        {t.name_en !== t.name_de ? ` / ${t.name_en}` : ''} ({countryName(t.country_code, 'de')})
+      </option>
+    ))
+  }
+</select>

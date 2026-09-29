@@ -1,0 +1,39 @@
+---
+/** Felder einer Strecke (Plan §6.1 `tracks`): Namen DE/EN, Land, Spiel-ID, Länge, Runden. */
+import Field from '~/components/admin/ui/Field.astro';
+import CountrySelect from '~/components/admin/core/CountrySelect.astro';
+import { fieldAria } from '~/lib/admin/league/page';
+
+interface Props {
+  prefix: string;
+  values: { name_de: string; name_en: string; slug: string; country_code: string; game_track_id: string; length_km: string; laps_default: string };
+  err: (name: string) => string[] | undefined;
+}
+const { prefix, values: v, err } = Astro.props;
+const fid = (n: string) => `${prefix}-${n}`;
+const aria = (n: string, hint = false) => fieldAria(fid(n), hint, err(n));
+---
+
+<div class="grid gap-4 sm:grid-cols-2">
+  <Field id={fid('name_de')} label="Name (DE)" required hint="Nach dem Ort, keine offiziellen Event-Titel." error={err('name_de')}>
+    <input id={fid('name_de')} name="name_de" class="input" value={v.name_de} maxlength="60" required {...aria('name_de', true)} />
+  </Field>
+  <Field id={fid('name_en')} label="Name (EN)" required error={err('name_en')}>
+    <input id={fid('name_en')} name="name_en" class="input" value={v.name_en} maxlength="60" required {...aria('name_en')} />
+  </Field>
+  <Field id={fid('country_code')} label="Land" required error={err('country_code')}>
+    <CountrySelect id={fid('country_code')} name="country_code" value={v.country_code} required />
+  </Field>
+  <Field id={fid('slug')} label="Slug" hint="Leer = aus dem englischen Namen." error={err('slug')}>
+    <input id={fid('slug')} name="slug" class="input font-mono" value={v.slug} maxlength="40" {...aria('slug', true)} />
+  </Field>
+  <Field id={fid('game_track_id')} label="Spiel-ID (UDP)" hint="Track-ID aus der F1-25-Telemetrie, für den späteren Import." error={err('game_track_id')}>
+    <input id={fid('game_track_id')} name="game_track_id" type="number" min="0" max="999" class="input" value={v.game_track_id} {...aria('game_track_id', true)} />
+  </Field>
+  <Field id={fid('length_km')} label="Länge (km)" hint="z. B. 5,807" error={err('length_km')}>
+    <input id={fid('length_km')} name="length_km" class="input" inputmode="decimal" value={v.length_km} maxlength="12" {...aria('length_km', true)} />
+  </Field>
+  <Field id={fid('laps_default')} label="Runden (Standard)" error={err('laps_default')}>
+    <input id={fid('laps_default')} name="laps_default" type="number" min="1" max="200" class="input" value={v.laps_default} {...aria('laps_default')} />
+  </Field>
+</div>

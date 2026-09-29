@@ -1,0 +1,65 @@
+---
+/** Strecke bearbeiten bzw. löschen (nur ohne Runden im Kalender). */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import ConfirmField from '~/components/admin/core/ConfirmField.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import Section from '~/components/admin/core/Section.astro';
+import TrackFields from '~/components/admin/core/TrackFields.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { actionOutcome, formValues } from '~/lib/admin/league/page';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { intParam } from '~/lib/view';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+const outcome = await actionOutcome(Astro, [actions.admin.trackSave, actions.admin.trackDelete]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const store = getServiceStore();
+const trackId = intParam(Astro.params.id);
+const track = trackId ? (await store.select('tracks', { eq: { id: trackId } }))[0] : undefined;
+if (!track) return Astro.redirect('/admin/kalender/strecken?fehlt=1');
+const used = await store.select('rounds', { eq: { track_id: track.id } });
+const f = formValues(outcome, actions.admin.trackSave);
+const values = {
+  name_de: f.str('name_de', track.name_de),
+  name_en: f.str('name_en', track.name_en),
+  slug: f.str('slug', track.slug),
+  country_code: f.str('country_code', track.country_code),
+  game_track_id: f.str('game_track_id', track.game_track_id ?? ''),
+  length_km: f.str('length_km', track.length_km != null ? String(track.length_km).replace('.', ',') : ''),
+  laps_default: f.str('laps_default', track.laps_default ?? ''),
+};
+---
+
+<AdminLayout title={track.name_de} breadcrumbs={[{ label: 'Kalender', href: '/admin/kalender' }, { label: 'Strecken', href: '/admin/kalender/strecken' }, { label: track.name_de }]}>
+  <Notice outcome={outcome} warnings={used.length ? [`Wird in ${used.length} Runde${used.length === 1 ? '' : 'n'} verwendet – Namensänderungen erscheinen überall.`] : []} />
+
+  <Section title="Strecke bearbeiten" id="bearbeiten">
+    <form method="POST" action={actions.admin.trackSave} class="grid gap-4">
+      <input type="hidden" name="id" value={track.id} />
+      <TrackFields prefix="track" values={values} err={f.err} />
+      <div>
+        <button type="submit" class="btn btn-primary">Speichern</button>
+      </div>
+    </form>
+  </Section>
+
+  <Section title="Löschen" id="loeschen">
+    {
+      used.length > 0 ? (
+        <p class="text-muted">Kann nicht gelöscht werden, solange Runden auf dieser Strecke im Kalender stehen.</p>
+      ) : (
+        <form method="POST" action={actions.admin.trackDelete} class="grid gap-3">
+          <input type="hidden" name="id" value={track.id} />
+          <ConfirmField id="track-delete-confirm" label={`Ja, ${track.name_de} löschen.`} />
+          <div>
+            <button type="submit" class="btn btn-danger">Strecke löschen</button>
+          </div>
+        </form>
+      )
+    }
+  </Section>
+</AdminLayout>

@@ -1,0 +1,369 @@
+---
+/**
+ * Kalender (Plan §5): Runden einer Saison, einzelne Runde anlegen, Stapel-Anlage mit
+ * Vorschau. Sessions (Quali, Rennen, bei Sprint zusätzlich Sprint) entstehen automatisch.
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import Badge from '~/components/ui/Badge.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import SeasonSwitch from '~/components/admin/core/SeasonSwitch.astro';
+import Section from '~/components/admin/core/Section.astro';
+import TrackSelect from '~/components/admin/core/TrackSelect.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { addDaysIso, batchDates, parseTrackList, splitLocalStart, weekdayOf } from '~/lib/admin/league/calendar';
+import { isIsoDate, isTime } from '~/lib/admin/league/forms';
+import { ROUND_FORMAT_SHORT, ROUND_STATUS_BADGE, ROUND_STATUS_LABELS, SESSION_TYPE_LABELS, WEEKDAY_LABELS } from '~/lib/admin/league/labels';
+import { actionOutcome, fieldAria, formValues } from '~/lib/admin/league/page';
+import { FROZEN_MESSAGE, isSeasonFrozen } from '~/lib/admin/league/season';
+import { formatDate, formatDateLong, timeZoneName, utcToZonedLocal } from '~/lib/domain/time';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { roundLabel } from '~/lib/view';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+const A = actions.admin;
+const outcome = await actionOutcome(Astro, [A.roundSave, A.roundsBatchCreate]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const store = getServiceStore();
+const [seasons, tracks] = await Promise.all([store.select('seasons'), store.select('tracks')]);
+const q = Astro.url.searchParams;
+const wanted = Number(q.get('saison') ?? outcome.posted?.get('season_id') ?? NaN);
+const season =
+  seasons.find((s) => s.id === wanted) ??
+  seasons.find((s) => s.status === 'active') ??
+  [...seasons].sort((a, b) => b.number - a.number)[0];
+
+const rounds = season ? (await store.select('rounds', { eq: { season_id: season.id } })).sort((a, b) => a.number - b.number) : [];
+const sessions = rounds.length ? await store.select('sessions', { in: { round_id: rounds.map((r) => r.id) } }) : [];
+const frozen = isSeasonFrozen(season);
+const trackOf = (id: number) => tracks.find((t) => t.id === id);
+const nextNumber = rounds.reduce((m, r) => Math.max(m, r.number), 0) + 1;
+const last = rounds.at(-1);
+const lastLocal = last ? splitLocalStart(last.local_start) : null;
+const today = utcToZonedLocal(new Date()).slice(0, 10);
+const defaultTime = lastLocal?.time ?? '20:00';
+const defaultStart = lastLocal ? addDaysIso(lastLocal.date, 7) : today;
+
+// Einzelne Runde
+const single = formValues(outcome, A.roundSave);
+
+// Stapel-Anlage: Vorschau per GET, Anlegen per POST
+const batchPosted = formValues(outcome, A.roundsBatchCreate);
+const bv = (name: string, fallback: string) => (batchPosted.active ? batchPosted.str(name) : (q.get(name) ?? fallback));
+const batch = {
+  start_date: bv('start_date', defaultStart),
+  weekday: bv('weekday', lastLocal ? String(weekdayOf(lastLocal.date)) : ''),
+  interval_days: bv('interval_days', '7'),
+  time: bv('time', defaultTime),
+  tracks: bv('tracks', ''),
+  skip_dates: bv('skip_dates', ''),
+};
+const wantsPreview = q.has('vorschau');
+let preview: Array<{ number: number; local: string; track: string; format: 'standard' | 'sprint' }> = [];
+const previewErrors: string[] = [];
+if (wantsPreview && season) {
+  const list = parseTrackList(batch.tracks, tracks);
+  if (list.unknown.length) previewErrors.push(`Unbekannte Strecken: ${list.unknown.join(', ')}.`);
+  if (list.items.length === 0) previewErrors.push('Bitte mindestens eine Strecke eintragen.');
+  if (!isIsoDate(batch.start_date)) previewErrors.push('Bitte ein gültiges Startdatum wählen.');
+  if (!isTime(batch.time)) previewErrors.push('Bitte eine Uhrzeit im Format HH:MM eintragen.');
+  const interval = Number(batch.interval_days);
+  if (!Number.isInteger(interval) || interval < 1 || interval > 60) previewErrors.push('Abstand: 1 bis 60 Tage.');
+  const skip = batch.skip_dates.split(/[\s,;]+/).filter((s) => s !== '');
+  if (skip.some((s) => !isIsoDate(s))) previewErrors.push('Pausen: Daten im Format JJJJ-MM-TT.');
+  if (previewErrors.length === 0 && list.items.length <= 30) {
+    const dates = batchDates({
+      startDate: batch.start_date,
+      weekday: batch.weekday === '' ? null : Number(batch.weekday),
+      intervalDays: interval,
+      time: batch.time,
+      count: list.items.length,
+      skipDates: skip,
+    });
+    preview = list.items.map((item, i) => ({
+      number: nextNumber + i,
+      local: dates[i]!,
+      track: item.track ? item.track.name_de : item.input,
+      format: item.format,
+    }));
+  }
+}
+const localDate = (local: string) => formatDateLong(`${local.slice(0, 10)}T12:00:00Z`, 'de');
+const weekdayOrder = [1, 2, 3, 4, 5, 6, 0];
+---
+
+<AdminLayout title="Kalender" breadcrumbs={[{ label: 'Kalender' }]}>
+  <a slot="actions" class="btn btn-ghost" href="/admin/kalender/strecken">Strecken verwalten</a>
+
+  <SeasonSwitch seasons={seasons} currentId={season?.id} base="/admin/kalender" />
+  <Notice outcome={outcome} warnings={frozen ? [FROZEN_MESSAGE] : []} />
+
+  {
+    !season ? (
+      <p class="alert alert-warning">
+        Es gibt noch keine Saison.{' '}
+        <a class="underline" href="/admin/saisons">
+          Saison anlegen
+        </a>
+      </p>
+    ) : (
+      <>
+        <Section title={`Runden · ${season.name}`} id="runden" description="Alle Zeiten sind Liga-Zeit (Europe/Berlin).">
+          {rounds.length === 0 ? (
+            <p class="text-muted">Noch keine Runden – lege unten einzelne Runden oder gleich den ganzen Kalender an.</p>
+          ) : (
+            <div class="table-wrap">
+              <table class="timing-table">
+                <caption class="sr-only">Runden der Saison {season.name}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col" class="sticky-col">Runde</th>
+                    <th scope="col">Datum</th>
+                    <th scope="col">Start</th>
+                    <th scope="col">Format</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Sessions</th>
+                    <th scope="col">
+                      <span class="sr-only">Aktionen</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rounds.map((r) => {
+                    const local = splitLocalStart(r.local_start);
+                    const rs = sessions.filter((s) => s.round_id === r.id);
+                    return (
+                      <tr>
+                        <th scope="row" class="sticky-col">
+                          <a class="font-semibold underline" href={`/admin/kalender/${r.id}`}>
+                            {roundLabel(r, trackOf(r.track_id), 'de')}
+                          </a>
+                        </th>
+                        <td>{formatDate(r.start_utc, 'de', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                        <td>
+                          {local.time} <span class="muted">{timeZoneName(r.start_utc, 'de')}</span>
+                        </td>
+                        <td>{ROUND_FORMAT_SHORT[r.format]}</td>
+                        <td>
+                          <Badge variant={ROUND_STATUS_BADGE[r.status]}>{ROUND_STATUS_LABELS[r.status]}</Badge>
+                        </td>
+                        <td class="muted text-sm">
+                          {rs
+                            .sort((a, b) => ['qualifying', 'sprint', 'race'].indexOf(a.type) - ['qualifying', 'sprint', 'race'].indexOf(b.type))
+                            .map((s) => `${SESSION_TYPE_LABELS[s.type]}${s.status === 'entered' ? ' ✓' : ''}`)
+                            .join(' · ') || '–'}
+                        </td>
+                        <td>
+                          <a class="underline" href={`/admin/runden/${r.id}`}>
+                            Renntag
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Section>
+
+        <Section title="Runde anlegen" id="neu">
+          <form method="POST" action={A.roundSave}>
+            <input type="hidden" name="season_id" value={season.id} />
+            <fieldset disabled={frozen} class="grid gap-4 sm:grid-cols-2">
+              <legend class="sr-only">Neue Runde</legend>
+              <Field id="round-track" label="Strecke" required error={single.err('track_id')}>
+                <TrackSelect id="round-track" tracks={tracks} value={single.str('track_id', '')} attrs={fieldAria('round-track', false, single.err('track_id'))} />
+              </Field>
+              <Field id="round-number" label="Rundennummer" hint={`Leer = R${nextNumber}`} error={single.err('number')}>
+                <input
+                  id="round-number"
+                  name="number"
+                  type="number"
+                  min="1"
+                  max="99"
+                  class="input"
+                  value={single.str('number', '')}
+                  placeholder={String(nextNumber)}
+                  {...fieldAria('round-number', true, single.err('number'))}
+                />
+              </Field>
+              <Field id="round-date" label="Datum" required error={single.err('date')}>
+                <input
+                  id="round-date"
+                  name="date"
+                  type="date"
+                  class="input"
+                  value={single.str('date', defaultStart)}
+                  required
+                  {...fieldAria('round-date', false, single.err('date'))}
+                />
+              </Field>
+              <Field id="round-time" label="Uhrzeit (Liga-Zeit)" required hint="Europe/Berlin, Sommer-/Winterzeit wird automatisch berücksichtigt." error={single.err('time')}>
+                <input
+                  id="round-time"
+                  name="time"
+                  type="time"
+                  class="input"
+                  value={single.str('time', defaultTime)}
+                  required
+                  {...fieldAria('round-time', true, single.err('time'))}
+                />
+              </Field>
+              <Field id="round-format" label="Format" required error={single.err('format')}>
+                <select id="round-format" name="format" class="select" {...fieldAria('round-format', false, single.err('format'))}>
+                  <option value="standard" selected={single.str('format', 'standard') === 'standard'}>
+                    Standard (Quali + Rennen)
+                  </option>
+                  <option value="sprint" selected={single.str('format', 'standard') === 'sprint'}>
+                    Sprint (Quali + Sprint + Rennen)
+                  </option>
+                </select>
+              </Field>
+              <div class="sm:col-span-2">
+                <button type="submit" class="btn btn-primary">
+                  Runde anlegen
+                </button>
+              </div>
+            </fieldset>
+          </form>
+        </Section>
+
+        <Section
+          title="Stapel-Anlage"
+          id="stapel"
+          description="Ganzen Kalender auf einmal anlegen: Startdatum, Wochentag und Abstand festlegen, eine Strecke pro Zeile. Mit „*“ am Zeilenende wird die Runde ein Sprint-Wochenende."
+        >
+          <form method="POST" action={A.roundsBatchCreate} class="grid gap-4">
+            <input type="hidden" name="season_id" value={season.id} />
+            <input type="hidden" name="saison" value={season.id} />
+            <fieldset disabled={frozen} class="grid gap-4">
+              <legend class="sr-only">Mehrere Runden anlegen</legend>
+              <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Field id="batch-start" label="Ab Datum" required error={batchPosted.err('start_date')}>
+                  <input
+                    id="batch-start"
+                    name="start_date"
+                    type="date"
+                    class="input"
+                    value={batch.start_date}
+                    required
+                    {...fieldAria('batch-start', false, batchPosted.err('start_date'))}
+                  />
+                </Field>
+                <Field id="batch-weekday" label="Wochentag" hint="Leer = genau ab dem Datum." error={batchPosted.err('weekday')}>
+                  <select id="batch-weekday" name="weekday" class="select" {...fieldAria('batch-weekday', true, batchPosted.err('weekday'))}>
+                    <option value="">– wie Datum –</option>
+                    {weekdayOrder.map((d) => (
+                      <option value={d} selected={batch.weekday === String(d)}>
+                        {WEEKDAY_LABELS[d]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field id="batch-interval" label="Abstand (Tage)" required hint="7 = wöchentlich, 14 = alle zwei Wochen." error={batchPosted.err('interval_days')}>
+                  <input
+                    id="batch-interval"
+                    name="interval_days"
+                    type="number"
+                    min="1"
+                    max="60"
+                    class="input"
+                    value={batch.interval_days}
+                    required
+                    {...fieldAria('batch-interval', true, batchPosted.err('interval_days'))}
+                  />
+                </Field>
+                <Field id="batch-time" label="Uhrzeit (Liga-Zeit)" required error={batchPosted.err('time')}>
+                  <input id="batch-time" name="time" type="time" class="input" value={batch.time} required {...fieldAria('batch-time', false, batchPosted.err('time'))} />
+                </Field>
+              </div>
+              <div class="grid gap-4 lg:grid-cols-2">
+                <Field
+                  id="batch-tracks"
+                  label="Strecken (eine pro Zeile)"
+                  required
+                  hint="Name (DE/EN) oder Kürzel, z. B. „suzuka“, „Monza *“ für Sprint."
+                  error={batchPosted.err('tracks')}
+                >
+                  <textarea
+                    id="batch-tracks"
+                    name="tracks"
+                    class="textarea font-mono"
+                    rows="10"
+                    required
+                    spellcheck="false"
+                    {...fieldAria('batch-tracks', true, batchPosted.err('tracks'))}
+                  >{batch.tracks}</textarea>
+                </Field>
+                <div class="grid content-start gap-4">
+                  <Field id="batch-skip" label="Pausen (optional)" hint="Termine, die ausfallen (JJJJ-MM-TT, durch Komma oder Zeile getrennt) – die Serie verschiebt sich." error={batchPosted.err('skip_dates')}>
+                    <textarea id="batch-skip" name="skip_dates" class="textarea font-mono" rows="3" {...fieldAria('batch-skip', true, batchPosted.err('skip_dates'))}>{batch.skip_dates}</textarea>
+                  </Field>
+                  <details class="text-sm">
+                    <summary class="cursor-pointer py-2 text-muted">Verfügbare Strecken ({tracks.length})</summary>
+                    <p class="mt-2 font-mono text-xs leading-6 text-muted">{[...tracks].sort((a, b) => a.slug.localeCompare(b.slug)).map((t) => t.slug).join(', ')}</p>
+                  </details>
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button type="submit" class="btn btn-secondary" formmethod="get" formaction="/admin/kalender#stapel" name="vorschau" value="1" formnovalidate>
+                  Vorschau
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  Runden anlegen
+                </button>
+              </div>
+            </fieldset>
+          </form>
+
+          {wantsPreview && (
+            <div class="mt-6" aria-live="polite">
+              <h3 class="mb-3 text-lg uppercase">Vorschau</h3>
+              {previewErrors.length > 0 ? (
+                <div class="alert alert-danger" role="alert">
+                  <ul class="list-disc pl-5">
+                    {previewErrors.map((e) => (
+                      <li>{e}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div class="table-wrap">
+                  <table class="timing-table">
+                    <caption class="sr-only">Vorschau der neuen Runden</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Runde</th>
+                        <th scope="col">Datum</th>
+                        <th scope="col">Start</th>
+                        <th scope="col">Format</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.map((p) => (
+                        <tr>
+                          <th scope="row" class="font-semibold">
+                            R{p.number} · {p.track}
+                          </th>
+                          <td>{localDate(p.local)}</td>
+                          <td>{p.local.slice(11, 16)}</td>
+                          <td>{ROUND_FORMAT_SHORT[p.format]}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p class="mt-2 text-sm text-muted">Passt alles? Dann oben auf „Runden anlegen“ klicken – die Eingaben sind übernommen.</p>
+            </div>
+          )}
+        </Section>
+      </>
+    )
+  }
+</AdminLayout>

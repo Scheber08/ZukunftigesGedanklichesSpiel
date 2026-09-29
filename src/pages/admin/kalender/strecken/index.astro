@@ -1,0 +1,91 @@
+---
+/** Strecken verwalten (Plan §5 „Kalender“, §6.1 `tracks`). */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import Notice from '~/components/admin/core/Notice.astro';
+import Section from '~/components/admin/core/Section.astro';
+import TrackFields from '~/components/admin/core/TrackFields.astro';
+import Flag from '~/components/ui/Flag.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { actionOutcome, formValues } from '~/lib/admin/league/page';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { countryName } from '~/lib/view';
+
+if (!hasRole(Astro.locals.staff, 'admin')) return Astro.redirect('/admin?error=forbidden');
+const outcome = await actionOutcome(Astro, [actions.admin.trackSave]);
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const store = getServiceStore();
+const [tracks, rounds] = await Promise.all([store.select('tracks'), store.select('rounds')]);
+const sorted = [...tracks].sort((a, b) => a.name_de.localeCompare(b.name_de, 'de'));
+const f = formValues(outcome, actions.admin.trackSave);
+const values = {
+  name_de: f.str('name_de'),
+  name_en: f.str('name_en'),
+  slug: f.str('slug'),
+  country_code: f.str('country_code'),
+  game_track_id: f.str('game_track_id'),
+  length_km: f.str('length_km'),
+  laps_default: f.str('laps_default'),
+};
+const fmtKm = (n: number | null) => (n == null ? '–' : new Intl.NumberFormat('de-DE', { minimumFractionDigits: 3 }).format(n));
+---
+
+<AdminLayout title="Strecken" breadcrumbs={[{ label: 'Kalender', href: '/admin/kalender' }, { label: 'Strecken' }]}>
+  <Notice outcome={outcome} />
+
+  <Section title={`Strecken (${tracks.length})`} id="liste">
+    <div class="table-wrap">
+      <table class="timing-table">
+        <caption class="sr-only">Alle Strecken</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="sticky-col">Strecke</th>
+            <th scope="col">Land</th>
+            <th scope="col">Slug</th>
+            <th scope="col" class="num">Spiel-ID</th>
+            <th scope="col" class="num">Länge</th>
+            <th scope="col" class="num">Runden</th>
+            <th scope="col" class="num">Rennen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            sorted.map((t) => (
+              <tr>
+                <th scope="row" class="sticky-col">
+                  <a class="font-semibold underline" href={`/admin/kalender/strecken/${t.id}`}>
+                    {t.name_de}
+                  </a>
+                  {t.name_en !== t.name_de && <span class="muted"> / {t.name_en}</span>}
+                </th>
+                <td>
+                  <span class="inline-flex items-center gap-2">
+                    <Flag code={t.country_code} lang="de" decorative />
+                    {countryName(t.country_code, 'de')}
+                  </span>
+                </td>
+                <td class="muted font-mono text-sm">{t.slug}</td>
+                <td class="num">{t.game_track_id ?? '–'}</td>
+                <td class="num">{fmtKm(t.length_km)}</td>
+                <td class="num">{t.laps_default ?? '–'}</td>
+                <td class="num">{rounds.filter((r) => r.track_id === t.id).length}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </Section>
+
+  <Section title="Neue Strecke" id="neu">
+    <form method="POST" action={actions.admin.trackSave} class="grid gap-4">
+      <TrackFields prefix="new-track" values={values} err={f.err} />
+      <div>
+        <button type="submit" class="btn btn-primary">Strecke anlegen</button>
+      </div>
+    </form>
+  </Section>
+</AdminLayout>
