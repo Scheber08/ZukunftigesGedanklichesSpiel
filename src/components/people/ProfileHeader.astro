@@ -69,15 +69,6 @@ const t = useT(lang);
     position: relative;
     overflow: hidden;
   }
-  /* dezenter Schimmer in Teamfarbe oben – nur Fläche, kein Logo */
-  .profile-header::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 3px;
-    background: var(--team-color, transparent);
-    opacity: 0.9;
-  }
   .head {
     display: grid;
     grid-template-columns: auto 1fr;

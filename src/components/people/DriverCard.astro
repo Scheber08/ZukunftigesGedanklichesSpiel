@@ -27,6 +27,8 @@ const t = useT(lang);
 const linked = hasProfile(driver);
 const name = linked ? driver.gamertag : `${t('common.formerDriver')} #${driver.id}`;
 const href = linked ? url(lang, 'driver', { slug: driver.slug }) : null;
+// Lange Gamertags auf schmalen Displays bevorzugt nach „_“ umbrechen
+const parts = name.split('_');
 ---
 
 <div class:list={['driver-card', href && 'is-linked', !showNumber && 'no-number', className]} style={teamStyle(team)}>
@@ -38,12 +40,12 @@ const href = linked ? url(lang, 'driver', { slug: driver.slug }) : null;
         href ? (
           <a href={href} class="stretched">
             {showNumber && <span class="sr-only">{t('common.number')} {number ?? '–'} </span>}
-            {name}
+            {parts.map((part, i) => (i < parts.length - 1 ? <Fragment>{part}_<wbr /></Fragment> : part))}
           </a>
         ) : (
           <span>
             {showNumber && <span class="sr-only">{t('common.number')} {number ?? '–'} </span>}
-            {name}
+            {parts.map((part, i) => (i < parts.length - 1 ? <Fragment>{part}_<wbr /></Fragment> : part))}
           </span>
         )
       }
@@ -60,11 +62,11 @@ const href = linked ? url(lang, 'driver', { slug: driver.slug }) : null;
   .driver-card {
     position: relative;
     display: grid;
-    grid-template-columns: 4px 3.25rem 1fr;
+    grid-template-columns: 4px 2.5rem 1fr;
     align-items: center;
-    gap: 0.875rem;
+    gap: 0.625rem;
     min-height: 4.5rem;
-    padding: 0.75rem 1rem 0.75rem 0.75rem;
+    padding: 0.75rem 0.75rem 0.75rem 0.625rem;
     border-radius: var(--radius-control);
     background: var(--color-surface-2);
     border: 1px solid transparent;
@@ -88,7 +90,7 @@ const href = linked ? url(lang, 'driver', { slug: driver.slug }) : null;
   .num {
     font-family: var(--font-display);
     font-weight: 900;
-    font-size: 2.25rem;
+    font-size: 1.875rem;
     line-height: 1;
     text-align: right;
   }
@@ -97,7 +99,7 @@ const href = linked ? url(lang, 'driver', { slug: driver.slug }) : null;
   }
   .name {
     font-family: var(--font-sans);
-    font-size: 1rem;
+    font-size: 0.9375rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.03em;
@@ -132,5 +134,18 @@ const href = linked ? url(lang, 'driver', { slug: driver.slug }) : null;
     margin-top: 0.3rem;
     font-size: 0.8125rem;
     color: var(--color-muted);
+  }
+  @media (min-width: 400px) {
+    .driver-card:not(.no-number) {
+      grid-template-columns: 4px 3.25rem 1fr;
+      gap: 0.875rem;
+      padding: 0.75rem 1rem 0.75rem 0.75rem;
+    }
+    .num {
+      font-size: 2.25rem;
+    }
+    .name {
+      font-size: 1rem;
+    }
   }
 </style>

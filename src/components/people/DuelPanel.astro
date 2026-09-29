@@ -39,7 +39,7 @@ const orderedRounds = [...duel.rounds]
 
 <div class="duel card p-4 md:p-5" style={teamStyle(team)}>
   <div class="duel-head">
-    <DriverLink lang={lang} driver={a} team={team} class="text-base" />
+    <DriverLink lang={lang} driver={a} team={team} stripe={false} class="text-base" />
     <span class="micro">{t('people.duel.versus')}</span>
     <DriverLink lang={lang} driver={b} team={team} stripe={false} class="justify-end text-base" />
   </div>
@@ -113,7 +113,7 @@ const orderedRounds = [...duel.rounds]
 
 <style>
   .duel {
-    border-top: 4px solid var(--team-color, var(--color-border));
+    border-left: 4px solid var(--team-color, var(--color-border));
   }
   .duel-head {
     display: grid;
