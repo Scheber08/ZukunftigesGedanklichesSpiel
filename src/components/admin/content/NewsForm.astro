@@ -69,6 +69,7 @@ const publicHref = news && wasPublished ? { de: `/news/${news.slug_de}`, en: `/e
   data-news-form
   data-taken-de={JSON.stringify(taken.de)}
   data-taken-en={JSON.stringify(taken.en)}
+  data-slug-locked={wasPublished ? 'true' : undefined}
 >
   {news && <input type="hidden" name="id" value={news.id} />}
 
@@ -366,8 +367,10 @@ const publicHref = news && wasPublished ? { de: `/news/${news.slug_de}`, en: `/e
       const note = form.querySelector<HTMLElement>(`[data-slug-note="${lang}"]`);
       if (!target) continue;
       const sourceText = () => (lang === 'de' ? titleDe?.value : titleEn?.value.trim() || titleDe?.value) ?? '';
-      // Automatisch, solange der Slug leer ist oder genau dem Titel entspricht
-      let auto = target.value === '' || target.value === newsSlug(sourceText());
+      // Automatisch, solange der Slug leer ist oder genau dem Titel entspricht –
+      // bei veröffentlichten Artikeln nie (geteilte Links sollen gültig bleiben)
+      const locked = form.dataset.slugLocked === 'true';
+      let auto = !locked && (target.value === '' || target.value === newsSlug(sourceText()));
 
       const showNote = () => {
         if (!note) return;

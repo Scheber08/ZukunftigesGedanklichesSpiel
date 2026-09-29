@@ -556,15 +556,20 @@ const rulesActions = {
           const [old] = await store.update('rules_versions', { id: oldId }, { status: 'archived' });
           if (old) archived.push(old.version);
         }
-        // Aktive Saison auf die neue Version setzen
+        // Aktive Saison (und geplante Saisons, die noch auf eine bisherige Fassung zeigen) umstellen
         let season: string | null = null;
         if (input.set_season) {
-          const [active] = await store.select('seasons', { eq: { status: 'active' }, limit: 1 });
-          if (active) {
-            await store.update('seasons', { id: active.id }, { rules_version_id: input.id });
-            await audit(store, staff, 'update', 'seasons', active.id, { rules_version_id: active.rules_version_id }, { rules_version_id: input.id });
-            season = active.name;
+          const seasons = await store.select('seasons');
+          const outdated = new Set(versions.filter((v) => v.id !== input.id && v.status !== 'draft').map((v) => v.id));
+          const targets = seasons.filter(
+            (s) => s.status === 'active' || (s.status === 'planned' && (s.rules_version_id == null || outdated.has(s.rules_version_id))),
+          );
+          for (const s of targets) {
+            if (s.rules_version_id === input.id) continue;
+            await store.update('seasons', { id: s.id }, { rules_version_id: input.id });
+            await audit(store, staff, 'update', 'seasons', s.id, { rules_version_id: s.rules_version_id }, { rules_version_id: input.id });
           }
+          season = targets.map((s) => s.name).join(', ') || null;
         }
         await audit(store, staff, 'publish', 'rules_versions', input.id, before, { ...published, archived });
         await requestRebuild(store, `Regelwerk ${input.version} veröffentlicht`);
@@ -647,7 +652,7 @@ const inhalteActions = {
       gamertag: req('Gamertag', 40),
       role_de: req('Rolle (DE)', 80),
       role_en: opt('Rolle (EN)', 80),
-      since_season: z.number({ error: 'Saison als Zahl angeben.' }).int().min(1).max(999).optional(),
+      since_season: z.number({ error: 'Saison als Zahl angeben.' }).int('Ganze Zahl angeben.').min(1, 'Saison ab 1.').max(999, 'Höchstens 999.').optional(),
       avatar: z.string().max(DEMO_MAX_DATA_URL_CHARS + 100, 'Das Bild ist zu groß.').optional(),
     }),
     handler: async (input, context) => {
@@ -854,8 +859,8 @@ const inhalteActions = {
       claim_de: req('Claim (DE)', 200),
       claim_en: req('Claim (EN)', 200),
       registration_state: z.enum(['open', 'waitlist', 'closed'], { error: 'Bitte einen Anmeldestatus wählen.' }),
-      free_seats: z.number({ error: 'Zahl angeben.' }).int().min(0).max(22),
-      free_reserve: z.number({ error: 'Zahl angeben.' }).int().min(0).max(99),
+      free_seats: z.number({ error: 'Zahl angeben.' }).int('Ganze Zahl angeben.').min(0, 'Mindestens 0.').max(22, 'Höchstens 22 – das Grid hat 22 Cockpits.'),
+      free_reserve: z.number({ error: 'Zahl angeben.' }).int('Ganze Zahl angeben.').min(0, 'Mindestens 0.').max(99, 'Höchstens 99.'),
       note_de: opt('Hinweis (DE)', 300),
       note_en: opt('Hinweis (EN)', 300),
     }),

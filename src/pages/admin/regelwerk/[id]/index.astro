@@ -91,7 +91,7 @@ const publicHref = version?.status === 'published' ? '/liga/regelwerk' : version
 const flash = flashMessage(Astro.url, {
   saved: 'Entwurf gespeichert.',
   created: `Version angelegt${Astro.url.searchParams.get('copied') ? ` – ${Astro.url.searchParams.get('copied')} Abschnitte übernommen` : ''}.`,
-  published: `Version veröffentlicht.${Astro.url.searchParams.get('archived') ? ` Archiviert: ${Astro.url.searchParams.get('archived')}.` : ''}${Astro.url.searchParams.get('season') ? ` ${Astro.url.searchParams.get('season')} nutzt jetzt diese Version.` : ''} Die Website aktualisiert sich nach dem nächsten Build.`,
+  published: `Version veröffentlicht.${Astro.url.searchParams.get('archived') ? ` Archiviert: ${Astro.url.searchParams.get('archived')}.` : ''}${Astro.url.searchParams.get('season') ? ` Umgestellt: ${Astro.url.searchParams.get('season')}.` : ''} Die Website aktualisiert sich nach dem nächsten Build.`,
   moved: 'Reihenfolge geändert.',
   section: 'Abschnitt gespeichert.',
   'section-deleted': 'Abschnitt gelöscht.',
@@ -269,11 +269,12 @@ const BADGE = { draft: 'badge-teal', published: 'badge-green', archived: 'badge-
                     />
                     <MarkdownEditor client:load id="changelog_en" name="changelog_en" label="Changelog (EN, optional)" value={meta.changelog_en} rows={5} lang="en" />
                     <label class="checkbox">
-                      <input type="checkbox" name="set_season" checked={pickChecked(submitted, 'set_season', true)} disabled={!activeSeason} />
+                      <input type="checkbox" name="set_season" checked={pickChecked(submitted, 'set_season', true)} />
                       <span>
                         Aktive Saison auf diese Version setzen
                         <span class="block text-sm text-muted">
                           {activeSeason ? `${activeSeason.name} nutzt derzeit Version ${versions.find((v) => v.id === activeSeason.rules_version_id)?.version ?? '–'}.` : 'Es gibt gerade keine aktive Saison.'}
+                          {' '}Geplante Saisons mit einer älteren Fassung werden ebenfalls umgestellt.
                         </span>
                       </span>
                     </label>
