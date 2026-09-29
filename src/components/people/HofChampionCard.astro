@@ -10,7 +10,8 @@ import TeamName from '~/components/ui/TeamName.astro';
 import { url, useT, type Lang } from '~/i18n';
 import type { Id, SeasonRow } from '~/lib/db/types';
 import type { League } from '~/lib/league/league';
-import { seasonLabel, teamStyle } from '~/lib/view';
+import { teamStyle } from '~/lib/view';
+import { seasonTitle } from '~/lib/people';
 
 interface Props {
   lang: Lang;
@@ -22,7 +23,7 @@ interface Props {
 }
 const { lang, league, season, driverId, teamId, points } = Astro.props;
 const t = useT(lang);
-const name = seasonLabel(season, lang);
+const name = seasonTitle(season, lang);
 const driver = driverId != null ? league.driver(driverId) : undefined;
 const driverStanding = driverId != null ? league.driverStandings(season.id).find((s) => s.driverId === driverId) : undefined;
 const driverTeam = driverStanding?.teamId != null ? league.team(driverStanding.teamId) : undefined;
@@ -52,7 +53,7 @@ const headingId = `champion-${season.slug}`;
           <div class="min-w-0">
             <p class="champ-name">
               <DriverLink lang={lang} driver={driver} stripe={false} />
-              {!driver.anonymized && driver.nationality_code && <Flag code={driver.nationality_code} lang={lang} class="ml-2" />}
+              {!driver.anonymized && driver.nationality_code && <Flag code={driver.nationality_code} lang={lang} class="ml-3 text-base" />}
             </p>
             <p class="mt-1 flex flex-wrap items-center gap-x-3 text-sm text-muted">
               {driverTeam && <TeamName lang={lang} team={driverTeam} />}

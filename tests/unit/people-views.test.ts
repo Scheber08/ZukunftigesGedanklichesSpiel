@@ -21,6 +21,7 @@ import {
   regularsByTeam,
   resultsBySeason,
   safeExternalUrl,
+  seasonTitle,
   signed,
   teamDrivers,
   teamDuel,
@@ -52,6 +53,15 @@ function leagueFrom(dataset: Dataset, now = NOW): League {
 const league = leagueFrom(demoDataset(NOW));
 const season = league.currentSeason!;
 const byTag = (tag: string) => league.drivers.find((d) => d.gamertag === tag)!;
+
+describe('Anzeige', () => {
+  it('übersetzt das Standardmuster des Saisonnamens, eigene Namen bleiben', () => {
+    expect(seasonTitle({ number: 2, name: 'Saison 2' }, 'en')).toBe('Season 2');
+    expect(seasonTitle({ number: 2, name: 'Saison 2' }, 'de')).toBe('Saison 2');
+    expect(seasonTitle({ number: 3, name: '' }, 'de')).toBe('Saison 3');
+    expect(seasonTitle({ number: 4, name: 'Winter Cup' }, 'en')).toBe('Winter Cup');
+  });
+});
 
 describe('Profilseiten', () => {
   it('erzeugt Profile für alle Fahrer mit Ergebnis, Nummer oder Cockpit', () => {

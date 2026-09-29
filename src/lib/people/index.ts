@@ -14,6 +14,20 @@ import type { CareerStats, Duel } from '../domain/stats';
 import type { League, ResultWithContext } from '../league/league';
 
 // ---------------------------------------------------------------------------
+// Anzeige
+// ---------------------------------------------------------------------------
+
+/**
+ * Saisonname für die Anzeige. In der DB steht meist „Saison 2“ – auf Englisch wird das
+ * Standardmuster übersetzt, eigene Namen (z. B. „Winter Cup“) bleiben unverändert.
+ */
+export function seasonTitle(season: Pick<SeasonRow, 'number' | 'name'>, lang: 'de' | 'en'): string {
+  const name = season.name?.trim() ?? '';
+  if (name === '' || /^(saison|season)\s+\d+$/i.test(name)) return lang === 'de' ? `Saison ${season.number}` : `Season ${season.number}`;
+  return name;
+}
+
+// ---------------------------------------------------------------------------
 // Profilseiten
 // ---------------------------------------------------------------------------
 

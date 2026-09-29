@@ -14,9 +14,9 @@ import { alternates, url, useT, type Lang } from '~/i18n';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import type { Id } from '~/lib/db/types';
 import type { TeamStanding } from '~/lib/domain/standings';
-import { platformCounts, regularsByTeam } from '~/lib/people';
+import { platformCounts, regularsByTeam, seasonTitle } from '~/lib/people';
 import { loadLeague } from '~/lib/server/league';
-import { seasonLabel, teamStyle } from '~/lib/view';
+import { teamStyle } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -32,7 +32,7 @@ const groups = season ? regularsByTeam(league, season.id) : [];
 const former = roster.former.filter((d) => !d.anonymized);
 const teamStanding = new Map<Id, TeamStanding>(season ? league.teamStandings(season.id).map((s) => [s.teamId, s]) : []);
 const platforms = platformCounts([...roster.regulars.map((r) => r.driver), ...roster.reserves]);
-const seasonName = season ? seasonLabel(season, lang) : '';
+const seasonName = season ? seasonTitle(season, lang) : '';
 const seats = groups.length * 2;
 const updated = league.lastUpdated([...league.data.drivers, ...league.data.seats]);
 
@@ -151,7 +151,7 @@ const sinceOf = (seasonId: Id | null) => (seasonId != null ? league.season(seaso
                       </span>
                       <DriverCard lang={lang} driver={driver} number={league.numberOf(driver.id)} class="flex-1">
                         <span class="sr-only">{t('people.drivers.reserveOrder', { n: i + 1 })}</span>
-                        {since && <span>{t('people.drivers.since', { season: seasonLabel(since, lang) })}</span>}
+                        {since && <span>{t('people.drivers.since', { season: seasonTitle(since, lang) })}</span>}
                       </DriverCard>
                     </li>
                   );
@@ -173,7 +173,7 @@ const sinceOf = (seasonId: Id | null) => (seasonId != null ? league.season(seaso
                   return (
                     <li>
                       <DriverCard lang={lang} driver={driver} number={null} showNumber={false}>
-                        {last && <span>{t('people.drivers.lastSeason', { season: seasonLabel(last, lang) })}</span>}
+                        {last && <span>{t('people.drivers.lastSeason', { season: seasonTitle(last, lang) })}</span>}
                       </DriverCard>
                     </li>
                   );

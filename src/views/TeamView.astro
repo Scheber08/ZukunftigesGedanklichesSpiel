@@ -17,9 +17,9 @@ import SectionTitle from '~/components/ui/SectionTitle.astro';
 import { alternates, url, useT, type Lang } from '~/i18n';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import type { Id } from '~/lib/db/types';
-import { progressionSteps, teamDrivers, teamDuel, teamReserveBySeason, teamSeasonDrivers } from '~/lib/people';
+import { progressionSteps, seasonTitle, teamDrivers, teamDuel, teamReserveBySeason, teamSeasonDrivers } from '~/lib/people';
 import { loadLeague } from '~/lib/server/league';
-import { breadcrumbJsonLd, roundLabel, seasonLabel } from '~/lib/view';
+import { breadcrumbJsonLd, roundLabel } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -30,7 +30,7 @@ const t = useT(lang);
 const league = await loadLeague();
 const team = league.teamBySlug(slug);
 const season = league.currentSeason;
-const seasonName = season ? seasonLabel(season, lang) : '';
+const seasonName = season ? seasonTitle(season, lang) : '';
 const inSeason = team != null && season != null && league.teamsOf(season.id).some((x) => x.id === team.id);
 const seasonOpen = season != null && season.status !== 'planned';
 
@@ -134,7 +134,7 @@ if (!team) Astro.response.status = 404;
                     return (
                       <li>
                         <DriverCard lang={lang} driver={driver} team={team} number={league.numberOf(driver.id)}>
-                          {since && <span>{t('people.drivers.since', { season: seasonLabel(since, lang) })}</span>}
+                          {since && <span>{t('people.drivers.since', { season: seasonTitle(since, lang) })}</span>}
                         </DriverCard>
                       </li>
                     );
@@ -207,7 +207,7 @@ if (!team) Astro.response.status = 404;
             ) : (
               <div class="grid gap-6">
                 {reserveGroups.map((g) => {
-                  const sName = seasonLabel(g.season, lang);
+                  const sName = seasonTitle(g.season, lang);
                   return (
                     <div>
                       {reserveGroups.length > 1 && <h3 class="micro mb-2">{sName}</h3>}
@@ -283,7 +283,7 @@ if (!team) Astro.response.status = 404;
                           <th scope="row" class="sticky-col font-normal">
                             <span class="flex flex-wrap items-center gap-2">
                               <a href={url(lang, 'seasonStandings', { season: s.slug })} class="round-link">
-                                {seasonLabel(s, lang)}
+                                {seasonTitle(s, lang)}
                               </a>
                               {s.status === 'active' && <Badge variant="teal">{t('people.team.inProgress')}</Badge>}
                             </span>

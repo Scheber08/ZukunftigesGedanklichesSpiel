@@ -14,8 +14,8 @@ import TeamName from '~/components/ui/TeamName.astro';
 import { url, useT, type Lang } from '~/i18n';
 import { formatDate } from '~/lib/domain/time';
 import type { League } from '~/lib/league/league';
-import type { ArchiveSeason } from '~/lib/people';
-import { roundLabel, seasonLabel, teamStyle } from '~/lib/view';
+import { roundLabel, teamStyle } from '~/lib/view';
+import { seasonTitle, type ArchiveSeason } from '~/lib/people';
 
 interface Props {
   lang: Lang;
@@ -27,7 +27,7 @@ interface Props {
 const { lang, league, entry, current = false } = Astro.props;
 const t = useT(lang);
 const { season } = entry;
-const name = seasonLabel(season, lang);
+const name = seasonTitle(season, lang);
 const headingId = `season-${season.slug}`;
 const statusVariant = season.status === 'finished' ? 'green' : season.status === 'active' ? 'teal' : 'muted';
 const period =

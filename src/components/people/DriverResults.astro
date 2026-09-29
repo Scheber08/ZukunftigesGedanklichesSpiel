@@ -8,8 +8,8 @@ import Timer from '@lucide/astro/icons/timer';
 import TeamName from '~/components/ui/TeamName.astro';
 import { url, useT, type Lang } from '~/i18n';
 import type { League } from '~/lib/league/league';
-import type { SeasonResults } from '~/lib/people';
-import { roundLabel, seasonLabel } from '~/lib/view';
+import { roundLabel } from '~/lib/view';
+import { seasonTitle, type SeasonResults } from '~/lib/people';
 
 interface Props {
   lang: Lang;
@@ -23,7 +23,7 @@ const t = useT(lang);
 <div class="accordion">
   {
     groups.map((g, gi) => {
-      const name = seasonLabel(g.season, lang);
+      const name = seasonTitle(g.season, lang);
       return (
         <details open={gi === 0}>
           <summary>

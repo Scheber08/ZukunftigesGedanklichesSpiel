@@ -34,9 +34,10 @@ import {
   progressionSteps,
   resultsBySeason,
   safeExternalUrl,
+  seasonTitle,
 } from '~/lib/people';
 import { loadLeague } from '~/lib/server/league';
-import { breadcrumbJsonLd, countryName, roundLabel, seasonLabel } from '~/lib/view';
+import { breadcrumbJsonLd, countryName, roundLabel } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -50,7 +51,7 @@ const found = league.driverBySlug(slug);
 const driver = found && !found.anonymized ? found : undefined;
 
 const season = league.currentSeason;
-const seasonName = season ? seasonLabel(season, lang) : '';
+const seasonName = season ? seasonTitle(season, lang) : '';
 const number = driver ? league.numberOf(driver.id) : null;
 const team = driver && season ? league.driverTeam(driver.id, season.id) : undefined;
 const role = driver ? driverRole(league, driver, season?.id) : 'former';
@@ -132,7 +133,7 @@ if (!driver) Astro.response.status = 404;
         <ProfileHeader
           lang={lang}
           title={driver.gamertag}
-          eyebrow={roleLabel}
+          eyebrow={role !== 'former' && seasonName ? seasonName : undefined}
           breadcrumbs={breadcrumbs}
           team={team ?? standingTeam}
           number={number ?? undefined}
@@ -172,7 +173,7 @@ if (!driver) Astro.response.status = 404;
             {since && (
               <div>
                 <dt class="micro">{t('people.driver.since')}</dt>
-                <dd>{seasonLabel(since, lang)}</dd>
+                <dd>{seasonTitle(since, lang)}</dd>
               </div>
             )}
           </dl>
@@ -287,7 +288,7 @@ if (!driver) Astro.response.status = 404;
                                 {!league.hasResults(round.id) && <RoundStatusBadge status={round.status} lang={lang} />}
                               </span>
                             </th>
-                            <td class="muted">{s ? seasonLabel(s, lang) : '–'}</td>
+                            <td class="muted">{s ? seasonTitle(s, lang) : '–'}</td>
                             <td>
                               <TeamName lang={lang} team={league.team(entry.team_id)} />
                             </td>
