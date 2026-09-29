@@ -1,0 +1,40 @@
+# =============================================================================
+# Geheime Laufzeit-Variablen für den lokalen Worker (`npm run dev` / `wrangler dev`).
+# Kopieren nach `.dev.vars` (wird NICHT eingecheckt):
+#
+#   cp .dev.vars.example .dev.vars
+#
+# In Produktion setzt man GENAU DIESE Namen einmalig als Worker-Secrets:
+#
+#   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+#   npx wrangler secret put DISCORD_BOT_TOKEN
+#   npx wrangler secret put TURNSTILE_SECRET_KEY
+#   npx wrangler secret put IP_HASH_SALT
+#   npx wrangler secret put GITHUB_DISPATCH_TOKEN
+#   npx wrangler secret put TWITCH_CLIENT_ID        (optional, erst mit Stream)
+#   npx wrangler secret put TWITCH_CLIENT_SECRET    (optional, erst mit Stream)
+#
+# (Kontrolle: `npx wrangler secret list` zeigt nur die Namen, nie die Werte.)
+# Öffentliche Werte (SUPABASE_URL, SUPABASE_ANON_KEY, DISCORD_GUILD_ID, PUBLIC_*) werden beim
+# Build eingebettet und gehören in `.env` bzw. in die GitHub-Variablen/-Secrets von deploy.yml.
+# Erklärung aller Variablen: .env.example und docs/SETUP.md
+# =============================================================================
+
+# Supabase service_role/secret Key – umgeht RLS, nur serverseitig
+SUPABASE_SERVICE_ROLE_KEY=
+
+# Discord-Bot-Token (Rollenprüfung beim Staff-Login)
+DISCORD_BOT_TOKEN=
+
+# Cloudflare Turnstile Secret (lokal leer lassen oder Test-Secret 1x0000000000000000000000000000000AA)
+TURNSTILE_SECRET_KEY=
+
+# Zufälliger Wert für IP-Hashes und Formular-Zeitfalle (mind. 32 Zeichen)
+IP_HASH_SALT=
+
+# GitHub-Token für den Rebuild per repository_dispatch (fine-grained, nur dieses Repo)
+GITHUB_DISPATCH_TOKEN=
+
+# Twitch-API (vorbereitet)
+TWITCH_CLIENT_ID=
+TWITCH_CLIENT_SECRET=

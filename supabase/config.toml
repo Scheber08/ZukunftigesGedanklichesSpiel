@@ -1,0 +1,108 @@
+# =============================================================================
+# Supabase CLI – lokale Entwicklung mit echter Datenbank (optional!)
+#
+# Für die normale Entwicklung reicht der Demo-Modus (`npm run dev`, keine Datenbank nötig).
+# Dieses Setup braucht man nur, um Migrationen, RLS oder den Discord-Login lokal zu testen:
+#
+#   1. Docker Desktop starten, Supabase CLI installieren (https://supabase.com/docs/guides/local-development)
+#   2. Discord-OAuth-Zugangsdaten als Umgebungsvariablen setzen (Shell oder supabase/.env):
+#        SUPABASE_AUTH_DISCORD_CLIENT_ID=…   SUPABASE_AUTH_DISCORD_SECRET=…
+#      In der Discord-Application als Redirect eintragen:
+#        http://127.0.0.1:54321/auth/v1/callback
+#   3. supabase start          → Postgres, Auth, Storage, Studio (http://127.0.0.1:54323)
+#      supabase db reset       → Migrationen + seed.sql neu einspielen
+#   4. In .env: SUPABASE_URL=http://127.0.0.1:54321, SUPABASE_ANON_KEY/SERVICE_ROLE_KEY aus
+#      `supabase status`, DEMO_MODE=false – dann `npm run dev`.
+#
+# Demo-Daten zusätzlich laden: unten bei [db.seed] "./demo.sql" ergänzen und
+# `npm run db:seed:demo` + `supabase db reset` ausführen.
+# =============================================================================
+
+project_id = "liga-web"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# wie das Supabase-Projekt in Frankfurt (neue Projekte laufen auf Postgres 17)
+major_version = 17
+
+[db.pooler]
+enabled = false
+port = 54329
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[db.migrations]
+enabled = true
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[realtime]
+enabled = false
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+
+# Lokaler Mail-Catcher (Auth-Mails); die Liga nutzt nur Discord-Login
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+# Bilder werden im Admin-Browser auf WebP verkleinert (Plan §7.5), 2 MiB reichen
+file_size_limit = "2MiB"
+
+[auth]
+enabled = true
+# Astro-Dev-Server
+site_url = "http://localhost:4321"
+# Rückkehr nach dem Discord-Login in den Admin-Bereich (Dev-Server und E2E-Server)
+additional_redirect_urls = [
+  "http://localhost:4321/admin/auth/callback",
+  "http://127.0.0.1:4321/admin/auth/callback",
+  "http://localhost:4322/admin/auth/callback",
+]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+# Neue Konten entstehen beim ersten Discord-Login. Zugang zum Admin-Bereich gibt es
+# trotzdem nur mit passender Discord-Rolle (Rollenprüfung im Worker, Plan §5).
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+minimum_password_length = 12
+
+[auth.email]
+# Kein E-Mail-Login – Staff meldet sich ausschließlich über Discord an
+enable_signup = false
+double_confirm_changes = true
+enable_confirmations = true
+
+[auth.sms]
+enable_signup = false
+
+[auth.external.discord]
+enabled = true
+client_id = "env(SUPABASE_AUTH_DISCORD_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_DISCORD_SECRET)"
+# leer = Standard-Callback von Supabase Auth (http://127.0.0.1:54321/auth/v1/callback)
+redirect_uri = ""
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false

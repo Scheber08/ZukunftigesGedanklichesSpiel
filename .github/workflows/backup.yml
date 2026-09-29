@@ -1,0 +1,179 @@
+# =============================================================================
+# Backup (Plan §11.4): nächtlich pg_dump der Supabase-Datenbank → gzip → Verschlüsselung
+# mit age → Cloudflare R2 (S3-kompatibel). Dazu dauerhafte Saison-Snapshots per Hand.
+#
+#   nightly/liga-YYYY-MM-DD.tar.gz.age        30 Tage rollierend (R2-Lifecycle-Regel,
+#                                             zusätzlich räumt dieser Workflow selbst auf)
+#   snapshots/<name>-YYYY-MM-DD.tar.gz.age    dauerhaft (manueller Start mit Namen,
+#                                             z. B. „saison-1-ende“)
+#
+# Inhalt des Archivs (Format von `supabase db dump`, wiederherstellbar nach docs/BETRIEB.md):
+#   roles.sql   Rollen      schema.sql   Tabellen, Policies, Funktionen      data.sql   Daten
+#   media/      (optional) Dateien aus dem Storage-Bucket „media“
+#
+# Benötigte Secrets (ohne sie wird der Lauf mit Hinweis übersprungen):
+#   SUPABASE_DB_URL        Verbindungs-URI des „Session pooler“ (IPv4!) inkl. Passwort
+#   BACKUP_AGE_PUBLIC_KEY  öffentlicher age-Schlüssel (age1…); der private Schlüssel liegt
+#                          NUR im Passwortmanager der Liga, nie auf GitHub
+#   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
+# Optional (Medien-Backup über die S3-Schnittstelle von Supabase Storage):
+#   SUPABASE_S3_ENDPOINT, SUPABASE_S3_REGION, SUPABASE_S3_ACCESS_KEY_ID, SUPABASE_S3_SECRET_ACCESS_KEY
+# =============================================================================
+name: Backup
+
+on:
+  schedule:
+    # täglich 02:17 UTC – vor dem Deploy-Lauf und außerhalb der Renn-Abende
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+    inputs:
+      snapshot_name:
+        description: 'Dauerhafter Snapshot (leer = normales Nacht-Backup), z. B. saison-1-ende'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+env:
+  RETENTION_DAYS: '30'
+  # R2 spricht S3; Region ist immer „auto“
+  AWS_DEFAULT_REGION: auto
+  AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+  AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+
+jobs:
+  backup:
+    name: Datenbank sichern
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_PUBLIC_KEY }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      SNAPSHOT_NAME: ${{ github.event.inputs.snapshot_name }}
+      SUPABASE_S3_ENDPOINT: ${{ secrets.SUPABASE_S3_ENDPOINT }}
+    steps:
+      - name: Konfiguration prüfen
+        id: cfg
+        run: |
+          missing=""
+          for v in SUPABASE_DB_URL AGE_RECIPIENT R2_ACCOUNT_ID R2_BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            if [ -z "${!v}" ]; then missing="$missing $v"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Backup übersprungen – fehlende Secrets:${missing} (siehe docs/BETRIEB.md)."
+            exit 0
+          fi
+          if [ -n "$SNAPSHOT_NAME" ] && ! [[ "$SNAPSHOT_NAME" =~ ^[a-z0-9][a-z0-9-]{1,48}$ ]]; then
+            echo "::error::Snapshot-Name nur mit a–z, 0–9 und Bindestrich (2–49 Zeichen), z. B. saison-1-ende"
+            exit 1
+          fi
+          case "$AGE_RECIPIENT" in
+            age1*) ;;
+            *) echo "::error::BACKUP_AGE_PUBLIC_KEY muss ein öffentlicher age-Schlüssel sein (beginnt mit age1)"; exit 1 ;;
+          esac
+          stamp=$(date -u +%F)
+          if [ -n "$SNAPSHOT_NAME" ]; then
+            key="snapshots/${SNAPSHOT_NAME}-${stamp}.tar.gz.age"
+          else
+            key="nightly/liga-${stamp}.tar.gz.age"
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo "endpoint=https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" >> "$GITHUB_OUTPUT"
+
+      - name: Supabase CLI installieren
+        if: steps.cfg.outputs.enabled == 'true'
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: age installieren, aws-cli einstellen
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age
+          age --version
+          # Pfad-Adressierung für S3-kompatible Endpunkte (R2, Supabase Storage)
+          aws configure set default.s3.addressing_style path
+
+      - name: Dump erstellen (Rollen, Schema, Daten)
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p backup
+          # supabase db dump nutzt pg_dump in der passenden Postgres-Version (Docker)
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/roles.sql --role-only
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/schema.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/data.sql --use-copy --data-only
+          for f in roles schema data; do
+            test -s "backup/$f.sql" || { echo "::error::backup/$f.sql ist leer"; exit 1; }
+          done
+          {
+            echo "created_at=$(date -u +%FT%TZ)"
+            echo "workflow_run=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "commit=${GITHUB_SHA}"
+          } > backup/MANIFEST.txt
+
+      - name: Medien aus Supabase Storage sichern (optional)
+        if: steps.cfg.outputs.enabled == 'true' && env.SUPABASE_S3_ENDPOINT != ''
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.SUPABASE_S3_REGION || 'eu-central-1' }}
+        run: |
+          set -euo pipefail
+          aws s3 sync "s3://media" backup/media --endpoint-url "$SUPABASE_S3_ENDPOINT" --only-show-errors
+          echo "media_files=$(find backup/media -type f | wc -l)" >> backup/MANIFEST.txt
+
+      - name: Packen und verschlüsseln
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          tar -czf backup.tar.gz backup
+          gzip -t backup.tar.gz
+          age --encrypt --recipient "$AGE_RECIPIENT" --output backup.tar.gz.age backup.tar.gz
+          # Klartext sofort entfernen
+          rm -rf backup backup.tar.gz
+          ls -lh backup.tar.gz.age
+
+      - name: Nach Cloudflare R2 hochladen
+        if: steps.cfg.outputs.enabled == 'true'
+        env:
+          KEY: ${{ steps.cfg.outputs.key }}
+          ENDPOINT: ${{ steps.cfg.outputs.endpoint }}
+        run: |
+          set -euo pipefail
+          aws s3 cp backup.tar.gz.age "s3://${R2_BUCKET}/${KEY}" --endpoint-url "$ENDPOINT" --only-show-errors
+          size=$(aws s3api head-object --bucket "$R2_BUCKET" --key "$KEY" --endpoint-url "$ENDPOINT" --query ContentLength --output text)
+          if [ "${size:-0}" -lt 1024 ]; then echo "::error::Hochgeladenes Backup ist verdächtig klein (${size} Bytes)"; exit 1; fi
+          echo "### Backup" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`${KEY}\` – ${size} Bytes, verschlüsselt mit age" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Nacht-Backups älter als 30 Tage löschen (Absicherung zur R2-Lifecycle-Regel)
+        if: steps.cfg.outputs.enabled == 'true' && env.SNAPSHOT_NAME == ''
+        env:
+          ENDPOINT: ${{ steps.cfg.outputs.endpoint }}
+        run: |
+          set -euo pipefail
+          cutoff=$(date -u -d "-${RETENTION_DAYS} days" +%FT%TZ)
+          old=$(aws s3api list-objects-v2 --bucket "$R2_BUCKET" --prefix nightly/ --endpoint-url "$ENDPOINT" \
+            --query "Contents[?LastModified<'${cutoff}'].Key" --output text)
+          for key in $old; do
+            [ "$key" = "None" ] && continue
+            echo "lösche $key"
+            aws s3 rm "s3://${R2_BUCKET}/${key}" --endpoint-url "$ENDPOINT" --only-show-errors
+          done
+
+      - name: Aufräumen
+        if: always()
+        run: rm -rf backup backup.tar.gz backup.tar.gz.age

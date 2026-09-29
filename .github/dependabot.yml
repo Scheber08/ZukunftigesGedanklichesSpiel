@@ -1,0 +1,69 @@
+# Dependabot (Plan §11.4 Monitoring): wöchentliche Update-Vorschläge für npm-Pakete und
+# GitHub Actions. Kleine Updates werden gebündelt, damit nicht jede Woche zehn PRs warten.
+# Jeder PR läuft durch die komplette CI inkl. E2E und bekommt eine Demo-Vorschau.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: 'deps'
+      prefix-development: 'deps-dev'
+    groups:
+      astro:
+        patterns:
+          - 'astro'
+          - '@astrojs/*'
+      svelte:
+        patterns:
+          - 'svelte'
+          - 'svelte-check'
+          - '@sveltejs/*'
+      tailwind:
+        patterns:
+          - 'tailwindcss'
+          - '@tailwindcss/*'
+      supabase:
+        patterns:
+          - '@supabase/*'
+      cloudflare:
+        patterns:
+          - 'wrangler'
+          - '@cloudflare/*'
+      testing:
+        dependency-type: development
+        patterns:
+          - 'vitest'
+          - '@vitest/*'
+          - '@playwright/test'
+          - '@axe-core/*'
+          - 'linkinator'
+          - 'typescript'
+          - '@types/*'
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Berlin
+    labels:
+      - dependencies
+    commit-message:
+      prefix: 'ci'
+    groups:
+      actions:
+        patterns:
+          - '*'
