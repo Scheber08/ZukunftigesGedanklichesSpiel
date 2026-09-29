@@ -1,0 +1,30 @@
+---
+/**
+ * Ergebnis einer Formular-Action anzeigen (Erfolg oder Fehler).
+ * Nutzung: <ActionMessage result={Astro.getActionResult(actions.admin.x)} success="Gespeichert." />
+ */
+import { isInputError } from 'astro:actions';
+
+interface Props {
+  result: { data?: unknown; error?: unknown } | undefined;
+  success?: string;
+}
+const { result, success = 'Gespeichert.' } = Astro.props;
+const error = result?.error as { message?: string } | undefined;
+const inputError = result?.error ? isInputError(result.error as never) : false;
+---
+
+{
+  result && !result.error && (
+    <p class="alert alert-success mb-6" role="status">
+      {success}
+    </p>
+  )
+}
+{
+  error && (
+    <p class="alert alert-danger mb-6" role="alert">
+      {inputError ? 'Bitte prüfe die markierten Felder.' : (error.message ?? 'Es ist ein Fehler aufgetreten.')}
+    </p>
+  )
+}

@@ -1,0 +1,199 @@
+---
+/**
+ * Layout des Admin-Bereichs: nicht indexiert, mobil benutzbar (Renntag am Handy),
+ * Navigation nach Rolle. Nur für dynamische Seiten (prerender = false).
+ */
+import { Font } from 'astro:assets';
+import '~/styles/global.css';
+import LogOut from '@lucide/astro/icons/log-out';
+import Menu from '@lucide/astro/icons/menu';
+import Logo from '~/components/ui/Logo.astro';
+import { SITE } from '~/config/site';
+import { ROLE_LABELS, visibleNav } from '~/lib/admin/nav';
+import { isDemoMode } from '~/lib/server/env';
+
+interface Props {
+  title: string;
+  breadcrumbs?: Array<{ label: string; href?: string }>;
+  /** Volle Breite für Grid-Builder und Ergebnis-Eingabe */
+  wide?: boolean;
+}
+const { title, breadcrumbs = [], wide = false } = Astro.props;
+const staff = Astro.locals.staff;
+const nav = staff ? visibleNav(staff.roles) : [];
+const path = Astro.url.pathname;
+const groups = [...new Set(nav.map((n) => n.group))];
+const isActive = (href: string) => (href === '/admin' ? path === '/admin' : path === href || path.startsWith(`${href}/`));
+const demo = isDemoMode();
+---
+
+<!doctype html>
+<html lang="de" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content={SITE.themeColor} />
+    <title>{title} · Admin · {SITE.name}</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <Font cssVariable="--font-titillium" />
+    <Font cssVariable="--font-inter" />
+  </head>
+  <body class="min-h-dvh">
+    <div class="flex min-h-dvh">
+      {
+        staff && (
+          <aside id="admin-nav" class="admin-nav" data-admin-nav>
+            <a href="/admin" class="flex items-center gap-2 px-4 py-4 no-underline">
+              <Logo size={26} variant="gradient" />
+              <span class="nav-label">Admin</span>
+            </a>
+            <nav aria-label="Admin-Navigation" class="px-2 pb-6">
+              {groups.map((g) => (
+                <div class="mt-4">
+                  <p class="micro px-3 pb-1">{g}</p>
+                  <ul>
+                    {nav
+                      .filter((n) => n.group === g)
+                      .map((n) => (
+                        <li>
+                          <a href={n.href} class="admin-link" aria-current={isActive(n.href) ? 'page' : undefined}>
+                            {n.label}
+                          </a>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ))}
+              <div class="mt-6 border-t border-border px-3 pt-4">
+                <a href="/" class="text-sm text-muted hover:text-fg">← Zur Website</a>
+              </div>
+            </nav>
+          </aside>
+        )
+      }
+      <div class="min-w-0 flex-1">
+        <header class="sticky top-0 z-30 border-b border-border bg-surface-1/95 backdrop-blur">
+          <div class="flex h-14 items-center gap-3 px-4">
+            {
+              staff && (
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-icon lg:hidden"
+                  aria-controls="admin-nav"
+                  aria-expanded="false"
+                  data-admin-nav-toggle
+                >
+                  <Menu size={22} aria-hidden="true" />
+                  <span class="sr-only">Menü</span>
+                </button>
+              )
+            }
+            <nav aria-label="Brotkrümel" class="min-w-0 flex-1 truncate text-sm text-muted">
+              <a href="/admin" class="hover:text-fg">Admin</a>
+              {
+                breadcrumbs.map((b) => (
+                  <>
+                    <span aria-hidden="true"> / </span>
+                    {b.href ? (
+                      <a href={b.href} class="hover:text-fg">
+                        {b.label}
+                      </a>
+                    ) : (
+                      <span class="text-fg">{b.label}</span>
+                    )}
+                  </>
+                ))
+              }
+            </nav>
+            {demo && <span class="badge badge-warning">Demo</span>}
+            {
+              staff && (
+                <div class="flex items-center gap-2">
+                  <span class="hidden text-sm sm:inline">
+                    {staff.name} <span class="text-muted">· {staff.roles.map((r) => ROLE_LABELS[r]).join(', ')}</span>
+                  </span>
+                  <form method="POST" action="/admin/auth/logout">
+                    <button type="submit" class="btn btn-ghost btn-icon" title="Abmelden">
+                      <LogOut size={18} aria-hidden="true" />
+                      <span class="sr-only">Abmelden</span>
+                    </button>
+                  </form>
+                </div>
+              )
+            }
+          </div>
+        </header>
+        <main id="main" class:list={['px-4 py-6 md:px-8', !wide && 'max-w-5xl']}>
+          <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <h1 class="text-3xl uppercase">{title}</h1>
+            <slot name="actions" />
+          </div>
+          <slot />
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
+
+<style>
+  .admin-nav {
+    width: 15rem;
+    flex: none;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-surface-1);
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    overflow-y: auto;
+  }
+  @media (max-width: 1023px) {
+    .admin-nav {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 50;
+      transform: translateX(-100%);
+      transition: transform 180ms ease-out;
+      box-shadow: 0 0 40px rgb(0 0 0 / 0.6);
+    }
+    .admin-nav[data-open='true'] {
+      transform: none;
+    }
+  }
+  .admin-link {
+    display: block;
+    padding: 0.55rem 0.75rem;
+    border-radius: var(--radius-control);
+    color: var(--color-muted);
+    text-decoration: none;
+    font-size: 0.9375rem;
+  }
+  .admin-link:hover {
+    background: var(--color-surface-2);
+    color: var(--color-fg);
+  }
+  .admin-link[aria-current='page'] {
+    background: var(--color-surface-2);
+    color: var(--color-fg);
+    box-shadow: inset 2px 0 0 var(--color-teal);
+  }
+</style>
+
+<script>
+  const toggle = document.querySelector<HTMLButtonElement>('[data-admin-nav-toggle]');
+  const nav = document.querySelector<HTMLElement>('[data-admin-nav]');
+  if (toggle && nav) {
+    toggle.addEventListener('click', () => {
+      const open = nav.dataset.open !== 'true';
+      nav.dataset.open = String(open);
+      toggle.setAttribute('aria-expanded', String(open));
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && nav.dataset.open === 'true') {
+        nav.dataset.open = 'false';
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.focus();
+      }
+    });
+  }
+</script>

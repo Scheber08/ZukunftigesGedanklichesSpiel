@@ -1,0 +1,26 @@
+---
+/**
+ * Formularfeld mit Label, Hinweis und Fehlertext unter dem Feld (Plan §3.5).
+ * Das eigentliche Eingabeelement kommt als Slot; `id` muss dazu passen.
+ */
+interface Props {
+  id: string;
+  label: string;
+  hint?: string;
+  error?: string | string[] | null;
+  required?: boolean;
+  class?: string;
+}
+const { id, label, hint, error, required = false, class: className } = Astro.props;
+const errors = error == null ? [] : Array.isArray(error) ? error : [error];
+---
+
+<div class:list={['field', className]}>
+  <label for={id} class="label">
+    {label}
+    {required && <span class="req" aria-hidden="true"> *</span>}
+  </label>
+  <slot />
+  {hint && <p class="field-hint" id={`${id}-hint`}>{hint}</p>}
+  {errors.map((e) => <p class="field-error" id={`${id}-error`} role="alert">{e}</p>)}
+</div>

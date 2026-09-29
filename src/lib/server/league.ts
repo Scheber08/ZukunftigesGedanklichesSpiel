@@ -57,3 +57,11 @@ export function loadPublicSettings(): Promise<PublicSettings> {
   }
   return settingsCache.value;
 }
+
+/**
+ * Liga-Daten direkt aus einem Store laden, ohne Cache – z. B. im Admin mit dem
+ * Service-Store (enthält dann auch Entwürfe; die League-Klasse filtert öffentliche Sichten).
+ */
+export async function loadLeagueFrom(store: Store): Promise<League> {
+  return new League(await loadDataset(store));
+}
