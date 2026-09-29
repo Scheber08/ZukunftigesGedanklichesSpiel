@@ -11,6 +11,7 @@ import BrandIcon from '~/components/ui/BrandIcon.astro';
 import PageHeader from '~/components/ui/PageHeader.astro';
 import { SITE } from '~/config/site';
 import { alternates, url, useT, type Lang } from '~/i18n';
+import MobileWrap from '~/components/content/MobileWrap.astro';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { normalizeTwitchChannel, twitchChannelUrl } from '~/lib/content/stream';
 import { loadLeague } from '~/lib/server/league';
@@ -121,6 +122,7 @@ const jsonLd = [
       </div>
     </section>
   </div>
+  <MobileWrap />
 </BaseLayout>
 
 <style>

@@ -6,6 +6,7 @@
 import ArrowRight from '@lucide/astro/icons/arrow-right';
 import Logo from '~/components/ui/Logo.astro';
 import { t, url, type Lang, type RouteName } from '~/i18n';
+import MobileWrap from '~/components/content/MobileWrap.astro';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 
 const LINKS: Array<{ route: RouteName; key: 'nav.home' | 'nav.calendar' | 'nav.standings' | 'nav.news' | 'nav.rules' }> = [
@@ -26,7 +27,7 @@ const blocks: Array<{ lang: Lang }> = [{ lang: 'de' }, { lang: 'en' }];
     </div>
     <div class="container-page py-16 md:py-24">
       <p class="code" aria-hidden="true">404</p>
-      <div class="grid gap-10 md:grid-cols-2 md:gap-12">
+      <div class="grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-12">
         {
           blocks.map(({ lang }, i) => (
             <div lang={lang} class:list={['notfound-block', i > 0 && 'md:border-l md:border-border md:pl-12']}>
@@ -40,7 +41,7 @@ const blocks: Array<{ lang: Lang }> = [{ lang: 'de' }, { lang: 'en' }];
               )}
               <p class="mt-4 max-w-md text-muted">{t(lang, 'error.404.text')}</p>
               <nav aria-label={t(lang, 'content.notFound.links')} class="mt-6">
-                <ul class="grid gap-2">
+                <ul class="grid grid-cols-1 gap-2">
                   {LINKS.map((l) => (
                     <li>
                       <a href={url(lang, l.route)} class="nf-link">
@@ -57,6 +58,7 @@ const blocks: Array<{ lang: Lang }> = [{ lang: 'de' }, { lang: 'en' }];
       </div>
     </div>
   </section>
+  <MobileWrap />
 </BaseLayout>
 
 <style>

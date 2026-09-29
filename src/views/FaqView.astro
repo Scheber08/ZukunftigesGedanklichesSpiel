@@ -19,6 +19,7 @@ import SectionTitle from '~/components/ui/SectionTitle.astro';
 import TranslationNotice from '~/components/ui/TranslationNotice.astro';
 import { SITE } from '~/config/site';
 import { alternates, url, useT, type Lang } from '~/i18n';
+import MobileWrap from '~/components/content/MobileWrap.astro';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { FAQ_CATEGORIES } from '~/lib/db/types';
 import { localized } from '~/lib/league/league';
@@ -116,7 +117,7 @@ const jsonLd = [
     <section id={ids.requirements} class="section anchor-target" aria-labelledby={`${ids.requirements}-title`}>
       <SectionTitle id={`${ids.requirements}-title`} title={t('content.faq.requirements.title')} />
       <p class="-mt-3 mb-6 max-w-2xl text-muted">{t('content.faq.requirements.lead')}</p>
-      <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {
           REQUIREMENTS.map((r) => {
             const Icon = REQUIREMENT_ICONS[r.key];
@@ -165,7 +166,7 @@ const jsonLd = [
 
     <!-- Abmeldung über Discord -->
     <section id={ids.signoff} class="section anchor-target border-t border-border" aria-labelledby={`${ids.signoff}-title`}>
-      <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
+      <div class="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
         <div>
           <SectionTitle id={`${ids.signoff}-title`} title={t('content.faq.signoff.title')} />
           <p class="-mt-3 max-w-xl text-muted">{t('content.faq.signoff.lead')}</p>
@@ -179,7 +180,7 @@ const jsonLd = [
                 </a>
               )
             }
-            <a href={`${url(lang, 'rules')}#p2-5`} class="btn btn-ghost">
+            <a href={`${url(lang, 'rules')}#p2-5`} class="inline-flex min-h-11 items-center text-sm font-semibold text-green underline hover:text-teal">
               {t('content.faq.signoff.rules')}
             </a>
           </div>
@@ -194,7 +195,7 @@ const jsonLd = [
     <section id={ids.lag} class="section anchor-target border-t border-border" aria-labelledby={`${ids.lag}-title`}>
       <SectionTitle id={`${ids.lag}-title`} title={t('content.faq.lag.title')} />
       <p class="-mt-3 mb-6 max-w-2xl text-muted">{t('content.faq.lag.lead')}</p>
-      <ul class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <ul class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {
           LAG_DISCONNECT.map((item) => (
             <li class="card p-5">
@@ -215,7 +216,7 @@ const jsonLd = [
     <section id={ids.setup} class="section anchor-target border-t border-border" aria-labelledby={`${ids.setup}-title`}>
       <SectionTitle id={`${ids.setup}-title`} title={t('content.faq.setup.title')} />
       <p class="-mt-3 mb-6 max-w-2xl text-muted">{t('content.faq.setup.lead')}</p>
-      <ul class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <ul class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {
           SETUP_TIPS.map((tip) => (
             <li class="card card-hover p-5">
@@ -240,7 +241,7 @@ const jsonLd = [
         faqGroups.length === 0 ? (
           <p class="text-muted">{t('content.faq.empty')}</p>
         ) : (
-          <div class="grid gap-10 lg:grid-cols-[14rem_minmax(0,1fr)]">
+          <div class="grid grid-cols-1 gap-10 lg:grid-cols-[14rem_minmax(0,1fr)]">
             <nav aria-label={t('content.faq.faq.title')} class="no-print hidden lg:block">
               <ul class="sticky top-[calc(var(--header-h)+1.5rem)] grid gap-1">
                 {faqGroups.map((g) => (
@@ -253,7 +254,7 @@ const jsonLd = [
                 ))}
               </ul>
             </nav>
-            <div class="grid gap-10">
+            <div class="grid grid-cols-1 gap-10">
               {faqGroups.map((g) => (
                 <div id={`${ids.faq}-${g.category}`} class="anchor-target">
                   <h3 class="micro mb-2 text-teal!">{t(`content.faq.category.${g.category}`)}</h3>
@@ -300,6 +301,7 @@ const jsonLd = [
       </div>
     </section>
   </div>
+  <MobileWrap />
 </BaseLayout>
 
 <style>

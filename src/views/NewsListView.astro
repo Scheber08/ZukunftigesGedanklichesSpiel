@@ -10,6 +10,7 @@ import EmptyState from '~/components/ui/EmptyState.astro';
 import PageHeader from '~/components/ui/PageHeader.astro';
 import { SITE } from '~/config/site';
 import { alternates, url, useT, type Lang } from '~/i18n';
+import MobileWrap from '~/components/content/MobileWrap.astro';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { NEWS_CATEGORIES, type NewsCategory } from '~/lib/db/types';
 import { newsHref } from '~/lib/content/news';
@@ -71,7 +72,7 @@ const jsonLd = [
       ) : (
         <>
           <NewsFilter lang={lang} counts={counts} total={news.length} />
-          <ul class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" data-news-list>
+          <ul class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3" data-news-list>
             {news.map((n) => (
               <li data-category={n.category}>
                 <NewsCard lang={lang} news={n} headingLevel="h2" />
@@ -88,4 +89,5 @@ const jsonLd = [
       )
     }
   </div>
+  <MobileWrap />
 </BaseLayout>

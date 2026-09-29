@@ -12,6 +12,7 @@ import PageHeader from '~/components/ui/PageHeader.astro';
 import SectionTitle from '~/components/ui/SectionTitle.astro';
 import TranslationNotice from '~/components/ui/TranslationNotice.astro';
 import { alternates, url, useT, type Lang } from '~/i18n';
+import MobileWrap from '~/components/content/MobileWrap.astro';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { localized } from '~/lib/league/league';
 import { loadLeague } from '~/lib/server/league';
@@ -60,7 +61,7 @@ const jsonLd = breadcrumbJsonLd(
         partners.length === 0 ? (
           <EmptyState title={t('content.partners.empty.title')} text={t('content.partners.empty.text')} />
         ) : (
-          <ul class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <ul class="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
             {partners.map((p) => {
               const text = localized(p, 'text', lang);
               const href = safeUrl(p.url);
@@ -101,7 +102,7 @@ const jsonLd = breadcrumbJsonLd(
     </section>
 
     <section class="section border-t border-border" aria-labelledby="partners-become">
-      <div class="grid gap-8 lg:grid-cols-2 lg:items-start">
+      <div class="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:items-start">
         <div class="card become-card p-6 md:p-8">
           <span class="icon-bubble" aria-hidden="true"><Handshake size={22} /></span>
           <h2 id="partners-become" class="mt-4 text-2xl uppercase">{t('content.partners.become.title')}</h2>
@@ -125,6 +126,7 @@ const jsonLd = breadcrumbJsonLd(
       </div>
     </section>
   </div>
+  <MobileWrap />
 </BaseLayout>
 
 <style>

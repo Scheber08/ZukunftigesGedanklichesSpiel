@@ -14,6 +14,7 @@ import PageHeader from '~/components/ui/PageHeader.astro';
 import TranslationNotice from '~/components/ui/TranslationNotice.astro';
 import { SITE } from '~/config/site';
 import { alternates, url, useT, type Lang } from '~/i18n';
+import MobileWrap from '~/components/content/MobileWrap.astro';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { findRulesVersion, rulesHaveFallback, rulesUpdatedAt } from '~/lib/content/rules';
 import { formatDate } from '~/lib/domain/time';
@@ -183,6 +184,7 @@ const dateOf = (iso: string | null) => (iso ? formatDate(iso, lang) : '–');
       )
     }
   </div>
+  <MobileWrap />
 </BaseLayout>
 
 <style>

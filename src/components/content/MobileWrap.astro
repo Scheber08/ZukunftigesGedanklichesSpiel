@@ -1,0 +1,22 @@
+---
+/**
+ * Schmale Bildschirme (ab 320 px) ohne horizontales Scrollen: lange Wörter in Überschriften
+ * (Versalien, z. B. „DATENSCHUTZERKLÄRUNG“) und lange Button-Texte dürfen umbrechen.
+ * Wird von den Inhaltsseiten eingebunden (nur deren CSS-Bündel).
+ */
+---
+
+<style is:global>
+  main :is(h1, h2, h3, h4) {
+    min-width: 0;
+    overflow-wrap: break-word;
+    hyphens: auto;
+  }
+  @media (max-width: 479px) {
+    main .btn {
+      max-width: 100%;
+      white-space: normal;
+      text-align: center;
+    }
+  }
+</style>

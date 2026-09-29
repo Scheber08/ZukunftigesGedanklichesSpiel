@@ -1,6 +1,6 @@
 /**
  * Content Collections: statische Rechtstexte (Plan §9.2) als Markdown mit Frontmatter.
- * Dateien: src/content/legal/<de|en>/<slug>.md → ID "de/impressum", "en/imprint" usw.
+ * Dateien: src/content/legal/<de|en>/<slug>.md → IDs wie "de/impressum" oder "en/imprint".
  */
 import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';

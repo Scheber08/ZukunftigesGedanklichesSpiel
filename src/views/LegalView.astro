@@ -7,6 +7,7 @@
 import TriangleAlert from '@lucide/astro/icons/triangle-alert';
 import PageHeader from '~/components/ui/PageHeader.astro';
 import { alternates, url, useT, type Lang } from '~/i18n';
+import MobileWrap from '~/components/content/MobileWrap.astro';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { getLegalEntry, renderLegal, type LegalDoc } from '~/lib/content/legal';
 import { breadcrumbJsonLd } from '~/lib/view';
@@ -47,7 +48,7 @@ const jsonLd = breadcrumbJsonLd(
         </p>
       )
     }
-    <div class:list={['grid gap-10', showToc && 'lg:grid-cols-[16rem_minmax(0,1fr)]']}>
+    <div class:list={['grid grid-cols-1 gap-10', showToc && 'lg:grid-cols-[16rem_minmax(0,1fr)]']}>
       {
         showToc && (
           <nav aria-label={t('content.legal.toc')} class="legal-toc no-print">
@@ -67,6 +68,7 @@ const jsonLd = breadcrumbJsonLd(
       </div>
     </div>
   </div>
+  <MobileWrap />
 </BaseLayout>
 
 <style>

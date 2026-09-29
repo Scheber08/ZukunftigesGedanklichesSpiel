@@ -12,6 +12,7 @@ import SectionTitle from '~/components/ui/SectionTitle.astro';
 import TranslationNotice from '~/components/ui/TranslationNotice.astro';
 import { SITE } from '~/config/site';
 import { alternates, url, useT, type Lang } from '~/i18n';
+import MobileWrap from '~/components/content/MobileWrap.astro';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { splitStep } from '~/lib/content/text';
 import { localized } from '~/lib/league/league';
@@ -105,11 +106,11 @@ const jsonLd = [
             </dl>
           </section>
 
-          <div class="grid gap-12 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-10">
+          <div class="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-10">
             {/* Einstellungen im Spiel */}
             <section aria-labelledby="lobby-settings">
               <SectionTitle id="lobby-settings" title={t('content.lobby.settingsTitle')} />
-              <div class="grid gap-5 md:grid-cols-2">
+              <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                 {groups.map((group) => {
                   const title = localized(group, 'title', lang);
                   return (
@@ -188,6 +189,7 @@ const jsonLd = [
       )
     }
   </div>
+  <MobileWrap />
 </BaseLayout>
 
 <style>

@@ -14,6 +14,7 @@ import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
 import ShareButton from '~/components/ui/ShareButton.astro';
 import TranslationNotice from '~/components/ui/TranslationNotice.astro';
 import { url, useT, type Lang } from '~/i18n';
+import MobileWrap from '~/components/content/MobileWrap.astro';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import {
   newsAlternates,
@@ -211,7 +212,7 @@ const fallbackLang = (fallback: boolean) => (fallback ? 'de' : undefined);
           <h2 id="more-news" class="section-title mb-6 uppercase">
             {t('content.article.more')}
           </h2>
-          <div class="grid gap-5 md:grid-cols-3">
+          <div class="grid grid-cols-1 gap-5 md:grid-cols-3">
             {more.map((n) => (
               <NewsCard lang={lang} news={n} />
             ))}
@@ -220,6 +221,7 @@ const fallbackLang = (fallback: boolean) => (fallback ? 'de' : undefined);
       </section>
     )
   }
+  <MobileWrap />
 </BaseLayout>
 
 <style>

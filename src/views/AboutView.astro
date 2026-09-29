@@ -16,6 +16,7 @@ import SectionTitle from '~/components/ui/SectionTitle.astro';
 import TranslationNotice from '~/components/ui/TranslationNotice.astro';
 import { SITE } from '~/config/site';
 import { alternates, url, useT, type Lang } from '~/i18n';
+import MobileWrap from '~/components/content/MobileWrap.astro';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { initials } from '~/lib/content/text';
 import { localized } from '~/lib/league/league';
@@ -83,15 +84,15 @@ const jsonLd = [
 
     <!-- Wer wir sind -->
     <section class="section" aria-labelledby="about-intro">
-      <div class="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-start">
+      <div class="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-start">
         <div>
           <SectionTitle id="about-intro" title={t('content.about.intro.title')} />
-          <div class="grid max-w-2xl gap-4 text-muted">
+          <div class="grid grid-cols-1 max-w-2xl gap-4 text-muted">
             <p>{t('content.about.intro.text1')}</p>
             <p>{t('content.about.intro.text2')}</p>
           </div>
         </div>
-        <ul class="grid gap-3">
+        <ul class="grid grid-cols-1 gap-3">
           {
             values.map(({ key, icon: Icon }) => (
               <li class="card flex gap-4 p-5">
@@ -117,7 +118,7 @@ const jsonLd = [
         staff.length === 0 ? (
           <EmptyState title={t('content.about.team.empty')} />
         ) : (
-          <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {staff.map((member) => {
               const role = localized(member, 'role', lang);
               return (
@@ -156,8 +157,8 @@ const jsonLd = [
             </a>
           </EmptyState>
         ) : (
-          <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-            <ul class="grid gap-4 md:grid-cols-2">
+          <div class="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+            <ul class="grid grid-cols-1 gap-4 md:grid-cols-2">
               {positions.map((p) => {
                 const title = localized(p, 'title', lang);
                 const description = localized(p, 'description', lang);
@@ -204,6 +205,7 @@ const jsonLd = [
       }
     </section>
   </div>
+  <MobileWrap />
 </BaseLayout>
 
 <style>
