@@ -26,9 +26,11 @@ interface Props {
   eyebrow: string;
   /** Nur der Countdown ohne Termin-Zeile und Buttons (Rennseite: steht schon im Kopf) */
   compact?: boolean;
+  /** Rundennamen im Countdown verlinken (auf der Rennseite selbst: false) */
+  linkTarget?: boolean;
   class?: string;
 }
-const { lang, league, round, heading, headingId, eyebrow, compact = false, class: className } = Astro.props;
+const { lang, league, round, heading, headingId, eyebrow, compact = false, linkTarget = true, class: className } = Astro.props;
 const t = useT(lang);
 const season = league.season(round.season_id)!;
 const track = league.track(round.track_id);
@@ -47,6 +49,7 @@ const subline = [countryName(track?.country_code, lang), round.format === 'sprin
       client:load
       targets={[{ startUtc: round.start_utc, label, href: raceHref, dateText: subline }]}
       previousStartUtc={previous?.start_utc ?? null}
+      linkTarget={linkTarget}
       labels={{
         days: t('countdown.days'),
         hours: t('countdown.hours'),
@@ -94,15 +97,6 @@ const subline = [countryName(track?.country_code, lang), round.format === 'sprin
 <style>
   .round-countdown {
     border-color: rgb(52 196 208 / 0.45);
-  }
-  /* Ab 320 px ohne Überlauf: Ziffernblöcke teilen sich die Breite */
-  .round-countdown :global(.digits) {
-    gap: 0.5rem;
-  }
-  .round-countdown :global(.unit) {
-    flex: 1 1 0;
-    min-width: 0;
-    max-width: 6.5rem;
   }
   @media (max-width: 400px) {
     .round-countdown {

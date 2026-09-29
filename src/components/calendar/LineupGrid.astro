@@ -53,7 +53,7 @@ const expected =
               <h3 class="lineup-team-name">
                 <TeamName lang={lang} team={team} />
               </h3>
-              <ol class="mt-3 grid gap-2">
+              <ol class="mt-1 grid">
                 {g.entries.map((e) => (
                   <li class="lineup-driver">
                     <span class="sr-only">{t('calendar.lineup.seat', { n: e.seat_no })}: </span>
@@ -87,7 +87,7 @@ const expected =
                   <h4 class="lineup-team-name">
                     <TeamName lang={lang} team={team} />
                   </h4>
-                  <ol class="mt-3 grid gap-2">
+                  <ol class="mt-1 grid">
                     {g.entries.map((s) => (
                       <li class="lineup-driver">
                         <span class="sr-only">{t('calendar.lineup.seat', { n: s.seat_no })}: </span>
@@ -118,12 +118,24 @@ const expected =
     text-transform: uppercase;
     letter-spacing: 0.03em;
   }
+  /* Touch-Ziele ≥ 44 px (Plan §10): Teamlink als ganze Zeile, Fahrerlink über die ganze Zeile */
+  .lineup-team-name :global(a) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
   .lineup-driver {
+    position: relative;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.25rem 0.75rem;
-    min-height: 2rem;
+    min-height: 44px;
+  }
+  .lineup-driver :global(a.gamertag)::after {
+    content: '';
+    position: absolute;
+    inset: 0;
   }
   .replaces {
     font-size: var(--fs-small);

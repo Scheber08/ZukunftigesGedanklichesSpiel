@@ -1,6 +1,6 @@
 ---
 /**
- * Rennseite (Plan §4.3): Kopf mit Strecke, Termin, Format und Status, Status-Banner,
+ * Rennseite (Plan §4.3): Kopf mit Strecke (ggf. Streckenkarte), Termin, Format und Status, Status-Banner,
  * Countdown für kommende Runden und Tabs Aufstellung · Qualifying · (Sprint) · Rennen ·
  * Stewards · Medien. JSON-LD SportsEvent + BreadcrumbList (Plan §10).
  */
@@ -14,6 +14,7 @@ import RaceTabPanel from '~/components/calendar/RaceTabPanel.astro';
 import RaceTabs from '~/components/calendar/RaceTabs.astro';
 import RoundCountdown from '~/components/calendar/RoundCountdown.astro';
 import RoundNav from '~/components/calendar/RoundNav.astro';
+import TrackMap from '~/components/calendar/TrackMap.astro';
 import ResultsTable from '~/components/sport/ResultsTable.astro';
 import EmptyState from '~/components/ui/EmptyState.astro';
 import Flag from '~/components/ui/Flag.astro';
@@ -26,7 +27,7 @@ import { SITE } from '~/config/site';
 import { alternates, url, useT, type Lang } from '~/i18n';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { EVENT_DURATION_MINUTES } from '~/lib/calendar/ics';
-import { defaultTabKind, isUpcoming, raceTabs, splitPlaceholder, sportsEventJsonLd, type RaceTabKind } from '~/lib/calendar/race';
+import { defaultTabKind, isUpcoming, raceTabs, splitPlaceholder, sportsEventJsonLd, trackMapImage, type RaceTabKind } from '~/lib/calendar/race';
 import { formatDateLong } from '~/lib/domain/time';
 import { loadLeague } from '~/lib/server/league';
 import { breadcrumbJsonLd, countryName, formatDecimal, roundLabel, seasonLabel, trackName } from '~/lib/view';
@@ -72,6 +73,15 @@ const tabLabel = (kind: RaceTabKind) => {
 };
 const protestOpen = league.protestOpen(round);
 const [reportBefore, reportAfter] = splitPlaceholder(t('calendar.stewards.reportOpen'), 'deadline');
+// Vorfall-Formular mit dieser Runde vorausgewählt
+const reportHref = `${url(lang, 'stewardsReport')}?round=${round.id}`;
+const hasMap = trackMapImage(track) != null;
+const distance = [
+  track?.laps_default ? t('calendar.race.laps', { n: track.laps_default }) : null,
+  track?.length_km ? t('calendar.race.length', { km: formatDecimal(track.length_km, lang, 3) }) : null,
+]
+  .filter(Boolean)
+  .join(' · ');
 
 // Brotkrümel: aktuelle/geplante Saison über den Kalender, frühere über die Ergebnisse
 const viaCalendar = season.id === league.currentSeason?.id || season.status === 'planned';
@@ -97,6 +107,7 @@ const jsonLd = [
     organizerName: SITE.name,
     organizerUrl: new URL(url(lang, 'home'), site).href,
     inLanguage: lang,
+    imageUrl: new URL('/og-default.png', site).href,
   }),
   breadcrumbJsonLd(
     site,
@@ -121,7 +132,7 @@ const jsonLd = [
             <a
               href={url(lang, 'raceIcs', routeParams)}
               download
-              class="btn btn-secondary header-btn"
+              class="btn btn-secondary min-h-11"
               data-track="ics_download"
             >
               <CalendarPlus size={18} aria-hidden="true" />
@@ -130,49 +141,45 @@ const jsonLd = [
             </a>
           )
         }
-        <ShareButton lang={lang} class="header-btn" />
+        <ShareButton lang={lang} class="min-h-11" />
       </div>
     </Fragment>
 
-    <dl class="race-meta mt-5 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
-      <div class="flex items-center gap-2">
-        <dt class="sr-only">{t('calendar.race.track')}</dt>
-        <dd class="flex items-center gap-2">
-          <Flag code={track?.country_code} lang={lang} decorative />
-          <span class:list={[cancelled && 'line-through']}>{trackName(track, lang)}</span>
-          <span class="text-muted">· {countryName(track?.country_code, lang)}</span>
-        </dd>
-      </div>
-      <div class="flex items-center gap-2">
-        <dt class="micro">{t('calendar.race.start')}</dt>
-        <dd class:list={[cancelled && 'line-through']}>
-          <LocalTime instant={round.start_utc} lang={lang} format="dateLongTime" zone />
-        </dd>
-      </div>
-      <div class="flex items-center gap-2">
-        <dt class="micro">{t('calendar.race.format')}</dt>
-        <dd>{t(`format.${round.format}`)}</dd>
-      </div>
-      {
-        (track?.laps_default || track?.length_km) && (
-          <div class="flex items-center gap-2 text-muted">
-            <dt class="sr-only">{t('calendar.race.track')}</dt>
-            <dd>
-              {[
-                track.laps_default ? t('calendar.race.laps', { n: track.laps_default }) : null,
-                track.length_km ? t('calendar.race.length', { km: formatDecimal(track.length_km, lang, 3) }) : null,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </dd>
-          </div>
-        )
-      }
-      <div class="flex items-center gap-2">
-        <dt class="sr-only">{t('common.status')}</dt>
-        <dd><RoundStatusBadge status={round.status} lang={lang} /></dd>
-      </div>
-    </dl>
+    <div class:list={['race-head mt-5', hasMap && 'has-map']}>
+      <dl class="race-meta flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
+        <div class="flex min-w-0 items-center gap-2">
+          <dt class="sr-only">{t('calendar.race.track')}</dt>
+          <dd class="flex min-w-0 flex-wrap items-center gap-x-2">
+            <Flag code={track?.country_code} lang={lang} decorative />
+            <span class:list={[cancelled && 'line-through']}>{trackName(track, lang)}</span>
+            <span class="text-muted">· {countryName(track?.country_code, lang)}</span>
+          </dd>
+        </div>
+        <div class="flex min-w-0 flex-wrap items-center gap-x-2">
+          <dt class="micro">{t('calendar.race.start')}</dt>
+          <dd class:list={[cancelled && 'line-through']}>
+            <LocalTime instant={round.start_utc} lang={lang} format="dateLongTime" zone />
+          </dd>
+        </div>
+        <div class="flex items-center gap-2">
+          <dt class="micro">{t('calendar.race.format')}</dt>
+          <dd>{t(`format.${round.format}`)}</dd>
+        </div>
+        {
+          distance && (
+            <div class="flex items-center gap-2 text-muted">
+              <dt class="sr-only">{t('calendar.race.distance')}</dt>
+              <dd>{distance}</dd>
+            </div>
+          )
+        }
+        <div class="flex items-center gap-2">
+          <dt class="sr-only">{t('common.status')}</dt>
+          <dd><RoundStatusBadge status={round.status} lang={lang} /></dd>
+        </div>
+      </dl>
+      <TrackMap lang={lang} track={track} eager class="race-head-map" />
+    </div>
   </PageHeader>
 
   <div class="container-page grid grid-cols-[minmax(0,1fr)] gap-10 py-8 md:py-12">
@@ -188,6 +195,7 @@ const jsonLd = [
           headingId="race-countdown-title"
           eyebrow={t('calendar.race.countdownTitle')}
           compact
+          linkTarget={false}
         />
       )
     }
@@ -233,7 +241,7 @@ const jsonLd = [
                       </strong>
                       {reportAfter}
                     </p>
-                    <a href={url(lang, 'stewardsReport')} class="btn btn-secondary btn-sm min-h-11">
+                    <a href={reportHref} class="btn btn-secondary btn-sm min-h-11">
                       {t('calendar.banner.report')}
                     </a>
                   </div>
@@ -241,7 +249,7 @@ const jsonLd = [
                 <DecisionList lang={lang} league={league} round={round} />
                 <p class="mt-4">
                   <a href={url(lang, 'stewards')} class="register-link">
-                    {t('calendar.stewards.register')} →
+                    {t('calendar.stewards.register')} <span aria-hidden="true">→</span>
                   </a>
                 </p>
               </>
@@ -258,8 +266,23 @@ const jsonLd = [
 </BaseLayout>
 
 <style>
-  .header-btn {
-    min-height: 44px;
+  .race-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+  }
+  .race-head :global(.race-head-map) {
+    width: 100%;
+    max-width: 13rem;
+  }
+  @media (min-width: 768px) {
+    .race-head.has-map {
+      grid-template-columns: minmax(0, 1fr) 15rem;
+      align-items: center;
+    }
+    .race-head :global(.race-head-map) {
+      justify-self: end;
+    }
   }
   .register-link {
     display: inline-flex;

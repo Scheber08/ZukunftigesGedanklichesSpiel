@@ -15,6 +15,7 @@ import {
   safeMediaUrl,
   splitPlaceholder,
   sportsEventJsonLd,
+  trackMapImage,
   verdictText,
   verdictTone,
 } from '~/lib/calendar/race';
@@ -185,6 +186,28 @@ describe('Medien', () => {
   });
 });
 
+describe('Streckenkarte', () => {
+  it('liefert eigene Pfade und https-URLs mit bereinigter Quellenangabe', () => {
+    expect(trackMapImage({ map_url: '/brand/tracks/suzuka.svg', map_credit: null })).toEqual({ src: '/brand/tracks/suzuka.svg', credit: null });
+    expect(trackMapImage({ map_url: ' https://example.org/maps/spa.svg ', map_credit: '  Wikimedia Commons,\n CC BY-SA 4.0 ' })).toEqual({
+      src: 'https://example.org/maps/spa.svg',
+      credit: 'Wikimedia Commons, CC BY-SA 4.0',
+    });
+  });
+
+  it('verwirft fehlende und unsichere Adressen', () => {
+    expect(trackMapImage(undefined)).toBeNull();
+    expect(trackMapImage({ map_url: null, map_credit: 'x' })).toBeNull();
+    expect(trackMapImage({ map_url: '   ' })).toBeNull();
+    expect(trackMapImage({ map_url: 'javascript:alert(1)' })).toBeNull();
+    expect(trackMapImage({ map_url: 'data:image/svg+xml,<svg/>' })).toBeNull();
+    expect(trackMapImage({ map_url: 'http://example.org/map.svg' })).toBeNull();
+    expect(trackMapImage({ map_url: '//evil.example/map.svg' })).toBeNull();
+    expect(trackMapImage({ map_url: '/\\evil.example/map.svg' })).toBeNull();
+    expect(trackMapImage({ map_url: 'maps/relativ.svg' })).toBeNull();
+  });
+});
+
 describe('JSON-LD', () => {
   const input = {
     name: 'R5 · Montreal – Liga',
@@ -212,5 +235,10 @@ describe('JSON-LD', () => {
 
   it('kennzeichnet Absagen', () => {
     expect(sportsEventJsonLd({ ...input, cancelled: true }).eventStatus).toBe('https://schema.org/EventCancelled');
+  });
+
+  it('nimmt ein Bild nur auf, wenn eines übergeben wird', () => {
+    expect(sportsEventJsonLd(input)).not.toHaveProperty('image');
+    expect(sportsEventJsonLd({ ...input, imageUrl: 'https://liga.example/og-default.png' }).image).toEqual(['https://liga.example/og-default.png']);
   });
 });

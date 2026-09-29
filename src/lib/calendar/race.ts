@@ -216,6 +216,41 @@ export function safeMediaUrl(href: string | null | undefined): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Streckenkarte (Plan §7.5)
+// ---------------------------------------------------------------------------
+
+export interface TrackMapImage {
+  /** Bildquelle: eigener Pfad („/…“) oder https-URL */
+  src: string;
+  /** Lizenz-/Quellenangabe, leer = keine Angabe */
+  credit: string | null;
+}
+
+/**
+ * Streckenkarte einer Strecke, falls gepflegt. Erlaubt sind Pfade auf der eigenen Seite
+ * („/strecken/suzuka.svg“) und https-URLs (z. B. Supabase Storage) – alles andere
+ * (javascript:, data:, protokoll-relative „//…“, http:) wird verworfen.
+ */
+export function trackMapImage(track: { map_url?: string | null; map_credit?: string | null } | null | undefined): TrackMapImage | null {
+  const raw = track?.map_url?.trim();
+  if (!raw) return null;
+  let src: string | null = null;
+  if (raw.startsWith('/') && !raw.startsWith('//') && !raw.includes('\\')) {
+    src = raw;
+  } else {
+    try {
+      const u = new URL(raw);
+      if (u.protocol === 'https:') src = u.href;
+    } catch {
+      src = null;
+    }
+  }
+  if (!src) return null;
+  const credit = track?.map_credit?.replace(/\s+/g, ' ').trim() || null;
+  return { src, credit };
+}
+
+// ---------------------------------------------------------------------------
 // JSON-LD (Plan §10)
 // ---------------------------------------------------------------------------
 
@@ -230,6 +265,8 @@ export interface SportsEventInput {
   organizerName: string;
   organizerUrl: string;
   inLanguage: Lang;
+  /** Absolute Bild-URL (z. B. OG-Bild) – von Suchmaschinen für Events empfohlen */
+  imageUrl?: string;
 }
 
 /** SportsEvent je Runde: Online-Event, Ort = Strecke (als VirtualLocation). */
@@ -249,6 +286,7 @@ export function sportsEventJsonLd(e: SportsEventInput): Record<string, unknown> 
     eventAttendanceMode: 'https://schema.org/OnlineEventAttendanceMode',
     location: { '@type': 'VirtualLocation', name: e.trackName, url: e.pageUrl },
     url: e.pageUrl,
+    ...(e.imageUrl ? { image: [e.imageUrl] } : {}),
     organizer: { '@type': 'SportsOrganization', name: e.organizerName, url: e.organizerUrl },
   };
 }

@@ -176,7 +176,7 @@ const jsonLd = breadcrumbJsonLd(
                     <span class="ml-2 text-sm font-normal normal-case text-muted">{t('calendar.results.earlier.rounds', { n: seasonRounds.length })}</span>
                   </h3>
                   <a href={url(lang, 'seasonStandings', { season: s.slug })} class="more-link">
-                    {t('calendar.results.earlier.standings', { season: seasonLabel(s, lang) })} →
+                    {t('calendar.results.earlier.standings', { season: seasonLabel(s, lang) })} <span aria-hidden="true">→</span>
                   </a>
                 </div>
                 {champion != null && (

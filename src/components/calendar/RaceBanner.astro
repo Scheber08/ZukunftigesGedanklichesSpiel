@@ -26,7 +26,8 @@ interface Props {
 const { lang, league, round } = Astro.props;
 const t = useT(lang);
 const banner = raceBanner(round, league.correctionsOf(round.id), league.now);
-const reportHref = url(lang, 'stewardsReport');
+// Vorfall-Formular mit dieser Runde vorausgewählt
+const reportHref = `${url(lang, 'stewardsReport')}?round=${round.id}`;
 const [beforeDeadline, afterDeadline] = splitPlaceholder(t('calendar.banner.provisional'), 'deadline');
 ---
 

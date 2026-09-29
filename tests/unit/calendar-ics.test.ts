@@ -128,6 +128,42 @@ describe('Kalender-Abo', () => {
   });
 });
 
+describe('ICS-Format (RFC 5545)', () => {
+  const league = leagueFrom(demoDataset(NOW));
+
+  it('faltet Zeilen auf höchstens 75 Oktette, nutzt nur CRLF und definiert jede TZID', () => {
+    const ics = buildCalendarIcs(league, SITE_URL);
+    expect(ics.endsWith('\r\n')).toBe(true);
+    expect(ics.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+    for (const line of ics.split('\r\n')) expect(new TextEncoder().encode(line).length).toBeLessThanOrEqual(75);
+    const lines = unfold(ics).split('\r\n');
+    const tzids = new Set(lines.filter((l) => l.startsWith('TZID:')).map((l) => l.slice(5)));
+    const used = lines.flatMap((l) => /^DT(?:START|END);TZID=([^:]+):/.exec(l)?.[1] ?? []);
+    expect(used.length).toBeGreaterThan(0);
+    for (const tz of used) expect(tzids.has(tz)).toBe(true);
+    expect(lines.indexOf('BEGIN:VTIMEZONE')).toBeLessThan(lines.indexOf('BEGIN:VEVENT'));
+    // BEGIN/END ausgeglichen
+    const stack: string[] = [];
+    for (const l of lines) {
+      if (l.startsWith('BEGIN:')) stack.push(l.slice(6));
+      if (l.startsWith('END:')) expect(stack.pop()).toBe(l.slice(4));
+    }
+    expect(stack).toEqual([]);
+  });
+
+  it('rechnet über die Zeitumstellung hinweg korrekt (Ende in Ortszeit)', () => {
+    const dst = leagueFrom(demoDataset(NOW), (data) => {
+      const r7 = data.rounds.find((r) => r.season_id === 2 && r.number === 7)!;
+      // 25.10.2026: 03:00 MESZ → 02:00 MEZ; Start 01:30 MESZ = 23:30 UTC, Ende 150 min später = 03:00 MEZ
+      r7.local_start = '2026-10-25T01:30:00';
+      r7.start_utc = '2026-10-24T23:30:00.000Z';
+    });
+    const ics = unfold(buildRoundIcs(dst, dst.roundByNumber(2, 7)!, SITE_URL));
+    expect(ics).toContain('DTSTART;TZID=Europe/Berlin:20261025T013000');
+    expect(ics).toContain('DTEND;TZID=Europe/Berlin:20261025T030000');
+  });
+});
+
 describe('ICS pro Runde', () => {
   const league = leagueFrom(demoDataset(NOW));
 

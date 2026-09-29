@@ -64,8 +64,8 @@ const nxt = next ? link(next) : null;
     </li>
   </ul>
   <p class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-    <a href={url(lang, 'calendar')} class="more-link">{t('calendar.nav.toCalendar')} →</a>
-    <a href={url(lang, 'results')} class="more-link">{t('calendar.nav.toResults')} →</a>
+    <a href={url(lang, 'calendar')} class="more-link">{t('calendar.nav.toCalendar')} <span aria-hidden="true">→</span></a>
+    <a href={url(lang, 'results')} class="more-link">{t('calendar.nav.toResults')} <span aria-hidden="true">→</span></a>
   </p>
 </nav>
 

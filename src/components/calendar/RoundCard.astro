@@ -12,7 +12,7 @@ import Flag from '~/components/ui/Flag.astro';
 import LocalTime from '~/components/ui/LocalTime.astro';
 import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
 import { url, useT, type Lang } from '~/i18n';
-import { isUpcoming } from '~/lib/calendar/race';
+import { isUpcoming, trackMapImage } from '~/lib/calendar/race';
 import type { RoundRow } from '~/lib/db/types';
 import type { League } from '~/lib/league/league';
 import { countryName, roundLabel, trackName } from '~/lib/view';
@@ -37,6 +37,9 @@ const summary = league.hasResults(round.id) ? league.roundSummary(round.id) : un
 const winner = summary?.podium.find((r) => r.position === 1);
 const upcoming = isUpcoming(round, league.now);
 const pending = !cancelled && !summary && new Date(round.start_utc) <= league.now;
+// Streckenkarte als Vorschaubild ab 640 px – dekorativ (Name steht daneben), die
+// Quellenangaben sammelt der Kalender am Seitenende
+const map = trackMapImage(track);
 ---
 
 <article class:list={['round-card card', highlight && 'is-next', cancelled && 'is-cancelled', summary && 'is-done']}>
@@ -71,7 +74,7 @@ const pending = !cancelled && !summary && new Date(round.start_utc) <= league.no
     {cancelled && <p class="mt-2 text-sm text-danger">{t('calendar.round.cancelledNote')}</p>}
     {
       winner && (
-        <p class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+        <p class="round-winner mt-2 flex flex-wrap items-center gap-2 text-sm">
           <span class="micro">{t('calendar.round.winner')}</span>
           <DriverLink lang={lang} driver={league.driver(winner.driver_id)} team={league.team(winner.team_id)} reserve={winner.role === 'reserve'} />
         </p>
@@ -96,6 +99,7 @@ const pending = !cancelled && !summary && new Date(round.start_utc) <= league.no
       }
     </div>
   </div>
+  {map && <img class="round-map" src={map.src} alt="" width="96" height="60" loading="lazy" decoding="async" referrerpolicy="no-referrer" />}
 </article>
 
 <style>
@@ -115,6 +119,12 @@ const pending = !cancelled && !summary && new Date(round.start_utc) <= league.no
   .btn {
     min-height: 44px;
     white-space: normal;
+  }
+  /* Sieger-Link: Trefferfläche 44 px hoch, ohne die Zeile höher zu machen */
+  .round-winner :global(a.gamertag) {
+    display: inline-block;
+    padding-block: 12px;
+    margin-block: -12px;
   }
   .round-card.is-next {
     border-color: var(--color-teal);
@@ -165,5 +175,25 @@ const pending = !cancelled && !summary && new Date(round.start_utc) <= league.no
   .is-cancelled .round-no {
     color: var(--color-muted);
     text-decoration: line-through;
+  }
+  /* Vorschau der Streckenkarte erst ab 640 px, damit mobil die volle Breite dem Text bleibt
+     (loading="lazy" + display:none: Browser laden das Bild dann in der Regel nicht) */
+  .round-map {
+    display: none;
+  }
+  @media (min-width: 640px) {
+    .round-map {
+      display: block;
+      flex: none;
+      align-self: center;
+      width: 6rem;
+      height: auto;
+      aspect-ratio: 8 / 5;
+      object-fit: contain;
+      opacity: 0.85;
+    }
+    .is-cancelled .round-map {
+      opacity: 0.35;
+    }
   }
 </style>

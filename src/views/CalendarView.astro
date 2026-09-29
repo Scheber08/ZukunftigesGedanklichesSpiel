@@ -12,8 +12,10 @@ import SectionTitle from '~/components/ui/SectionTitle.astro';
 import { alternates, url, useT, type Lang } from '~/i18n';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { splitCalendar } from '~/lib/calendar/calendar';
+import { trackMapImage } from '~/lib/calendar/race';
+import type { TrackRow } from '~/lib/db/types';
 import { loadLeague } from '~/lib/server/league';
-import { breadcrumbJsonLd, seasonLabel } from '~/lib/view';
+import { breadcrumbJsonLd, seasonLabel, trackName } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -43,6 +45,17 @@ const jsonLd = breadcrumbJsonLd(
   crumbs.map((c) => ({ name: c.label, href: c.href })),
 );
 const updated = league.lastUpdated(rounds);
+
+// Quellenangaben der Streckenkarten, die in den Rundenkarten als Vorschau erscheinen
+const shownTracks = new Map<number, TrackRow>();
+for (const r of [...rounds, ...plannedSeasons.flatMap((p) => p.rounds)]) {
+  const track = league.track(r.track_id);
+  if (track) shownTracks.set(track.id, track);
+}
+const mapCredits = [...shownTracks.values()]
+  .map((track) => ({ name: trackName(track, lang), credit: trackMapImage(track)?.credit }))
+  .filter((c): c is { name: string; credit: string } => !!c.credit)
+  .map((c) => `${c.name}: ${c.credit}`);
 ---
 
 <BaseLayout
@@ -140,6 +153,8 @@ const updated = league.lastUpdated(rounds);
         </section>
       ))
     }
+
+    {mapCredits.length > 0 && <p class="map-credits text-xs text-muted">{t('calendar.track.mapCredits', { credits: mapCredits.join(' · ') })}</p>}
   </div>
 </BaseLayout>
 
@@ -179,5 +194,8 @@ const updated = league.lastUpdated(rounds);
   }
   .completed[open] > .completed-summary::after {
     transform: rotate(-135deg);
+  }
+  .map-credits {
+    overflow-wrap: anywhere;
   }
 </style>
