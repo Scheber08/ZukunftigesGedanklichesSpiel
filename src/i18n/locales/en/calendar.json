@@ -56,6 +56,7 @@
   "calendar.race.length": "{km} km",
   "calendar.race.tabsLabel": "Sections of this race page",
   "calendar.race.countdownOver": "The race is on or has just finished – the result will follow shortly.",
+  "calendar.race.countdownTitle": "Countdown to the start",
   "calendar.race.addToCalendar": "Add to calendar",
   "calendar.tab.lineup": "Line-up",
   "calendar.tab.stewards": "Stewards",
@@ -138,6 +139,7 @@
   "calendar.results.earlier.lead": "Every race from past seasons with its winner – one click takes you to the full result.",
   "calendar.results.earlier.standings": "Standings {season}",
   "calendar.results.earlier.rounds": "{n} rounds",
+  "calendar.results.earlier.champion": "Champion",
   "calendar.results.noneTitle": "No results yet",
   "calendar.results.noneText": "After the first race of the season you’ll find the winner, pole and fastest lap here."
 }

@@ -1,0 +1,276 @@
+---
+/**
+ * Ergebnis-Übersicht (Plan §4.1): alle Runden der aktuellen Saison mit Sieger, Pole und
+ * schnellster Runde (League.roundSummary), Status und Link zur Rennseite; darunter die
+ * Rennen früherer Saisons gruppiert nach Saison.
+ */
+import Timer from '@lucide/astro/icons/timer';
+import Trophy from '@lucide/astro/icons/trophy';
+import Badge from '~/components/ui/Badge.astro';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import Flag from '~/components/ui/Flag.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import type { ResultRow, RoundRow } from '~/lib/db/types';
+import { formatLapTime } from '~/lib/domain/laptime';
+import { formatDate } from '~/lib/domain/time';
+import { loadLeague } from '~/lib/server/league';
+import { breadcrumbJsonLd, roundLabel, seasonLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const site = Astro.site ?? new URL(Astro.url.origin);
+
+const season = league.currentSeason;
+const rounds = season ? league.roundsOf(season.id) : [];
+const counted = season ? league.countedRounds(season.id).length : 0;
+const rows = rounds.map((round) => ({ round, summary: league.roundSummary(round.id) }));
+const earlier = league.archiveSeasons
+  .filter((s) => s.id !== season?.id)
+  .map((s) => ({
+    season: s,
+    champion: league.awardsOf(s.id).find((a) => a.type === 'champion')?.driver_id ?? null,
+    rounds: league.roundsOf(s.id).map((round) => ({ round, summary: league.roundSummary(round.id) })),
+  }))
+  .filter((s) => s.rounds.length > 0);
+
+const label = season ? seasonLabel(season, lang) : '';
+const raceHref = (round: RoundRow) => url(lang, 'race', { season: league.season(round.season_id)!.slug, round: round.number });
+const winnerOf = (podium: ResultRow[]) => podium.find((r) => r.position === 1);
+
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('calendar.results.title'), href: url(lang, 'results') },
+];
+const jsonLd = breadcrumbJsonLd(
+  site,
+  crumbs.map((c) => ({ name: c.label, href: c.href })),
+);
+---
+
+<BaseLayout
+  lang={lang}
+  title={t('calendar.results.meta.title')}
+  description={t('calendar.results.meta.description', { season: label || t('calendar.results.title') })}
+  alternates={alternates('results')}
+  jsonLd={jsonLd}
+>
+  <PageHeader lang={lang} title={t('calendar.results.title')} eyebrow={label || undefined} lead={t('calendar.results.lead')} breadcrumbs={crumbs}>
+    <Fragment slot="actions">
+      <a href={url(lang, 'standings')} class="btn btn-secondary">{t('calendar.results.toStandings')}</a>
+    </Fragment>
+  </PageHeader>
+
+  <div class="container-page grid gap-14 py-10 md:py-14">
+    {
+      season && (
+        <section aria-labelledby={`season-${season.slug}`}>
+          <SectionTitle id={`season-${season.slug}`} title={label} href={url(lang, 'calendar')} linkLabel={t('calendar.nav.toCalendar')} />
+          {counted === 0 ? (
+            <EmptyState title={t('calendar.results.noneTitle')} text={t('calendar.results.noneText')} />
+          ) : (
+            <div class="table-wrap">
+              <table class="timing-table results-overview">
+                <caption class="sr-only">{t('calendar.results.tableCaption', { season: label })}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col" class="sticky-col">
+                      {t('calendar.results.col.round')}
+                    </th>
+                    <th scope="col">{t('calendar.results.col.date')}</th>
+                    <th scope="col">{t('calendar.results.col.winner')}</th>
+                    <th scope="col">{t('calendar.results.col.pole')}</th>
+                    <th scope="col">{t('calendar.results.col.fastestLap')}</th>
+                    <th scope="col">{t('common.status')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(({ round, summary }) => {
+                    const track = league.track(round.track_id);
+                    const winner = summary?.hasResults ? winnerOf(summary.podium) : undefined;
+                    const cancelled = round.status === 'cancelled';
+                    const empty = cancelled ? t('calendar.results.cancelled') : t('calendar.results.pending');
+                    return (
+                      <tr class:list={[cancelled && 'is-cancelled', !summary?.hasResults && 'is-open']}>
+                        <th scope="row" class="sticky-col font-normal">
+                          <a href={raceHref(round)} class="round-link">
+                            <Flag code={track?.country_code} lang={lang} decorative />
+                            <span class="strike">{roundLabel(round, track, lang)}</span>
+                          </a>
+                          {round.format === 'sprint' && (
+                            <Badge variant="teal" class="ml-2">
+                              {t('common.sprint')}
+                            </Badge>
+                          )}
+                        </th>
+                        <td class="muted tabular">
+                          <time datetime={round.start_utc} class="strike">
+                            {formatDate(round.start_utc, lang)}
+                          </time>
+                        </td>
+                        <td>
+                          {winner ? (
+                            <DriverLink lang={lang} driver={league.driver(winner.driver_id)} team={league.team(winner.team_id)} reserve={winner.role === 'reserve'} />
+                          ) : (
+                            <span class="muted">{empty}</span>
+                          )}
+                        </td>
+                        <td>
+                          {summary?.pole ? (
+                            <span class="inline-flex items-center gap-2">
+                              <DriverLink lang={lang} driver={league.driver(summary.pole.driver_id)} team={league.team(summary.pole.team_id)} stripe={false} />
+                            </span>
+                          ) : (
+                            <span class="muted">–</span>
+                          )}
+                        </td>
+                        <td>
+                          {summary?.fastestLap ? (
+                            <span class="inline-flex items-center gap-2">
+                              <DriverLink lang={lang} driver={league.driver(summary.fastestLap.driver_id)} team={league.team(summary.fastestLap.team_id)} stripe={false} />
+                              <span class="tabular text-sm text-teal">
+                                <Timer size={14} aria-hidden="true" class="inline align-[-2px]" /> {formatLapTime(summary.fastestLap.best_lap_ms)}
+                              </span>
+                            </span>
+                          ) : (
+                            <span class="muted">–</span>
+                          )}
+                        </td>
+                        <td>
+                          <RoundStatusBadge status={round.status} lang={lang} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )
+    }
+
+    {
+      !season && <EmptyState title={t('calendar.results.noneTitle')} text={t('calendar.results.noneText')} />
+    }
+
+    {
+      earlier.length > 0 && (
+        <section aria-labelledby="earlier-title">
+          <SectionTitle id="earlier-title" title={t('calendar.results.earlier.title')} />
+          <p class="-mt-3 mb-8 max-w-2xl text-sm text-muted">{t('calendar.results.earlier.lead')}</p>
+          <div class="grid gap-10">
+            {earlier.map(({ season: s, champion, rounds: seasonRounds }) => (
+              <section aria-labelledby={`season-${s.slug}`}>
+                <div class="mb-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+                  <h3 id={`season-${s.slug}`} class="text-xl uppercase">
+                    {seasonLabel(s, lang)}
+                    <span class="ml-2 text-sm font-normal normal-case text-muted">{t('calendar.results.earlier.rounds', { n: seasonRounds.length })}</span>
+                  </h3>
+                  <a href={url(lang, 'seasonStandings', { season: s.slug })} class="more-link">
+                    {t('calendar.results.earlier.standings', { season: seasonLabel(s, lang) })} →
+                  </a>
+                </div>
+                {champion != null && (
+                  <p class="mb-4 flex flex-wrap items-center gap-2 text-sm">
+                    <Trophy size={16} aria-hidden="true" class="text-green" />
+                    <span class="micro">{t('calendar.results.earlier.champion')}</span>
+                    <DriverLink lang={lang} driver={league.driver(champion)} stripe={false} />
+                  </p>
+                )}
+                <ol class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {seasonRounds.map(({ round, summary }) => {
+                    const track = league.track(round.track_id);
+                    const winner = summary?.hasResults ? winnerOf(summary.podium) : undefined;
+                    return (
+                      <li>
+                        <a href={raceHref(round)} class:list={['past-round card card-hover', round.status === 'cancelled' && 'is-cancelled']}>
+                          <span class="flex items-center justify-between gap-2">
+                            <span class="nav-label flex items-center gap-2">
+                              <Flag code={track?.country_code} lang={lang} decorative />
+                              <span class="strike">{roundLabel(round, track, lang)}</span>
+                            </span>
+                            {round.status !== 'final' && <RoundStatusBadge status={round.status} lang={lang} />}
+                          </span>
+                          <span class="mt-1 block text-sm text-muted">
+                            {winner ? (
+                              <>
+                                {t('calendar.round.winner')}: <span class="gamertag">{league.driverName(winner.driver_id, lang)}</span>
+                              </>
+                            ) : round.status === 'cancelled' ? (
+                              t('calendar.results.cancelled')
+                            ) : (
+                              t('calendar.results.pending')
+                            )}
+                          </span>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
+            ))}
+          </div>
+        </section>
+      )
+    }
+  </div>
+</BaseLayout>
+
+<style>
+  .round-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    text-decoration: none;
+  }
+  .round-link:hover .strike {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+  .is-cancelled .strike {
+    text-decoration: line-through;
+    color: var(--color-muted);
+  }
+  .past-round {
+    display: block;
+    min-height: 44px;
+    padding: 0.875rem 1rem;
+    text-decoration: none;
+  }
+  .past-round:hover .strike {
+    color: var(--color-teal);
+  }
+  .gamertag {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--color-fg);
+  }
+  .more-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-size: var(--fs-small);
+    font-weight: 600;
+    color: var(--color-green);
+    text-decoration: none;
+  }
+  .more-link:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+</style>

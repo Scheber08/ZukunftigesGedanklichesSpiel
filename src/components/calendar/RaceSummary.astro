@@ -23,26 +23,28 @@ const summary = league.roundSummary(roundId);
 const winner = summary?.podium.find((r) => r.position === 1);
 const round = league.round(roundId);
 const dotd = round ? league.awardsOf(round.season_id).find((a) => a.round_id === roundId && a.type === 'driver_of_the_day') : undefined;
-const items = [
-  winner && { key: 'winner', label: t('calendar.results.winner'), driverId: winner.driver_id, teamId: winner.team_id, reserve: winner.role === 'reserve', extra: null },
-  summary?.pole && { key: 'pole', label: t('legend.pole'), driverId: summary.pole.driver_id, teamId: summary.pole.team_id, reserve: summary.pole.role === 'reserve', extra: formatLapTime(summary.pole.best_lap_ms) },
-  summary?.fastestLap && {
-    key: 'fl',
-    label: t('legend.fastestLap'),
-    driverId: summary.fastestLap.driver_id,
-    teamId: summary.fastestLap.team_id,
-    reserve: summary.fastestLap.role === 'reserve',
-    extra: formatLapTime(summary.fastestLap.best_lap_ms),
-  },
-  dotd?.driver_id != null && {
-    key: 'dotd',
-    label: t('calendar.results.driverOfTheDay'),
-    driverId: dotd.driver_id,
-    teamId: league.entriesOf(roundId).find((e) => e.driver_id === dotd.driver_id)?.team_id ?? null,
-    reserve: false,
-    extra: null,
-  },
-].filter((x): x is { key: string; label: string; driverId: number; teamId: number | null; reserve: boolean; extra: string | null } => Boolean(x));
+interface Item {
+  key: 'winner' | 'pole' | 'fl' | 'dotd';
+  label: string;
+  driverId: number;
+  teamId: number | null;
+  reserve: boolean;
+  extra: string | null;
+}
+const items: Item[] = [];
+if (winner) items.push({ key: 'winner', label: t('calendar.results.winner'), driverId: winner.driver_id, teamId: winner.team_id, reserve: winner.role === 'reserve', extra: null });
+if (summary?.pole) {
+  const p = summary.pole;
+  items.push({ key: 'pole', label: t('legend.pole'), driverId: p.driver_id, teamId: p.team_id, reserve: p.role === 'reserve', extra: formatLapTime(p.best_lap_ms) });
+}
+if (summary?.fastestLap) {
+  const f = summary.fastestLap;
+  items.push({ key: 'fl', label: t('legend.fastestLap'), driverId: f.driver_id, teamId: f.team_id, reserve: f.role === 'reserve', extra: formatLapTime(f.best_lap_ms) });
+}
+if (dotd?.driver_id != null) {
+  const teamId = league.entriesOf(roundId).find((e) => e.driver_id === dotd.driver_id)?.team_id ?? null;
+  items.push({ key: 'dotd', label: t('calendar.results.driverOfTheDay'), driverId: dotd.driver_id, teamId, reserve: false, extra: null });
+}
 ---
 
 {

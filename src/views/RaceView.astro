@@ -1,0 +1,277 @@
+---
+/**
+ * Rennseite (Plan §4.3): Kopf mit Strecke, Termin, Format und Status, Status-Banner,
+ * Countdown für kommende Runden und Tabs Aufstellung · Qualifying · (Sprint) · Rennen ·
+ * Stewards · Medien. JSON-LD SportsEvent + BreadcrumbList (Plan §10).
+ */
+import CalendarPlus from '@lucide/astro/icons/calendar-plus';
+import DecisionList from '~/components/calendar/DecisionList.astro';
+import LineupGrid from '~/components/calendar/LineupGrid.astro';
+import MediaPanel from '~/components/calendar/MediaPanel.astro';
+import RaceBanner from '~/components/calendar/RaceBanner.astro';
+import RaceSummary from '~/components/calendar/RaceSummary.astro';
+import RaceTabPanel from '~/components/calendar/RaceTabPanel.astro';
+import RaceTabs from '~/components/calendar/RaceTabs.astro';
+import RoundCountdown from '~/components/calendar/RoundCountdown.astro';
+import RoundNav from '~/components/calendar/RoundNav.astro';
+import ResultsTable from '~/components/sport/ResultsTable.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import Flag from '~/components/ui/Flag.astro';
+import Legend from '~/components/ui/Legend.astro';
+import LocalTime from '~/components/ui/LocalTime.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import ShareButton from '~/components/ui/ShareButton.astro';
+import { SITE } from '~/config/site';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { EVENT_DURATION_MINUTES } from '~/lib/calendar/ics';
+import { defaultTabKind, isUpcoming, raceTabs, splitPlaceholder, sportsEventJsonLd, type RaceTabKind } from '~/lib/calendar/race';
+import { formatDateLong } from '~/lib/domain/time';
+import { loadLeague } from '~/lib/server/league';
+import { breadcrumbJsonLd, countryName, formatDecimal, roundLabel, seasonLabel, trackName } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  roundId: number;
+}
+const { lang, roundId } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const round = league.round(roundId);
+if (!round) throw new Error(`Runde ${roundId} nicht gefunden`);
+const season = league.season(round.season_id)!;
+const track = league.track(round.track_id);
+const site = Astro.site ?? new URL(Astro.url.origin);
+
+const label = roundLabel(round, track, lang);
+const sLabel = seasonLabel(season, lang);
+const total = league.roundsOf(season.id).length;
+const cancelled = round.status === 'cancelled';
+const upcoming = isUpcoming(round, league.now);
+const hasResults = league.hasResults(round.id);
+const routeParams = { season: season.slug, round: round.number };
+const pageUrl = new URL(url(lang, 'race', routeParams), site).href;
+
+// Tabs
+const sessions = league.sessionsOf(round.id);
+const tabs = raceTabs(round.format, sessions, lang);
+const decisions = league.decisionsOf(round.id);
+const defaultKind = defaultTabKind(round.status);
+const tabLabel = (kind: RaceTabKind) => {
+  switch (kind) {
+    case 'lineup':
+      return t('calendar.tab.lineup');
+    case 'stewards':
+      return t('calendar.tab.stewards');
+    case 'media':
+      return t('calendar.tab.media');
+    default:
+      return t(`session.${kind}`);
+  }
+};
+const protestOpen = league.protestOpen(round);
+const [reportBefore, reportAfter] = splitPlaceholder(t('calendar.stewards.reportOpen'), 'deadline');
+
+// Brotkrümel: aktuelle/geplante Saison über den Kalender, frühere über die Ergebnisse
+const viaCalendar = season.id === league.currentSeason?.id || season.status === 'planned';
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  viaCalendar
+    ? { label: t('calendar.title'), href: url(lang, 'calendar') }
+    : { label: t('calendar.results.title'), href: url(lang, 'results') },
+  ...(viaCalendar ? [] : [{ label: sLabel, href: `${url(lang, 'results')}#season-${season.slug}` }]),
+  { label, href: url(lang, 'race', routeParams) },
+];
+
+const description = t('calendar.race.metaDescription', { round: label, season: sLabel, date: formatDateLong(round.start_utc, lang) });
+const jsonLd = [
+  sportsEventJsonLd({
+    name: `${label} – ${SITE.name}`,
+    description,
+    startUtc: round.start_utc,
+    durationMinutes: EVENT_DURATION_MINUTES[round.format],
+    cancelled,
+    trackName: trackName(track, lang),
+    pageUrl,
+    organizerName: SITE.name,
+    organizerUrl: new URL(url(lang, 'home'), site).href,
+    inLanguage: lang,
+  }),
+  breadcrumbJsonLd(
+    site,
+    crumbs.map((c) => ({ name: c.label, href: c.href })),
+  ),
+];
+---
+
+<BaseLayout
+  lang={lang}
+  title={t('calendar.race.metaTitle', { round: label, season: sLabel })}
+  description={description}
+  alternates={alternates('race', routeParams)}
+  jsonLd={jsonLd}
+  modifiedTime={round.updated_at}
+>
+  <PageHeader lang={lang} title={label} eyebrow={t('calendar.race.eyebrow', { season: sLabel, n: round.number, total })} breadcrumbs={crumbs}>
+    <Fragment slot="actions">
+      <div class="flex flex-wrap gap-2">
+        {
+          upcoming && (
+            <a
+              href={url(lang, 'raceIcs', routeParams)}
+              download
+              class="btn btn-secondary header-btn"
+              aria-label={t('calendar.round.icsAria', { round: label })}
+              data-track="ics_download"
+            >
+              <CalendarPlus size={18} aria-hidden="true" />
+              {t('calendar.race.addToCalendar')}
+            </a>
+          )
+        }
+        <ShareButton lang={lang} class="header-btn" />
+      </div>
+    </Fragment>
+
+    <dl class="race-meta mt-5 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
+      <div class="flex items-center gap-2">
+        <dt class="sr-only">{t('calendar.race.track')}</dt>
+        <dd class="flex items-center gap-2">
+          <Flag code={track?.country_code} lang={lang} decorative />
+          <span class:list={[cancelled && 'line-through']}>{trackName(track, lang)}</span>
+          <span class="text-muted">· {countryName(track?.country_code, lang)}</span>
+        </dd>
+      </div>
+      <div class="flex items-center gap-2">
+        <dt class="micro">{t('calendar.race.start')}</dt>
+        <dd class:list={[cancelled && 'line-through']}>
+          <LocalTime instant={round.start_utc} lang={lang} format="dateLongTime" zone />
+        </dd>
+      </div>
+      <div class="flex items-center gap-2">
+        <dt class="micro">{t('calendar.race.format')}</dt>
+        <dd>{t(`format.${round.format}`)}</dd>
+      </div>
+      {
+        (track?.laps_default || track?.length_km) && (
+          <div class="flex items-center gap-2 text-muted">
+            <dt class="sr-only">{t('calendar.race.track')}</dt>
+            <dd>
+              {[
+                track.laps_default ? t('calendar.race.laps', { n: track.laps_default }) : null,
+                track.length_km ? t('calendar.race.length', { km: formatDecimal(track.length_km, lang, 3) }) : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </dd>
+          </div>
+        )
+      }
+      <div class="flex items-center gap-2">
+        <dt class="sr-only">{t('common.status')}</dt>
+        <dd><RoundStatusBadge status={round.status} lang={lang} /></dd>
+      </div>
+    </dl>
+  </PageHeader>
+
+  <div class="container-page grid gap-10 py-8 md:py-12">
+    <RaceBanner lang={lang} league={league} round={round} />
+
+    {
+      upcoming && (
+        <RoundCountdown
+          lang={lang}
+          league={league}
+          round={round}
+          heading={t('calendar.race.countdownTitle')}
+          headingId="race-countdown-title"
+          eyebrow={t('calendar.race.countdownTitle')}
+          compact
+        />
+      )
+    }
+
+    <RaceTabs
+      tabs={tabs.map((tab) => ({ id: tab.id, label: tabLabel(tab.kind), count: tab.kind === 'stewards' ? decisions.length : null }))}
+      defaultId={tabs.find((tab) => tab.kind === defaultKind)?.id ?? tabs[0]!.id}
+      label={t('calendar.race.tabsLabel')}
+    >
+      {
+        tabs.map((tab) => (
+          <RaceTabPanel id={tab.id} title={tabLabel(tab.kind)}>
+            {tab.kind === 'lineup' && <LineupGrid lang={lang} league={league} round={round} />}
+
+            {(tab.kind === 'qualifying' || tab.kind === 'sprint' || tab.kind === 'race') &&
+              (tab.sessionId != null ? (
+                <>
+                  {tab.kind === 'race' && hasResults && <RaceSummary lang={lang} league={league} roundId={round.id} />}
+                  <ResultsTable
+                    lang={lang}
+                    league={league}
+                    sessionId={tab.sessionId}
+                    caption={t('calendar.results.caption', { session: tabLabel(tab.kind), round: label })}
+                  />
+                  {league.resultsOf(tab.sessionId).length > 0 && (
+                    <div class="mt-4">
+                      <Legend lang={lang} podium={tab.kind !== 'qualifying'} />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <EmptyState title={t('results.none')} text={cancelled ? t('calendar.banner.cancelled') : undefined} />
+              ))}
+
+            {tab.kind === 'stewards' && (
+              <>
+                {protestOpen && round.protest_deadline && (
+                  <div class="alert alert-warning mb-5 flex flex-wrap items-center justify-between gap-3" data-protest-deadline-scope={round.protest_deadline}>
+                    <p class="text-sm">
+                      {reportBefore}
+                      <strong>
+                        <LocalTime instant={round.protest_deadline} lang={lang} format="dateLongTime" zone />
+                      </strong>
+                      {reportAfter}
+                    </p>
+                    <a href={url(lang, 'stewardsReport')} class="btn btn-secondary btn-sm min-h-11">
+                      {t('calendar.banner.report')}
+                    </a>
+                  </div>
+                )}
+                <DecisionList lang={lang} league={league} round={round} />
+                <p class="mt-4">
+                  <a href={url(lang, 'stewards')} class="register-link">
+                    {t('calendar.stewards.register')} →
+                  </a>
+                </p>
+              </>
+            )}
+
+            {tab.kind === 'media' && <MediaPanel lang={lang} league={league} round={round} />}
+          </RaceTabPanel>
+        ))
+      }
+    </RaceTabs>
+
+    <RoundNav lang={lang} league={league} round={round} />
+  </div>
+</BaseLayout>
+
+<style>
+  .header-btn {
+    min-height: 44px;
+  }
+  .register-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-size: var(--fs-small);
+    font-weight: 600;
+    color: var(--color-green);
+    text-decoration: none;
+  }
+  .register-link:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+</style>

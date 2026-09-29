@@ -1,0 +1,12 @@
+---
+import { racePaths, type RacePathProps } from '~/lib/calendar/paths';
+import RaceView from '~/views/RaceView.astro';
+
+export async function getStaticPaths() {
+  return racePaths();
+}
+
+const { roundId } = Astro.props as RacePathProps;
+---
+
+<RaceView lang="en" roundId={roundId} />

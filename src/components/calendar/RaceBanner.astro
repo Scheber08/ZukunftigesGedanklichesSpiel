@@ -3,6 +3,7 @@
  * Status-Banner der Rennseite (Plan §4.3): „Vorläufig, Protestfrist bis …“ mit Link zum
  * Vorfall-Formular, „Final“, „Korrigiert am … (Grund)“ sowie Hinweise für geplante,
  * gerade gefahrene und abgesagte Runden. Immer Icon + Text, nie nur Farbe.
+ * Geplante Runden ohne Aufstellung brauchen kein Banner – das sagen Countdown und Aufstellungs-Tab.
  */
 import CalendarX from '@lucide/astro/icons/calendar-x';
 import CircleCheckBig from '@lucide/astro/icons/circle-check-big';
@@ -112,10 +113,10 @@ const [beforeDeadline, afterDeadline] = splitPlaceholder(t('calendar.banner.prov
     )
   }
   {
-    (banner.kind === 'scheduled' || banner.kind === 'lineup') && (
+    banner.kind === 'lineup' && (
       <div class="alert banner-row">
         <Info size={20} aria-hidden="true" class="shrink-0 text-teal" />
-        <p>{banner.kind === 'lineup' ? t('calendar.banner.lineup') : t('calendar.banner.scheduled')}</p>
+        <p>{t('calendar.banner.lineup')}</p>
       </div>
     )
   }
