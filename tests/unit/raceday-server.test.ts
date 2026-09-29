@@ -242,6 +242,8 @@ describe('Stewards', () => {
   it('Vier-Augen-Prinzip: erst die zweite Stimme veröffentlicht, Zeitstrafe fließt ein', async () => {
     const r4 = await roundOf(2, 4);
     const [draft] = await store.select('decisions', { eq: { round_id: r4.id, status: 'draft' } });
+    // Der Demo-Entwurf bringt schon eine erste Stimme mit – für den Test von vorn beginnen
+    await store.update('decisions', { id: draft!.id }, { decided_by: [] });
     const first = await publishDecision(store, stewardA, draft!.id);
     expect(first.published).toBe(false);
     const second = await publishDecision(store, stewardB, draft!.id);

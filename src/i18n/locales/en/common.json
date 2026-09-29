@@ -187,5 +187,6 @@
   "news.category.rule_change": "Rule change",
   "news.category.new_drivers": "New drivers",
   "news.category.community": "Community",
-  "news.by": "by {name}"
+  "news.by": "by {name}",
+  "results.gapIncludesPenalties": "Gaps include stewards’ time penalties."
 }

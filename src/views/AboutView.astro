@@ -39,7 +39,7 @@ const hasFallback =
     (p) =>
       localized(p, 'title', lang).fallback ||
       localized(p, 'description', lang).fallback ||
-      (!!p.effort?.trim() && localizedEffort(p.effort, lang).fallback),
+      (!!p.effort?.trim() && !(lang === 'en' && p.effort_en?.trim()) && localizedEffort(p.effort, lang).fallback),
   );
 
 const values = [
@@ -167,7 +167,13 @@ const jsonLd = [
               {positions.map((p) => {
                 const title = localized(p, 'title', lang);
                 const description = localized(p, 'description', lang);
-                const effort = p.effort ? localizedEffort(p.effort, lang) : null;
+                // EN: gepflegter englischer Zeitaufwand vor der automatischen Übersetzung
+                const effort =
+                  lang === 'en' && p.effort_en?.trim()
+                    ? { text: p.effort_en.trim(), fallback: false }
+                    : p.effort
+                      ? localizedEffort(p.effort, lang)
+                      : null;
                 return (
                   <li class="card card-hover flex flex-col p-5">
                     <h3 class="text-xl uppercase" lang={title.fallback ? 'de' : undefined}>

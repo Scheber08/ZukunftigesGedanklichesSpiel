@@ -26,7 +26,14 @@ const href = driver && !driver.anonymized ? url(lang, 'driver', { slug: driver.s
 
 <span class:list={['driver-link', className]} style={teamStyle(team)}>
   {stripe && <span class="team-stripe" aria-hidden="true" />}
-  {number !== undefined && <span class="driver-number tabular" aria-label={`${t('common.number')} ${number ?? '–'}`}>{number ?? '–'}</span>}
+  {
+    number !== undefined && (
+      <span class="driver-number tabular">
+        <span class="sr-only">{t('common.number')} </span>
+        {number ?? '–'}
+      </span>
+    )
+  }
   {flag && driver?.nationality_code && <Flag code={driver.nationality_code} lang={lang} />}
   {href ? <a href={href} class="gamertag">{name}</a> : <span class="gamertag">{name}</span>}
   {reserve && <abbr class="reserve-mark" title={t('legend.reserve')}>{t('common.reserveShort')}</abbr>}

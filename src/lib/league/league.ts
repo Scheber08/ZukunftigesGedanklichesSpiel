@@ -13,6 +13,7 @@ import type {
   DriverNumberRow,
   DriverRow,
   FaqItemRow,
+  IncidentRow,
   Id,
   NewsRow,
   OpenPositionRow,
@@ -72,6 +73,8 @@ export interface LeagueDataset {
   standings_snapshots: StandingsSnapshotRow[];
   awards: AwardRow[];
   decisions: DecisionRow[];
+  /** Nur öffentliche Felder von Vorfällen mit veröffentlichtem Urteil (View incidents_public) */
+  incidents: Array<Pick<IncidentRow, 'id' | 'round_id' | 'session_id' | 'involved_driver_ids' | 'lap' | 'corner' | 'source'>>;
   news: NewsRow[];
   rules_versions: RulesVersionRow[];
   rules_sections: RulesSectionRow[];
@@ -99,6 +102,7 @@ export const LEAGUE_TABLES = [
   'standings_snapshots',
   'awards',
   'decisions',
+  'incidents',
   'news',
   'rules_versions',
   'rules_sections',
@@ -523,6 +527,21 @@ export class League {
     return this.publishedDecisions.filter((d) => d.driver_id === driverId);
   }
 
+  /**
+   * Beteiligte eines Urteils (Plan §4.6): Fahrer aus dem zugehörigen Vorfall, sonst nur der
+   * bestrafte Fahrer. Reihenfolge: bestrafter Fahrer zuerst.
+   */
+  involvedDrivers(decision: Pick<DecisionRow, 'incident_id' | 'driver_id'>): Id[] {
+    const incident = decision.incident_id != null ? this.data.incidents.find((i) => i.id === decision.incident_id) : undefined;
+    const ids = [decision.driver_id, ...(incident?.involved_driver_ids ?? [])];
+    return [...new Set(ids)];
+  }
+
+  /** Öffentliche Angaben zum Vorfall eines Urteils (Runde/Kurve), falls vorhanden. */
+  incidentOf(decision: Pick<DecisionRow, 'incident_id'>): LeagueDataset['incidents'][number] | undefined {
+    return decision.incident_id != null ? this.data.incidents.find((i) => i.id === decision.incident_id) : undefined;
+  }
+
   decisionByRef(ref: string): DecisionRow | undefined {
     return this.publishedDecisions.find((d) => d.public_ref.toLowerCase() === ref.toLowerCase());
   }
@@ -697,7 +716,8 @@ export class League {
           .map(([driverId, c]) => ({ driverId, value: pick(c) }))
           .filter((e) => e.value > 0)
           .sort((a, b) => b.value - a.value || this.driverName(a.driverId).localeCompare(this.driverName(b.driverId), 'de'))
-          .slice(0, limit);
+          // Top N, bei Gleichstand an der Grenze alle mit demselben Wert
+          .filter((e, i, all) => i < limit || e.value === all[limit - 1]?.value);
 
       return {
         champions,

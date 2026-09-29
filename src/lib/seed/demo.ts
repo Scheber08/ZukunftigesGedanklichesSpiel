@@ -35,6 +35,9 @@ import { BASE_POINTS_SCHEMES, BASE_TEAMS, BASE_TRACKS, baseDataset } from './bas
 
 type Seed<T> = Omit<T, 'created_at' | 'updated_at'>;
 
+/** Fiktiver Chef-Steward mit bereits abgegebener erster Stimme (Vier-Augen-Prinzip). */
+const DEMO_CHIEF_STEWARD_ID = '00000000-0000-4000-8000-000000000005';
+
 /** Deterministischer Zufallsgenerator (mulberry32). */
 function rng(seed: number): () => number {
   let a = seed >>> 0;
@@ -512,7 +515,13 @@ export function demoDataset(now: Date = new Date()): Dataset {
     driver_id: 22,
     verdict: 'time_penalty',
     time_seconds: 5,
-    reasoning_de: 'Entwurf: Unsicheres Wiedereinfahren (V-04). Wartet auf zweite Steward-Stimme.',
+    reasoning_de:
+      'NightRace_Nils ist nach einem Dreher in Kurve 17 ohne ausreichenden Blick auf den nachfolgenden Verkehr zurück auf die Ideallinie gefahren und hat MaxAttackMia zum Ausweichen gezwungen (Strafenkatalog V-04, unsicheres Wiedereinfahren).',
+    reasoning_en:
+      'After spinning at turn 17, NightRace_Nils rejoined the racing line without sufficient regard for following traffic and forced MaxAttackMia to take avoiding action (penalty catalogue V-04, unsafe rejoin).',
+    rule_ref: '§8',
+    // Erste Stimme liegt vor – die zweite fehlt noch (Vier-Augen-Prinzip in Saison 2)
+    decided_by: [DEMO_CHIEF_STEWARD_ID],
     status: 'draft',
     published_at: null,
   });
@@ -709,6 +718,7 @@ export function demoDataset(now: Date = new Date()): Dataset {
       round_id: null,
       author_id: null,
       author_name: 'RaceControl_Rene',
+      discord_post: false,
       status: 'published',
       publish_at: newsAt(s2r1, -24 * 10),
     },
@@ -729,6 +739,7 @@ export function demoDataset(now: Date = new Date()): Dataset {
       round_id: null,
       author_id: null,
       author_name: 'Newsdesk_Nora',
+      discord_post: false,
       status: 'published',
       publish_at: newsAt(s2r1, -24 * 5),
     },
@@ -750,6 +761,7 @@ export function demoDataset(now: Date = new Date()): Dataset {
       round_id: s2r3r.id,
       author_id: null,
       author_name: 'Newsdesk_Nora',
+      discord_post: false,
       status: 'published',
       publish_at: newsAt(s2r3r, 26),
     },
@@ -770,6 +782,7 @@ export function demoDataset(now: Date = new Date()): Dataset {
       round_id: null,
       author_id: null,
       author_name: 'RaceControl_Rene',
+      discord_post: false,
       status: 'published',
       publish_at: newsAt(s2r3r, 50),
     },
@@ -790,6 +803,7 @@ export function demoDataset(now: Date = new Date()): Dataset {
       round_id: s2r4.id,
       author_id: null,
       author_name: 'Newsdesk_Nora',
+      discord_post: false,
       status: 'draft',
       publish_at: null,
     },
@@ -900,6 +914,17 @@ export function demoDataset(now: Date = new Date()): Dataset {
     ],
     // Beispiel für eine Umbenennung: alte Profil-URL leitet per 301 weiter
     slug_redirects: [{ id: 1, entity: 'driver', old_slug: 'kurvenkoenig-alt', new_slug: slugify('Kurvenkönig'), lang: null }],
+    staff_accounts: [
+      {
+        user_id: DEMO_CHIEF_STEWARD_ID,
+        discord_user_id: 'demo-chefsteward',
+        display_name: 'Chefsteward_Clara',
+        avatar_url: null,
+        roles: ['steward'],
+        driver_id: null,
+        roles_checked_at: null,
+      },
+    ],
     contact_messages: [
       {
         id: 1,

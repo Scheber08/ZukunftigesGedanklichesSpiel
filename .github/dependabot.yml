@@ -45,7 +45,6 @@ updates:
           - '@vitest/*'
           - '@playwright/test'
           - '@axe-core/*'
-          - 'linkinator'
           - 'typescript'
           - '@types/*'
       minor-and-patch:

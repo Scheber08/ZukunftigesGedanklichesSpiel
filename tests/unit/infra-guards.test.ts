@@ -134,7 +134,10 @@ describe('CSP und Client-Code', () => {
     const offenders: string[] = [];
     for (const f of astro) {
       const src = read(f);
-      if (/<script\b[^>]*\bis:inline\b/.test(src)) offenders.push(`${rel(f)}: is:inline`);
+      // Erlaubt: externe Skriptdateien aus /scripts/ (kein Inline-Code, CSP 'self')
+      for (const tag of src.match(/<script\b[^>]*>/g) ?? []) {
+        if (/\bis:inline\b/.test(tag) && !/\bsrc="\/scripts\/[\w.-]+\.js"/.test(tag)) offenders.push(`${rel(f)}: is:inline`);
+      }
       // HTML-Attribut mit String-Wert, z. B. onclick="…" (Svelte-Handler onclick={…} sind kein Inline-Skript)
       const handler = /<[a-zA-Z][^>]*\son[a-z]+\s*=\s*["']/.exec(src);
       if (handler) offenders.push(`${rel(f)}: ${handler[0].slice(0, 60)}`);

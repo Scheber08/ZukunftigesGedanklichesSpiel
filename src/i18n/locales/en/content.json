@@ -32,6 +32,7 @@
   "content.rules.effectiveFrom": "In force from",
   "content.rules.status": "Status",
   "content.rules.statusCurrent": "in force",
+  "content.rules.statusUpcoming": "not yet in force",
   "content.rules.statusArchived": "no longer in force",
   "content.rules.changelog": "Changelog & versions",
   "content.rules.changelogHint": "What has changed between versions. Older versions remain available.",

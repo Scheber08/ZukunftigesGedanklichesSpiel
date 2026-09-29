@@ -7,7 +7,7 @@
  */
 
 import { SITE } from '~/config/site';
-import { t, url } from '~/i18n';
+import { t, url, type Lang } from '~/i18n';
 import type { RoundFormat, RoundRow, SeasonRow } from '~/lib/db/types';
 import { buildIcs, type IcsEvent } from '~/lib/domain/ics';
 import { LEAGUE_TIMEZONE } from '~/lib/domain/time';
@@ -42,20 +42,20 @@ export function roundIcsFilename(season: Pick<SeasonRow, 'slug'>, round: Pick<Ro
   return `${parts.filter(Boolean).join('-')}.ics`;
 }
 
-/** Termin einer Runde. Das Abo ist sprachneutral und nutzt die deutschen Texte. */
-export function roundIcsEvent(league: League, round: RoundRow, site: URL): IcsEvent | null {
+/** Termin einer Runde in der Sprache des Abos (gleiche UID in DE und EN). */
+export function roundIcsEvent(league: League, round: RoundRow, site: URL, lang: Lang = 'de'): IcsEvent | null {
   const season = league.season(round.season_id);
   if (!season) return null;
   const track = league.track(round.track_id);
   const cancelled = round.status === 'cancelled';
-  const label = roundLabel(round, track, 'de');
-  const pageUrl = new URL(url('de', 'race', { season: season.slug, round: round.number }), site).href;
-  const summary = `${cancelled ? `${t('de', 'calendar.ics.cancelledPrefix')}: ` : ''}${label} – ${SITE.name}`;
+  const label = roundLabel(round, track, lang);
+  const pageUrl = new URL(url(lang, 'race', { season: season.slug, round: round.number }), site).href;
+  const summary = `${cancelled ? `${t(lang, 'calendar.ics.cancelledPrefix')}: ` : ''}${label} – ${SITE.name}`;
   const description = [
-    t('de', 'calendar.ics.eventDescription', { season: seasonLabel(season, 'de'), n: round.number }),
-    round.format === 'sprint' ? t('de', 'format.sprint') : null,
-    cancelled ? t('de', 'calendar.ics.cancelledNote') : null,
-    t('de', 'calendar.ics.moreInfo', { url: pageUrl }),
+    t(lang, 'calendar.ics.eventDescription', { season: seasonLabel(season, lang), n: round.number }),
+    round.format === 'sprint' ? t(lang, 'format.sprint') : null,
+    cancelled ? t(lang, 'calendar.ics.cancelledNote') : null,
+    t(lang, 'calendar.ics.moreInfo', { url: pageUrl }),
   ]
     .filter((line): line is string => line != null)
     .join('\n');
@@ -69,7 +69,7 @@ export function roundIcsEvent(league: League, round: RoundRow, site: URL): IcsEv
     summary,
     description,
     url: pageUrl,
-    location: t('de', 'calendar.ics.location', { track: trackName(track, 'de') }),
+    location: t(lang, 'calendar.ics.location', { track: trackName(track, lang) }),
     cancelled,
     sequence: icsSequence(round.updated_at),
     lastModified: Number.isFinite(updated) ? new Date(updated) : undefined,
@@ -91,27 +91,27 @@ export function subscriptionRounds(league: League): RoundRow[] {
     .sort((a, b) => a.start_utc.localeCompare(b.start_utc) || a.number - b.number);
 }
 
-/** Inhalt von /kalender.ics. */
-export function buildCalendarIcs(league: League, site: URL): string {
+/** Inhalt von /kalender.ics bzw. /en/calendar.ics. */
+export function buildCalendarIcs(league: League, site: URL, lang: Lang = 'de'): string {
   const events = subscriptionRounds(league)
-    .map((r) => roundIcsEvent(league, r, site))
+    .map((r) => roundIcsEvent(league, r, site, lang))
     .filter((e): e is IcsEvent => e != null);
   return buildIcs({
-    name: t('de', 'calendar.ics.name', { league: SITE.name }),
-    description: t('de', 'calendar.ics.description', { league: SITE.name, game: SITE.gameName }),
-    prodId: `-//${SITE.name}//Rennkalender//DE`,
+    name: t(lang, 'calendar.ics.name', { league: SITE.name }),
+    description: t(lang, 'calendar.ics.description', { league: SITE.name, game: SITE.gameName }),
+    prodId: `-//${SITE.name}//Rennkalender//${lang.toUpperCase()}`,
     events,
     now: league.now,
   });
 }
 
 /** Inhalt von /rennen/[saison]/[runde].ics (ein Termin, gleiche UID wie im Abo). */
-export function buildRoundIcs(league: League, round: RoundRow, site: URL): string {
-  const event = roundIcsEvent(league, round, site);
+export function buildRoundIcs(league: League, round: RoundRow, site: URL, lang: Lang = 'de'): string {
+  const event = roundIcsEvent(league, round, site, lang);
   const track = league.track(round.track_id);
   return buildIcs({
-    name: `${roundLabel(round, track, 'de')} – ${SITE.name}`,
-    prodId: `-//${SITE.name}//Rennkalender//DE`,
+    name: `${roundLabel(round, track, lang)} – ${SITE.name}`,
+    prodId: `-//${SITE.name}//Rennkalender//${lang.toUpperCase()}`,
     events: event ? [event] : [],
     now: league.now,
   });

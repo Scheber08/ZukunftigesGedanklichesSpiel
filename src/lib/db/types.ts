@@ -405,6 +405,8 @@ export interface NewsRow extends Timestamps {
   author_name: string | null;
   status: NewsStatus;
   publish_at: IsoDateTime | null;
+  /** Beim (geplanten) Veröffentlichen in Discord posten */
+  discord_post: boolean;
 }
 
 export interface FaqItemRow extends Timestamps {

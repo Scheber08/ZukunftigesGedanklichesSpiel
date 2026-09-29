@@ -12,5 +12,5 @@ const t = useT(lang);
 ---
 
 <span class="badge badge-muted" title={t(`platform.long.${platform}`)}>
-  {t(`platform.${platform}`)}<span class="sr-only"> ({t(`platform.long.${platform}`)})</span>
+  <span aria-hidden="true">{t(`platform.${platform}`)}</span><span class="sr-only">{t(`platform.long.${platform}`)}</span>
 </span>

@@ -156,10 +156,16 @@ const consentTexts = {
       minute: '2-digit',
       timeZoneName: 'short',
     }).format(d);
-    const hint = document.createElement('span');
-    hint.className = 'localtime-hint';
+    // Platz ist per data-tz-diff (public/scripts/tz.js) schon reserviert – nur noch Text setzen
+    let hint = el.nextElementSibling as HTMLElement | null;
+    if (!hint?.hasAttribute('data-localtime-hint')) {
+      hint = document.createElement('span');
+      hint.className = 'localtime-hint';
+      el.after(hint);
+    }
     hint.textContent = el.dataset.lang === 'en' ? ` (your time: ${local})` : ` (deine Zeit: ${local})`;
-    el.after(hint);
+    hint.removeAttribute('aria-hidden');
+    hint.classList.add('is-set');
   });
 
   // „Link kopieren“

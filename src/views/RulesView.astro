@@ -36,6 +36,8 @@ const shown = findRulesVersion(league, version);
 if (version && !shown) throw new Error(`Regelwerk-Version nicht gefunden: ${version}`);
 const isVersionPage = version != null;
 const isCurrent = shown != null && shown.id === current?.id;
+// Veröffentlicht, aber noch nicht in Kraft (gilt ab einem künftigen Datum)
+const isUpcoming = isCurrent && shown?.effective_from != null && new Date(`${shown.effective_from}T00:00:00`) > league.now;
 const versions = sortRulesVersions(league.rulesVersions);
 
 const tree = shown ? league.rulesTree(shown.id) : [];
@@ -106,7 +108,9 @@ const dateOf = (iso: string | null) => (iso ? formatDate(iso, lang) : '–');
           <div>
             <dt>{t('content.rules.status')}</dt>
             <dd>
-              <Badge variant={isCurrent ? 'green' : 'muted'}>{isCurrent ? t('content.rules.statusCurrent') : t('content.rules.statusArchived')}</Badge>
+              <Badge variant={isUpcoming ? 'teal' : isCurrent ? 'green' : 'muted'}>
+                {isUpcoming ? t('content.rules.statusUpcoming') : isCurrent ? t('content.rules.statusCurrent') : t('content.rules.statusArchived')}
+              </Badge>
             </dd>
           </div>
         </dl>

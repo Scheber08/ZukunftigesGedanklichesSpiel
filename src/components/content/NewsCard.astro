@@ -1,5 +1,6 @@
 ---
 /** News-Karte für Übersicht und Startseite (Plan §4.7). */
+import { mediaVariantUrl } from '~/lib/admin/content/media';
 import Badge from '~/components/ui/Badge.astro';
 import { useT, type Lang } from '~/i18n';
 import { newsCoverAlt, newsDate, newsHref } from '~/lib/content/news';
@@ -18,13 +19,22 @@ const title = localized(news, 'title', lang);
 const excerpt = localized(news, 'excerpt', lang);
 const href = newsHref(lang, news);
 const date = newsDate(news);
+
+/** 800- und 1600-px-Variante aus dem Upload (Plan §7.5), sonst kein srcset */
+function coverSrcset(url: string | null): string | undefined {
+  const small = mediaVariantUrl(url, 800);
+  const large = mediaVariantUrl(url, 1600);
+  return small && large && small !== large ? `${small} 800w, ${large} 1600w` : undefined;
+}
 ---
 
 <article class="card card-hover relative flex h-full flex-col overflow-hidden">
   {
     news.cover_image && (
       <img
-        src={news.cover_image}
+        src={mediaVariantUrl(news.cover_image, 800) ?? news.cover_image}
+        srcset={coverSrcset(news.cover_image)}
+        sizes="(min-width: 768px) 33vw, 100vw"
         alt={newsCoverAlt(news, lang)}
         width="800"
         height="450"

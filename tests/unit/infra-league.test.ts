@@ -188,11 +188,12 @@ describe('League – Hall of Fame und Inhalte', () => {
     expect(hof.titles).toEqual([{ driverId: champ.driverId, value: 1 }]);
   });
 
-  it('sortiert die ewigen Bestenlisten absteigend (max. 10)', () => {
+  it('sortiert die ewigen Bestenlisten absteigend (Top 10, Gleichstand an der Grenze inklusive)', () => {
     const hof = league.hallOfFame();
     for (const list of [hof.wins, hof.podiums, hof.poles, hof.fastestLaps, hof.starts, hof.points]) {
       expect(list.length).toBeGreaterThan(0);
-      expect(list.length).toBeLessThanOrEqual(10);
+      // mehr als 10 nur, wenn alle weiteren denselben Wert wie Platz 10 haben
+      expect(list.slice(10).every((e) => e.value === list[9]!.value)).toBe(true);
       expect(list.every((e) => e.value > 0)).toBe(true);
       for (let i = 1; i < list.length; i++) expect(list[i - 1]!.value).toBeGreaterThanOrEqual(list[i]!.value);
     }

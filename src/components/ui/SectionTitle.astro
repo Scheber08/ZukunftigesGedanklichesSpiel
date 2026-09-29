@@ -13,5 +13,5 @@ const { title, id, href, linkLabel, as: Tag = 'h2', class: className } = Astro.p
 
 <div class:list={['mb-6 flex flex-wrap items-center justify-between gap-3', className]}>
   <Tag class="section-title uppercase" id={id}>{title}</Tag>
-  {href && linkLabel && <a href={href} class="text-sm font-semibold text-green hover:text-teal">{linkLabel} →</a>}
+  {href && linkLabel && <a href={href} class="section-link text-sm font-semibold text-green hover:text-teal">{linkLabel} →</a>}
 </div>

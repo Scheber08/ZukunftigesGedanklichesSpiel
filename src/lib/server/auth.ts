@@ -73,18 +73,27 @@ export function supabaseAuthClient(ctx: CookieContext): SupabaseClient {
 
 // ---------------------------------------------------------------------------- Demo-Login
 
-const DEMO_USERS: Record<StaffRole, { userId: string; name: string }> = {
-  admin: { userId: '00000000-0000-4000-8000-000000000001', name: 'Demo-Admin' },
-  steward: { userId: '00000000-0000-4000-8000-000000000002', name: 'Demo-Steward' },
-  redakteur: { userId: '00000000-0000-4000-8000-000000000003', name: 'Demo-Redaktion' },
+/** Demo-Zugänge; zwei Stewards, damit sich das Vier-Augen-Prinzip durchspielen lässt (Plan §5.3). */
+export const DEMO_LOGINS = ['admin', 'steward', 'steward2', 'redakteur'] as const;
+export type DemoLogin = (typeof DEMO_LOGINS)[number];
+
+const DEMO_USERS: Record<DemoLogin, { userId: string; name: string; role: StaffRole }> = {
+  admin: { userId: '00000000-0000-4000-8000-000000000001', name: 'Demo-Admin', role: 'admin' },
+  steward: { userId: '00000000-0000-4000-8000-000000000002', name: 'Demo-Steward', role: 'steward' },
+  steward2: { userId: '00000000-0000-4000-8000-000000000004', name: 'Demo-Steward 2', role: 'steward' },
+  redakteur: { userId: '00000000-0000-4000-8000-000000000003', name: 'Demo-Redaktion', role: 'redakteur' },
 };
 
-export function demoStaff(role: StaffRole): Staff {
-  const u = DEMO_USERS[role];
-  return { userId: u.userId, discordUserId: `demo-${role}`, name: u.name, avatarUrl: null, roles: [role], driverId: null, demo: true };
+export function isDemoLogin(value: string): value is DemoLogin {
+  return (DEMO_LOGINS as readonly string[]).includes(value);
 }
 
-export function setDemoLogin(cookies: AstroCookies, role: StaffRole): void {
+export function demoStaff(login: DemoLogin): Staff {
+  const u = DEMO_USERS[login];
+  return { userId: u.userId, discordUserId: `demo-${login}`, name: u.name, avatarUrl: null, roles: [u.role], driverId: null, demo: true };
+}
+
+export function setDemoLogin(cookies: AstroCookies, role: DemoLogin): void {
   if (!isDemoMode()) throw new AuthError('Demo-Login ist nur im Demo-Modus verfügbar');
   cookies.set(DEMO_COOKIE, role, { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 8 * 3600 });
 }
@@ -125,8 +134,8 @@ export async function refreshStaffRoles(row: StaffAccountRow): Promise<StaffAcco
  */
 export async function getStaff(ctx: CookieContext): Promise<Staff | null> {
   if (isDemoMode()) {
-    const role = ctx.cookies.get(DEMO_COOKIE)?.value as StaffRole | undefined;
-    return role && role in DEMO_USERS ? demoStaff(role) : null;
+    const login = ctx.cookies.get(DEMO_COOKIE)?.value;
+    return login && isDemoLogin(login) ? demoStaff(login) : null;
   }
   const supabase = supabaseAuthClient(ctx);
   const { data, error } = await supabase.auth.getClaims();

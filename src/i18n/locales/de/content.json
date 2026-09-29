@@ -32,6 +32,7 @@
   "content.rules.effectiveFrom": "Gilt ab",
   "content.rules.status": "Status",
   "content.rules.statusCurrent": "gültig",
+  "content.rules.statusUpcoming": "noch nicht in Kraft",
   "content.rules.statusArchived": "nicht mehr gültig",
   "content.rules.changelog": "Changelog & Versionen",
   "content.rules.changelogHint": "Was sich zwischen den Fassungen geändert hat. Alte Fassungen bleiben abrufbar.",

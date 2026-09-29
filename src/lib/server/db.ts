@@ -28,7 +28,9 @@ let serviceStore: SupabaseStore | undefined;
 export function getPublicStore(): Store {
   if (isDemoMode()) return getMemoryStore();
   if (!env.supabaseAnonKey) throw new Error('SUPABASE_ANON_KEY fehlt');
-  publicStore ??= new SupabaseStore(env.supabaseUrl!, env.supabaseAnonKey, { views: { drivers: 'drivers_public' } });
+  publicStore ??= new SupabaseStore(env.supabaseUrl!, env.supabaseAnonKey, {
+    views: { drivers: 'drivers_public', decisions: 'decisions_public', incidents: 'incidents_public' },
+  });
   return publicStore;
 }
 

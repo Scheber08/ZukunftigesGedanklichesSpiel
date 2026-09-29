@@ -1,8 +1,10 @@
 ---
 /**
  * Timing-Tabelle für eine Session (Plan §3.5, §4.3):
- * Pos, Nr, Fahrer, Team, Runden, Zeit/Abstand, beste Runde, Stopps, Strafen, Punkte, +/−.
+ * Pos, Nr, Fahrer, Team, Runden, Zeit/Abstand, beste Runde, Stopps, Strafen, Punkte, Status, +/−.
  * Kopfzeile bleibt stehen, die Fahrerspalte ist auf dem Handy fixiert.
+ * Abstände enthalten veröffentlichte Zeitstrafen der Stewards (Plan §5.3), damit sie zur
+ * neu berechneten Reihenfolge passen.
  */
 import Timer from '@lucide/astro/icons/timer';
 import DriverLink from '~/components/ui/DriverLink.astro';
@@ -32,22 +34,39 @@ const rows = limit ? all.slice(0, limit) : all;
 const type = session?.type ?? 'race';
 const isQuali = type === 'qualifying';
 const leader = all.find((r) => r.position === 1);
-const poleTime = isQuali ? leader?.best_lap_ms ?? null : null;
+const poleTime = isQuali ? (leader?.best_lap_ms ?? null) : null;
 const showPoints = all.some((r) => r.points > 0);
 const showStops = !isQuali && all.some((r) => r.pit_stops != null);
 const showPenalties = all.some((r) => r.steward_penalty_s > 0 || r.ingame_penalty_s > 0);
 const showGrid = type !== 'qualifying' && all.some((r) => r.grid_position != null);
+const stewardTimePenalties = !isQuali && all.some((r) => r.steward_penalty_s > 0);
+
+// Renndauer laut Eingabe: Gesamtzeit oder Abstand zum eingegebenen Ersten
+const enteredLeader = all.find((r) => r.entered_position === 1 && r.status === 'classified');
+function enteredTime(r: ResultRow): number | null {
+  if (r.total_time_ms != null) return r.total_time_ms;
+  if (r === enteredLeader) return 0;
+  if (r.gap_ms != null && (r.gap_laps ?? 0) === 0) return (enteredLeader?.total_time_ms ?? 0) + r.gap_ms;
+  return null;
+}
+/** Zeit inklusive Steward-Zeitstrafe */
+const effectiveTime = (r: ResultRow): number | null => {
+  const base = enteredTime(r);
+  return base == null ? null : base + r.steward_penalty_s * 1000;
+};
+const leaderTime = leader ? effectiveTime(leader) : null;
 
 function timeOrGap(r: ResultRow): string {
-  if (r.status !== 'classified') return t(`status.result.${r.status}`);
+  if (r.status !== 'classified') return '–';
   if (isQuali) {
     if (r.position === 1 || poleTime == null || r.best_lap_ms == null) return formatLapTime(r.best_lap_ms);
     return formatGapMs(r.best_lap_ms - poleTime);
   }
-  if (r.position === 1) return formatLapTime(r.total_time_ms);
+  if (r.position === 1) return r.total_time_ms != null ? formatLapTime(effectiveTime(r)) : '–';
   if (r.gap_laps && r.gap_laps > 0) return t('results.lapsDown', { n: r.gap_laps });
+  const own = effectiveTime(r);
+  if (own != null && leaderTime != null) return formatGapMs(Math.max(0, own - leaderTime));
   if (r.gap_ms != null) return formatGapMs(r.gap_ms);
-  if (r.total_time_ms != null && leader?.total_time_ms != null) return formatGapMs(r.total_time_ms - leader.total_time_ms);
   return '–';
 }
 
@@ -75,99 +94,125 @@ const sessionLabel = t(`session.${type}`);
   rows.length === 0 ? (
     <EmptyState title={t('results.none')} />
   ) : (
-    <div class="table-wrap">
-      <table class="timing-table">
-        <caption class="sr-only">{caption ?? t('results.caption', { session: sessionLabel })}</caption>
-        <thead>
-          <tr>
-            <th scope="col" class="pos">
-              <abbr title={t('common.position')}>{t('common.positionShort')}</abbr>
-            </th>
-            <th scope="col" class="sticky-col">{t('common.driver')}</th>
-            <th scope="col">{t('common.team')}</th>
-            {!compact && !isQuali && <th scope="col" class="num">{t('results.laps')}</th>}
-            <th scope="col" class="num">{isQuali ? t('results.bestLap') : t('results.timeGap')}</th>
-            {!compact && isQuali && <th scope="col" class="num">{t('results.gapToPole')}</th>}
-            {!compact && !isQuali && <th scope="col" class="num">{t('results.bestLap')}</th>}
-            {!compact && showStops && <th scope="col" class="num">{t('results.stops')}</th>}
-            {!compact && showPenalties && <th scope="col" class="num">{t('results.penalties')}</th>}
-            {!compact && showGrid && (
-              <th scope="col" class="num">
-                <abbr title={t('results.grid')}>{t('results.gained')}</abbr>
+    <>
+      <div class="table-wrap">
+        <table class="timing-table">
+          <caption class="sr-only">{caption ?? t('results.caption', { session: sessionLabel })}</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="pos">
+                <abbr title={t('common.position')}>{t('common.positionShort')}</abbr>
               </th>
-            )}
-            {showPoints && <th scope="col" class="num">{t('common.pointsShort')}</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            const team = league.team(r.team_id);
-            const g = gained(r);
-            return (
-              <tr class:list={[r.position != null && r.position <= 3 && !isQuali && 'podium']}>
-                <td class="pos">
-                  {r.position ?? <span class="text-sm text-danger">{t(`status.result.${r.status}`)}</span>}
-                </td>
-                <th scope="row" class="sticky-col font-normal">
-                  <span class="flex items-center gap-2">
-                    <DriverLink lang={lang} driver={league.driver(r.driver_id)} team={team} number={r.race_number} reserve={r.role === 'reserve'} />
-                    {r.is_pole && (
-                      <abbr class="pole" title={t('legend.pole')}>
-                        P
-                      </abbr>
-                    )}
-                    {r.is_fastest_lap && (
-                      <span class="text-teal" title={t('legend.fastestLap')}>
-                        <Timer size={16} aria-hidden="true" />
-                        <span class="sr-only">{t('legend.fastestLap')}</span>
-                      </span>
-                    )}
-                  </span>
+              {!compact && (
+                <th scope="col" class="num">
+                  <abbr title={t('common.number')}>{t('common.number')}</abbr>
                 </th>
-                <td class="muted">
-                  <TeamName lang={lang} team={team} short={compact} stripe={false} />
-                </td>
-                {!compact && !isQuali && <td class="num">{r.laps ?? '–'}</td>}
-                <td class:list={['num', r.status !== 'classified' && 'text-danger']}>
-                  {isQuali ? formatLapTime(r.best_lap_ms) : timeOrGap(r)}
-                </td>
-                {!compact && isQuali && <td class="num muted">{r.position === 1 ? '' : timeOrGap(r)}</td>}
-                {!compact && !isQuali && (
-                  <td class:list={['num', r.is_fastest_lap && 'text-teal font-semibold']}>{formatLapTime(r.best_lap_ms)}</td>
-                )}
-                {!compact && showStops && <td class="num">{r.pit_stops ?? '–'}</td>}
-                {!compact && showPenalties && (
+              )}
+              <th scope="col" class="sticky-col">{t('common.driver')}</th>
+              <th scope="col">{t('common.team')}</th>
+              {!compact && !isQuali && <th scope="col" class="num">{t('results.laps')}</th>}
+              <th scope="col" class="num">{isQuali ? t('results.bestLap') : t('results.timeGap')}</th>
+              {!compact && isQuali && <th scope="col" class="num">{t('results.gapToPole')}</th>}
+              {!compact && !isQuali && <th scope="col" class="num">{t('results.bestLap')}</th>}
+              {!compact && showStops && <th scope="col" class="num">{t('results.stops')}</th>}
+              {!compact && showPenalties && <th scope="col" class="num">{t('results.penalties')}</th>}
+              {showPoints && <th scope="col" class="num">{t('common.pointsShort')}</th>}
+              {!compact && <th scope="col">{t('common.status')}</th>}
+              {!compact && showGrid && (
+                <th scope="col" class="num">
+                  <abbr title={t('results.grid')}>{t('results.gained')}</abbr>
+                </th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const team = league.team(r.team_id);
+              const g = gained(r);
+              const classified = r.status === 'classified';
+              return (
+                <tr class:list={[r.position != null && r.position <= 3 && !isQuali && 'podium']}>
+                  <td class="pos">{r.position ?? '–'}</td>
+                  {!compact && <td class="num muted">{r.race_number ?? '–'}</td>}
+                  <th scope="row" class="sticky-col font-normal">
+                    <span class="flex items-center gap-2">
+                      <DriverLink
+                        lang={lang}
+                        driver={league.driver(r.driver_id)}
+                        team={team}
+                        number={compact ? r.race_number : undefined}
+                        reserve={r.role === 'reserve'}
+                      />
+                      {r.is_pole && (
+                        <abbr class="pole" title={t('legend.pole')}>
+                          P
+                        </abbr>
+                      )}
+                      {r.is_fastest_lap && (
+                        <span class="text-teal" title={t('legend.fastestLap')}>
+                          <Timer size={16} aria-hidden="true" />
+                          <span class="sr-only">{t('legend.fastestLap')}</span>
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                  <td class="muted">
+                    <TeamName lang={lang} team={team} short={compact} stripe={false} />
+                  </td>
+                  {!compact && !isQuali && <td class="num">{r.laps ?? '–'}</td>}
                   <td class="num">
-                    {r.steward_penalty_s > 0 && (
-                      <span class="text-danger" title={t('results.steward')}>
-                        {t('results.penaltySeconds', { n: r.steward_penalty_s })}
-                      </span>
-                    )}
-                    {r.ingame_penalty_s > 0 && (
-                      <span class="muted" title={t('results.ingame')}>
-                        {' '}
-                        ({t('results.penaltySeconds', { n: r.ingame_penalty_s })})
-                      </span>
+                    {compact && !classified ? (
+                      <span class="text-danger">{t(`status.result.${r.status}`)}</span>
+                    ) : isQuali ? (
+                      formatLapTime(r.best_lap_ms)
+                    ) : (
+                      timeOrGap(r)
                     )}
                   </td>
-                )}
-                {!compact && showGrid && (
-                  <td class="num">
-                    {g && (
-                      <span class:list={[g.n > 0 && 'text-green', g.n < 0 && 'text-danger', g.n === 0 && 'muted']} title={g.label}>
-                        <span aria-hidden="true">{g.n > 0 ? `▲${g.n}` : g.n < 0 ? `▼${-g.n}` : '='}</span>
-                        <span class="sr-only">{g.label}</span>
+                  {!compact && isQuali && <td class="num muted">{r.position === 1 ? '' : timeOrGap(r)}</td>}
+                  {!compact && !isQuali && (
+                    <td class:list={['num', r.is_fastest_lap && 'text-teal font-semibold']}>{formatLapTime(r.best_lap_ms)}</td>
+                  )}
+                  {!compact && showStops && <td class="num">{r.pit_stops ?? '–'}</td>}
+                  {!compact && showPenalties && (
+                    <td class="num">
+                      <span class="inline-grid justify-items-end gap-0.5">
+                        {r.steward_penalty_s > 0 && (
+                          <span class="text-danger">
+                            {t('results.penaltySeconds', { n: r.steward_penalty_s })}{' '}
+                            <span class="text-xs">{t('results.steward')}</span>
+                          </span>
+                        )}
+                        {r.ingame_penalty_s > 0 && (
+                          <span class="muted">
+                            {t('results.penaltySeconds', { n: r.ingame_penalty_s })} <span class="text-xs">{t('results.ingame')}</span>
+                          </span>
+                        )}
                       </span>
-                    )}
-                  </td>
-                )}
-                {showPoints && <td class="num font-semibold">{r.points > 0 ? r.points : ''}</td>}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                    </td>
+                  )}
+                  {showPoints && <td class="num font-semibold">{r.points > 0 ? r.points : ''}</td>}
+                  {!compact && (
+                    <td class:list={[classified ? 'muted' : 'font-semibold text-danger']}>{t(`status.result.${r.status}`)}</td>
+                  )}
+                  {!compact && showGrid && (
+                    <td class="num">
+                      {g && (
+                        <span class:list={[g.n > 0 && 'text-green', g.n < 0 && 'text-danger', g.n === 0 && 'muted']} title={g.label}>
+                          <span aria-hidden="true">{g.n > 0 ? `▲${g.n}` : g.n < 0 ? `▼${-g.n}` : '='}</span>
+                          <span class="sr-only">{g.label}</span>
+                        </span>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {!compact && stewardTimePenalties && <p class="mt-2 text-xs text-muted">{t('results.gapIncludesPenalties')}</p>}
+    </>
   )
 }
 

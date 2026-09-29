@@ -37,7 +37,8 @@ if (!decision || !item) {
   throw new Error(`Entscheidung ${ref} nicht gefunden`);
 }
 
-const { round, track, season, sessionType, driver, team, number, reasoning, rule, clipUrl } = item;
+const { round, track, season, sessionType, driver, team, number, reasoning, rule, clipUrl, involved, lap, corner } = item;
+const location = [lap != null ? t('stewards.incident.lap', { n: lap }) : null, corner].filter(Boolean).join(' · ');
 const driverName = league.driverName(decision.driver_id, lang);
 const label = roundLabel(round, track, lang);
 const verdictText = t(`stewards.verdict.${decision.verdict}`);
@@ -123,6 +124,26 @@ const jsonLd = breadcrumbJsonLd(site, [
             {team && <TeamName lang={lang} team={team} class="text-muted" stripe={false} />}
           </dd>
         </div>
+        {
+          involved.length > 0 && (
+            <div>
+              <dt>{t('stewards.field.involved')}</dt>
+              <dd class="grid gap-1">
+                {involved.map((x) => (
+                  <DriverLink lang={lang} driver={x.driver} team={x.team} number={x.number} />
+                ))}
+              </dd>
+            </div>
+          )
+        }
+        {
+          location && (
+            <div>
+              <dt>{t('stewards.field.location')}</dt>
+              <dd>{location}</dd>
+            </div>
+          )
+        }
         <div>
           <dt>{t('stewards.field.round')}</dt>
           <dd>

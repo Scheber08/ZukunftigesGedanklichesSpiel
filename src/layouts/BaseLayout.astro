@@ -27,7 +27,7 @@ interface Props {
   jsonLd?: Record<string, unknown> | Array<Record<string, unknown>>;
   publishedTime?: string;
   modifiedTime?: string;
-  /** Header transparent über dem Hero (nur Startseite) */
+  /** Header transparent über dem Hero (nur Startseite); lädt zusätzlich den Display-Schnitt 900 vor (LCP) */
   heroHeader?: boolean;
 }
 
@@ -61,12 +61,16 @@ const robotsNoindex = noindex || demo || env.noindex;
     <meta name="color-scheme" content="dark" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="generator" content={Astro.generator} />
+    <script is:inline src="/scripts/tz.js"></script>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="alternate" type="application/rss+xml" title={`${SITE.name} – News`} href={lang === 'de' ? '/news/rss.xml' : '/en/news/rss.xml'} />
-    <Font cssVariable="--font-titillium" preload={[{ weight: 700, subset: 'latin' }]} />
+    <Font
+      cssVariable="--font-titillium"
+      preload={heroHeader ? [{ weight: 700, subset: 'latin' }, { weight: 900, subset: 'latin' }] : [{ weight: 700, subset: 'latin' }]}
+    />
     <Font cssVariable="--font-inter" />
     <SeoHead
       lang={lang}

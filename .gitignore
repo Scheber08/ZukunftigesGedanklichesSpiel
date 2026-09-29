@@ -15,6 +15,7 @@ node_modules/
 !.dev.vars.example
 
 # test output
+.lighthouseci/
 test-results/
 playwright-report/
 coverage/

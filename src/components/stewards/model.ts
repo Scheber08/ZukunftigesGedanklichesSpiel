@@ -22,6 +22,11 @@ export interface DecisionItem {
   rule: RuleLink | null;
   /** Clip-Link, nur http(s) – alles andere wird nicht verlinkt */
   clipUrl: string | null;
+  /** Weitere Beteiligte des Vorfalls (ohne den bestraften Fahrer), Plan §4.6 */
+  involved: Array<{ driver: DriverRow | undefined; team: TeamRow | undefined; number: number | null }>;
+  /** Rennrunde und Kurve aus der Meldung, falls öffentlich */
+  lap: number | null;
+  corner: string | null;
 }
 
 export function decisionItem(league: League, decision: DecisionRow, lang: Lang): DecisionItem | null {
@@ -31,6 +36,19 @@ export function decisionItem(league: League, decision: DecisionRow, lang: Lang):
   const session = decision.session_id != null ? league.session(decision.session_id) : undefined;
   const entry = league.entriesOf(round.id).find((e) => e.driver_id === decision.driver_id);
   const teamId = entry?.team_id ?? league.driverTeam(decision.driver_id, season.id)?.id;
+  const incident = league.incidentOf(decision);
+  const involved = league
+    .involvedDrivers(decision)
+    .filter((id) => id !== decision.driver_id)
+    .map((id) => {
+      const e = league.entriesOf(round.id).find((x) => x.driver_id === id);
+      const tId = e?.team_id ?? league.driverTeam(id, season.id)?.id;
+      return {
+        driver: league.driver(id),
+        team: tId != null ? league.team(tId) : undefined,
+        number: e?.race_number ?? league.numberAt(id, new Date(round.start_utc)),
+      };
+    });
   return {
     decision,
     round,
@@ -43,6 +61,9 @@ export function decisionItem(league: League, decision: DecisionRow, lang: Lang):
     reasoning: localized(decision, 'reasoning', lang),
     rule: decisionRuleLink(league, lang, season, decision.rule_ref),
     clipUrl: decision.clip_url && isHttpUrl(decision.clip_url.trim()) ? decision.clip_url.trim() : null,
+    involved,
+    lap: incident?.lap ?? null,
+    corner: incident?.corner ?? null,
   };
 }
 

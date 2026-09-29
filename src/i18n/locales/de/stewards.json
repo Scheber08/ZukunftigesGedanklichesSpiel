@@ -136,5 +136,8 @@
   "stewards.report.success.step3": "In der Regel entscheiden die Stewards innerhalb von 72 Stunden nach Fristende. Beteiligte Stewards entscheiden nicht mit.",
   "stewards.report.success.step4": "Die Entscheidung erscheint mit Begründung im öffentlichen Register.",
   "stewards.report.success.another": "Weiteren Vorfall melden",
-  "stewards.report.success.register": "Zum Register"
+  "stewards.report.success.register": "Zum Register",
+  "stewards.field.involved": "Beteiligte",
+  "stewards.field.location": "Ort",
+  "stewards.incident.lap": "Rennrunde {n}"
 }

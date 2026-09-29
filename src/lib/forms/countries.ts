@@ -6,7 +6,8 @@ import { countries } from 'country-flag-icons';
 import type { Lang } from '~/i18n/routes';
 
 /** Keine Nationalitäten im engeren Sinn. */
-const EXCLUDED = new Set(['EU', 'UN']);
+// Keine Staaten: EU/UN sowie Pseudo-Regionen (XA/XB/XC/XO) aus country-flag-icons
+const EXCLUDED = new Set(['EU', 'UN', 'XA', 'XB', 'XC', 'XO']);
 
 const CODES: readonly string[] = countries.filter((c) => /^[A-Z]{2}$/.test(c) && !EXCLUDED.has(c));
 const CODE_SET = new Set(CODES);

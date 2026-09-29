@@ -136,5 +136,8 @@
   "stewards.report.success.step3": "As a rule, the stewards decide within 72 hours after the window closes. Stewards who were involved do not take part.",
   "stewards.report.success.step4": "The decision appears in the public register with its reasoning.",
   "stewards.report.success.another": "Report another incident",
-  "stewards.report.success.register": "Go to the register"
+  "stewards.report.success.register": "Go to the register",
+  "stewards.field.involved": "Involved",
+  "stewards.field.location": "Location",
+  "stewards.incident.lap": "Lap {n}"
 }

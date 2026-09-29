@@ -10,6 +10,15 @@ import tailwindcss from '@tailwindcss/vite';
  */
 const SITE_URL = process.env.PUBLIC_SITE_URL || 'https://liga.example';
 
+/** Supabase-Herkunft für direkte Uploads über signierte URLs (Plan §7.5). */
+const SUPABASE_ORIGIN = (() => {
+  try {
+    return process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).origin : '';
+  } catch {
+    return '';
+  }
+})();
+
 export default defineConfig({
   site: SITE_URL,
   trailingSlash: 'never',
@@ -92,7 +101,17 @@ export default defineConfig({
         "default-src 'self'",
         "img-src 'self' data: blob: https:",
         "font-src 'self'",
-        "connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://challenges.cloudflare.com",
+        `connect-src ${[
+          "'self'",
+          'https://*.supabase.co',
+          SUPABASE_ORIGIN,
+          'https://*.google-analytics.com',
+          'https://*.analytics.google.com',
+          'https://www.googletagmanager.com',
+          'https://challenges.cloudflare.com',
+        ]
+          .filter(Boolean)
+          .join(' ')}`,
         "frame-src https://challenges.cloudflare.com https://player.twitch.tv https://www.youtube-nocookie.com",
         "object-src 'none'",
         "base-uri 'self'",

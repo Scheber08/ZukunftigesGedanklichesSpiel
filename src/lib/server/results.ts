@@ -437,6 +437,10 @@ export async function publishProvisional(
   if (!(await hasRaceResult(store, b))) {
     throw new RacedayError('PRECONDITION_FAILED', 'Es ist noch kein Rennergebnis eingetragen.');
   }
+  // Die Protestfrist darf nicht vor dem Rennen beginnen (Plan §11.1: Rennende → vorläufig)
+  if (b.round.status !== 'provisional' && new Date(b.round.start_utc).getTime() > Date.now()) {
+    throw new RacedayError('PRECONDITION_FAILED', 'Die Runde hat noch nicht begonnen – das Ergebnis kann erst nach dem Start veröffentlicht werden.');
+  }
   const { warnings } = await recomputeRound(store, roundId);
   if (b.round.status === 'provisional') {
     // Schon öffentlich: nur neu bauen, Protestfrist nicht verlängern, kein zweiter Discord-Post

@@ -4,6 +4,7 @@
  *                alle 10 Minuten Discord-Mitgliederzahlen
  * - "17 3 * * *" täglich: Löschfristen (Plan §6.7) und Supabase-Keep-alive
  */
+import { audit } from './audit';
 import { getServiceStore } from './db';
 import { fetchInviteCounts, inviteCodeFromUrl, notify, siteUrl, EMBED_TEAL } from './discord';
 import { processRebuildQueue, requestRebuild } from './rebuild';
@@ -25,14 +26,18 @@ export async function publishScheduledNews(now = new Date()): Promise<number> {
     (n) => n.publish_at != null && new Date(n.publish_at) <= now,
   );
   for (const n of due) {
-    await store.update('news', { id: n.id }, { status: 'published' });
-    await notify(store, 'news', {
-      title: n.title_de,
-      description: n.excerpt_de,
-      url: siteUrl(`/news/${n.slug_de}`),
-      color: EMBED_TEAL,
-      image: n.cover_image ? { url: n.cover_image } : undefined,
-    });
+    await store.update('news', { id: n.id }, { status: 'published', discord_post: false });
+    await audit(store, null, 'publish', 'news', n.id, { status: n.status }, { status: 'published' });
+    // Nur posten, wenn es beim Planen gewünscht war; Bilder nur als öffentliche https-URL
+    if (n.discord_post) {
+      await notify(store, 'news', {
+        title: n.title_de,
+        description: n.excerpt_de,
+        url: siteUrl(`/news/${n.slug_de}`),
+        color: EMBED_TEAL,
+        image: n.cover_image?.startsWith('https://') ? { url: n.cover_image } : undefined,
+      });
+    }
   }
   if (due.length > 0) await requestRebuild(store, `${due.length} geplante News veröffentlicht`);
   return due.length;

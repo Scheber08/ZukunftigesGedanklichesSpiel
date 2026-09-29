@@ -21,9 +21,11 @@
     labels: { days: string; hours: string; minutes: string; seconds: string; next: string; now: string; none: string };
     /** Rundenbezeichnung verlinken (auf der Rennseite selbst: false) */
     linkTarget?: boolean;
+    /** Zeile „Nächstes Rennen“ zeigen (aus, wenn die Umgebung schon eine Überschrift hat) */
+    showLabel?: boolean;
   }
 
-  let { targets, previousStartUtc = null, labels, linkTarget = true }: Props = $props();
+  let { targets, previousStartUtc = null, labels, linkTarget = true, showLabel = true }: Props = $props();
 
   let now = $state<number | null>(null);
 
@@ -57,7 +59,7 @@
 
 {#if target}
   <div class="countdown">
-    <p class="micro">{labels.next}</p>
+    {#if showLabel}<p class="micro">{labels.next}</p>{/if}
     {#if linkTarget}
       <a class="target" href={target.href}>{target.label}</a>
     {:else}

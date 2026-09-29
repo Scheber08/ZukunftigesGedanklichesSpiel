@@ -70,11 +70,21 @@ export function renderMarkdownInline(source: string | null | undefined): string 
 /** Markdown → reiner Text (für Meta-Descriptions, Discord, RSS-Teaser). */
 export function markdownToText(source: string | null | undefined, maxLength = 200): string {
   if (!source) return '';
+  // Nur Markdown-Syntax entfernen – Zeichen innerhalb von Wörtern (Oversteer_Olli, V-02, #10) bleiben
   const text = source
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/[#>*_`~|-]+/g, ' ')
+    .replace(/```[\s\S]*?```/g, ' ') // Codeblöcke
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1') // Bilder → Alt-Text
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // Links → Linktext
+    .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '') // Überschriften
+    .replace(/^[ \t]{0,3}>[ \t]?/gm, '') // Zitate
+    .replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/gm, '') // Listenpunkte
+    .replace(/^[ \t]*(?:[-*_][ \t]*){3,}$/gm, ' ') // Trennlinien
+    .replace(/^[ \t]*\|?(?:[ \t]*:?-{3,}:?[ \t]*\|)+[ \t]*(?::?-{3,}:?)?[ \t]*$/gm, ' ') // Tabellen-Trennzeilen
+    .replace(/[ \t]*\|[ \t]*/g, ' ') // Tabellenspalten
+    .replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, '$2') // fett
+    .replace(/(^|[^\p{L}\p{N}*_])([*_])(?=\S)([^\n]*?\S)\2(?![\p{L}\p{N}*_])/gu, '$1$3') // kursiv
+    .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '$1') // durchgestrichen
+    .replace(/`([^`\n]*)`/g, '$1') // Inline-Code
     .replace(/\s+/g, ' ')
     .trim();
   return text.length > maxLength ? `${text.slice(0, maxLength - 1).trimEnd()}…` : text;

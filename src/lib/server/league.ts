@@ -22,6 +22,12 @@ async function loadDataset(store: Store): Promise<LeagueDataset> {
   data.settings = data.settings.filter((s) => s.is_public);
   // Wie die View drivers_public: Links nur, wenn der Fahrer das wünscht
   data.drivers = data.drivers.map((d) => (d.show_links ? d : { ...d, twitch_url: null, youtube_url: null }));
+  // Wie decisions_public/incidents_public: nur veröffentlichte Urteile, keine internen Felder
+  data.decisions = data.decisions.filter((d) => d.status === 'published').map((d) => ({ ...d, decided_by: [] }));
+  const decidedIncidents = new Set(data.decisions.map((d) => d.incident_id).filter((id): id is number => id != null));
+  data.incidents = data.incidents
+    .filter((i) => decidedIncidents.has(i.id))
+    .map((i) => ({ id: i.id, round_id: i.round_id, session_id: i.session_id, involved_driver_ids: i.involved_driver_ids, lap: i.lap, corner: i.corner, source: i.source }));
   return data;
 }
 

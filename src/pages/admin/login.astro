@@ -8,8 +8,7 @@ import AdminLayout from '~/layouts/AdminLayout.astro';
 import BrandIcon from '~/components/ui/BrandIcon.astro';
 import Logo from '~/components/ui/Logo.astro';
 import { loginErrorMessage, safeNext } from '~/lib/admin/league/auth';
-import { STAFF_ROLE_LABELS } from '~/lib/admin/league/labels';
-import { STAFF_ROLES } from '~/lib/db/types';
+import type { DemoLogin } from '~/lib/server/auth';
 import { isDemoMode } from '~/lib/server/env';
 
 const next = safeNext(Astro.url.searchParams.get('next'));
@@ -20,11 +19,12 @@ const error = loginErrorMessage(Astro.url.searchParams.get('error'));
 const loggedOut = Astro.url.searchParams.has('abgemeldet');
 const demo = isDemoMode();
 const discordHref = `/admin/auth/login?next=${encodeURIComponent(next)}`;
-const demoText: Record<(typeof STAFF_ROLES)[number], string> = {
-  admin: 'Alle Module: Saisons, Kalender, Fahrer, Renntag, Einstellungen',
-  steward: 'Vorfälle prüfen und Entscheidungen treffen',
-  redakteur: 'News, FAQ und Seiten-Inhalte pflegen',
-};
+const demoLogins: Array<{ login: DemoLogin; label: string; text: string }> = [
+  { login: 'admin', label: 'Demo-Admin', text: 'Alle Module: Saisons, Kalender, Fahrer, Renntag, Einstellungen' },
+  { login: 'steward', label: 'Demo-Steward', text: 'Vorfälle prüfen und Entscheidungen treffen' },
+  { login: 'steward2', label: 'Demo-Steward 2', text: 'Zweite Stimme für das Vier-Augen-Prinzip' },
+  { login: 'redakteur', label: 'Demo-Redaktion', text: 'News, FAQ und Seiten-Inhalte pflegen' },
+];
 ---
 
 <AdminLayout title="Anmelden">
@@ -61,17 +61,17 @@ const demoText: Record<(typeof STAFF_ROLES)[number], string> = {
               Der Demo-Modus läuft mit Beispieldaten im Speicher. Wähle eine Rolle – Änderungen gehen beim Neustart des Servers verloren.
             </p>
             <ul class="grid gap-3">
-              {STAFF_ROLES.map((role) => (
+              {demoLogins.map((d) => (
                 <li>
                   <form method="POST" action="/admin/auth/demo">
-                    <input type="hidden" name="role" value={role} />
+                    <input type="hidden" name="role" value={d.login} />
                     <input type="hidden" name="next" value={next} />
                     <button type="submit" class="btn whitespace-normal btn-secondary w-full justify-between">
-                      <span>Als Demo-{STAFF_ROLE_LABELS[role]}</span>
+                      <span>Als {d.label}</span>
                       <span class="sr-only">anmelden</span>
                     </button>
                   </form>
-                  <p class="mt-1 text-xs text-muted">{demoText[role]}</p>
+                  <p class="mt-1 text-xs text-muted">{d.text}</p>
                 </li>
               ))}
             </ul>

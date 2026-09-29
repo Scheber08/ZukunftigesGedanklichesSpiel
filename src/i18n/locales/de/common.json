@@ -187,5 +187,6 @@
   "news.category.rule_change": "Regeländerung",
   "news.category.new_drivers": "Neuzugänge",
   "news.category.community": "Community",
-  "news.by": "von {name}"
+  "news.by": "von {name}",
+  "results.gapIncludesPenalties": "Abstände inklusive Zeitstrafen der Stewards."
 }

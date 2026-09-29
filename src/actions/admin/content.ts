@@ -256,6 +256,12 @@ const newsActions = {
           saved = await insertOne(store, 'news', { ...row, author_id: staff.userId });
         }
 
+        // Discord-Wunsch für geplante News merken – der Cron postet beim Veröffentlichen
+        if (saved.status === 'scheduled' || saved.discord_post) {
+          const want = saved.status === 'scheduled' && Boolean(input.discord_post);
+          if (saved.discord_post !== want) [saved] = (await store.update('news', { id: saved.id }, { discord_post: want })) as [typeof saved];
+        }
+
         const wasPublic = isPublicNews(before);
         const isPublic = isPublicNews(saved);
 

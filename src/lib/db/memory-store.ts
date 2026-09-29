@@ -120,6 +120,7 @@ const DEFAULTS: { [T in TableName]?: Partial<Row<T>> } = {
     author_name: null,
     status: 'draft',
     publish_at: null,
+    discord_post: false,
   },
   faq_items: { category: 'general', question_en: null, answer_en: null, sort: 0 },
   staff_members: { role_en: null, avatar: null, since_season: null, sort: 0 },

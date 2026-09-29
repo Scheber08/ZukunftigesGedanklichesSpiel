@@ -34,7 +34,7 @@ const inputId = `ics-url-${lang}`;
       <CalendarSync size={18} aria-hidden="true" />
       {t('calendar.subscribe.webcal')}
     </a>
-    <a href={icsPath} download="kalender.ics" class="btn btn-secondary" data-track="ics_download">
+    <a href={icsPath} download={lang === 'de' ? 'kalender.ics' : 'calendar.ics'} class="btn btn-secondary" data-track="ics_download">
       <Download size={18} aria-hidden="true" />
       {t('calendar.subscribe.download')}
     </a>

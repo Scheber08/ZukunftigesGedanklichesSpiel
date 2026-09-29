@@ -35,6 +35,17 @@ switch (format) {
     text = formatDateTime(instant, lang);
 }
 if (zone && format !== 'date' && format !== 'dateLong') text += ` ${timeZoneName(instant, lang)}`;
+const withHint = local && format !== 'date' && format !== 'dateLong';
+// Platzhalter in gleicher Länge wie der spätere Hinweis (Liga-Zeit im selben Format)
+const placeholder = withHint
+  ? `${lang === 'en' ? ' (your time: ' : ' (deine Zeit: '}${new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'de-DE', {
+      timeZone: 'Europe/Berlin',
+      ...(format === 'time' ? {} : { weekday: 'short', day: '2-digit', month: '2-digit' }),
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    }).format(new Date(instant))})`
+  : '';
 ---
 
-<time datetime={instant} class={className} data-localtime={local && format !== 'date' && format !== 'dateLong' ? format : undefined} data-lang={lang}>{text}</time>
+<time datetime={instant} class={className} data-localtime={local && format !== 'date' && format !== 'dateLong' ? format : undefined} data-lang={lang}>{text}</time>{withHint && <span class="localtime-hint" data-localtime-hint aria-hidden="true">{placeholder}</span>}
