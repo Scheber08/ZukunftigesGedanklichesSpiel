@@ -175,12 +175,18 @@ Links to other platforms (e.g. Medal, Streamable, Xbox or PlayStation) are plain
 
 We use only a few cookies and entries in your browser's local storage:
 
-| What | Purpose | How long | Legal basis |
-| --- | --- | --- | --- |
-| Consent storage | remembers your choice in the cookie banner | 12 months **[CHECK]** | Section 25(2) No. 2 TDDDG, Art. 6(1)(f) GDPR |
-| Staff session | keeps staff members logged in after the Discord login; staff only | until logout or the session expires | Section 25(2) No. 2 TDDDG, Art. 6(1)(b) GDPR |
-| Google Analytics (_ga, _ga_…) | recognises returning visits; only with consent | up to 2 years **[CHECK: configure lifetime in GA4]** | Section 25(1) TDDDG, Art. 6(1)(a) GDPR |
-| Cloudflare Turnstile | bot protection in forms | according to Cloudflare **[CHECK]** | Section 25(2) No. 2 TDDDG, Art. 6(1)(f) GDPR |
+<div class="legal-table" role="region" tabindex="0" aria-labelledby="table-cookies">
+<table>
+<caption id="table-cookies">Cookies and local storage entries</caption>
+<thead><tr><th scope="col">What</th><th scope="col">Purpose</th><th scope="col">How long</th><th scope="col">Legal basis</th></tr></thead>
+<tbody>
+<tr><th scope="row">Consent storage</th><td>remembers your choice in the cookie banner</td><td>12 months <strong>[CHECK]</strong></td><td>Section 25(2) No. 2 TDDDG, Art. 6(1)(f) GDPR</td></tr>
+<tr><th scope="row">Staff session</th><td>keeps staff members logged in after the Discord login; staff only</td><td>until logout or the session expires</td><td>Section 25(2) No. 2 TDDDG, Art. 6(1)(b) GDPR</td></tr>
+<tr><th scope="row">Google Analytics (_ga, _ga_…)</th><td>recognises returning visits; only with consent</td><td>up to 2 years <strong>[CHECK: configure lifetime in GA4]</strong></td><td>Section 25(1) TDDDG, Art. 6(1)(a) GDPR</td></tr>
+<tr><th scope="row">Cloudflare Turnstile</th><td>bot protection in forms</td><td>according to Cloudflare <strong>[CHECK]</strong></td><td>Section 25(2) No. 2 TDDDG, Art. 6(1)(f) GDPR</td></tr>
+</tbody>
+</table>
+</div>
 
 After you click an embedded video, YouTube or Twitch may set their own cookies (section 11).
 
@@ -197,17 +203,23 @@ After you click an embedded video, YouTube or Twitch may set their own cookies (
 
 ## 14. Retention periods at a glance
 
-| Data | Retention |
-| --- | --- |
-| Rejected sign-ups | 6 months after processing |
-| Data of active drivers | as long as you take part; then pseudonymisation (section 13) |
-| IP hashes (forms, abuse protection) | 30 days |
-| Discord name for follow-up questions on incident reports | until the end of the season |
-| Steward decisions | permanently as part of the league's history (can be pseudonymised) |
-| Contact enquiries | until dealt with **[CHECK: maximum period]** |
-| Staff accounts | as long as the staff role exists |
-| Google Analytics (only with consent) | 2 months |
-| Server logs at Cloudflare | **[CHECK]** |
+<div class="legal-table" role="region" tabindex="0" aria-labelledby="table-retention">
+<table>
+<caption id="table-retention">Retention period by type of data</caption>
+<thead><tr><th scope="col">Data</th><th scope="col">Retention</th></tr></thead>
+<tbody>
+<tr><th scope="row">Rejected sign-ups</th><td>6 months after processing</td></tr>
+<tr><th scope="row">Data of active drivers</th><td>as long as you take part; then pseudonymisation (section 13)</td></tr>
+<tr><th scope="row">IP hashes (forms, abuse protection)</th><td>30 days</td></tr>
+<tr><th scope="row">Discord name for follow-up questions on incident reports</th><td>until the end of the season</td></tr>
+<tr><th scope="row">Steward decisions</th><td>permanently as part of the league's history (can be pseudonymised)</td></tr>
+<tr><th scope="row">Contact enquiries</th><td>until dealt with <strong>[CHECK: maximum period]</strong></td></tr>
+<tr><th scope="row">Staff accounts</th><td>as long as the staff role exists</td></tr>
+<tr><th scope="row">Google Analytics (only with consent)</th><td>2 months</td></tr>
+<tr><th scope="row">Server logs at Cloudflare</th><td><strong>[CHECK]</strong></td></tr>
+</tbody>
+</table>
+</div>
 
 ## 15. Recipients and transfers to third countries
 

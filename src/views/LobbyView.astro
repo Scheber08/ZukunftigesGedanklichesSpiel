@@ -14,6 +14,7 @@ import { SITE } from '~/config/site';
 import { alternates, url, useT, type Lang } from '~/i18n';
 import MobileWrap from '~/components/content/MobileWrap.astro';
 import BaseLayout from '~/layouts/BaseLayout.astro';
+import { rulesHref } from '~/lib/content/rules';
 import { splitStep } from '~/lib/content/text';
 import { localized } from '~/lib/league/league';
 import { loadLeague } from '~/lib/server/league';
@@ -136,7 +137,7 @@ const jsonLd = [
               </div>
               <p class="mt-6 max-w-3xl text-sm text-muted">
                 {t('content.lobby.binding')}{' '}
-                <a href={`${url(lang, 'rules')}#p10-2`} class="font-semibold text-green underline hover:text-teal">
+                <a href={rulesHref(league, lang, 'p10-2')} class="font-semibold text-green underline hover:text-teal">
                   {t('content.lobby.rulesLink')}
                 </a>
               </p>

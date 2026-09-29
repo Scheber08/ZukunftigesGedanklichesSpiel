@@ -1,7 +1,8 @@
 ---
 /** News-Karte für Übersicht und Startseite (Plan §4.7). */
 import Badge from '~/components/ui/Badge.astro';
-import { url, useT, type Lang } from '~/i18n';
+import { useT, type Lang } from '~/i18n';
+import { newsCoverAlt, newsDate, newsHref } from '~/lib/content/news';
 import type { NewsRow } from '~/lib/db/types';
 import { formatDate } from '~/lib/domain/time';
 import { localized } from '~/lib/league/league';
@@ -15,8 +16,8 @@ const { lang, news, headingLevel: H = 'h3' } = Astro.props;
 const t = useT(lang);
 const title = localized(news, 'title', lang);
 const excerpt = localized(news, 'excerpt', lang);
-const href = url(lang, 'newsArticle', { slug: lang === 'de' ? news.slug_de : news.slug_en });
-const date = news.publish_at ?? news.created_at;
+const href = newsHref(lang, news);
+const date = newsDate(news);
 ---
 
 <article class="card card-hover relative flex h-full flex-col overflow-hidden">
@@ -24,7 +25,7 @@ const date = news.publish_at ?? news.created_at;
     news.cover_image && (
       <img
         src={news.cover_image}
-        alt={(lang === 'en' ? news.cover_alt_en : null) ?? news.cover_alt_de ?? ''}
+        alt={newsCoverAlt(news, lang)}
         width="800"
         height="450"
         loading="lazy"

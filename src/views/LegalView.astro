@@ -84,11 +84,44 @@ const jsonLd = breadcrumbJsonLd(
     border-top: 0;
     padding-top: 0;
   }
-  .legal-body :global(table) {
+  /* Tabellen (im Markdown als HTML mit caption und th scope): eigener Scrollbereich */
+  .legal-body :global(.legal-table) {
+    max-width: 100%;
+    overflow-x: auto;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-control);
+    background: var(--color-surface-1);
   }
-  .legal-body :global(td) {
+  .legal-body :global(.legal-table:focus-visible) {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+  }
+  .legal-body :global(.legal-table table) {
+    display: table;
+    width: 100%;
+    overflow: visible;
+  }
+  .legal-body :global(caption) {
+    caption-side: top;
+    padding: 0.75rem 0.75rem 0.5rem;
+    text-align: left;
+    font-size: var(--fs-small);
+    font-weight: 600;
+    color: var(--color-fg);
+  }
+  .legal-body :global(tbody th) {
+    background: transparent;
+    font-size: inherit;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--color-fg);
+  }
+  .legal-body :global(tbody tr:last-child > *) {
+    border-bottom: 0;
+  }
+  .legal-body :global(td),
+  .legal-body :global(tbody th) {
     min-width: 9rem;
   }
   @media (min-width: 1024px) {
@@ -128,8 +161,14 @@ const jsonLd = breadcrumbJsonLd(
     background: var(--color-surface-2);
   }
   @media print {
-    .legal-body :global(strong) {
+    .legal-body :global(strong),
+    .legal-body :global(caption),
+    .legal-body :global(th) {
       color: #000;
+    }
+    .legal-body :global(.legal-table) {
+      overflow: visible;
+      background: #fff;
     }
   }
 </style>

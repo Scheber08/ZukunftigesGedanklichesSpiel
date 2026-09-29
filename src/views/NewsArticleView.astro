@@ -23,6 +23,7 @@ import {
   newsDate,
   newsHref,
   newsNeedsTranslation,
+  newsSlug,
   newsTeaser,
   newsWasUpdated,
 } from '~/lib/content/news';
@@ -38,7 +39,8 @@ interface Props {
 const { lang, slug } = Astro.props;
 const t = useT(lang);
 const league = await loadLeague();
-const news = league.newsBySlug(slug, lang);
+// Wie newsStaticPaths(): EN fällt auf slug_de zurück, falls slug_en leer ist
+const news = league.news.find((n) => newsSlug(n, lang) === slug);
 if (!news) throw new Error(`News-Artikel nicht gefunden: ${slug}`);
 
 const title = localized(news, 'title', lang);

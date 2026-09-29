@@ -8,6 +8,8 @@
  */
 import { alternates, type Alternates, type RouteName } from '~/i18n';
 import type { League } from '~/lib/league/league';
+import { profileDrivers, teamPageTeams } from '~/lib/people';
+import { seasonStandingsPaths } from '~/lib/standings/page';
 import { escapeHtml } from '~/lib/util/html';
 import { newsAlternates } from './news';
 import { rulesUpdatedAt } from './rules';
@@ -83,29 +85,27 @@ export function collectSitemapPages(league: League, opts: SitemapOptions): Sitem
 
   if (opts.includeStream) add(alternates('stream'));
 
-  // Rennseiten: alle Runden der Saisons mit Ergebnissen plus der aktuellen Saison
-  const seasons = new Map(league.archiveSeasons.map((s) => [s.id, s]));
-  const current = league.currentSeason;
-  if (current) seasons.set(current.id, current);
-  for (const season of [...seasons.values()].sort((a, b) => a.number - b.number)) {
-    for (const round of league.roundsOf(season.id)) {
-      add(alternates('race', { season: season.slug, round: round.number }), maxIso(round.updated_at, round.final_at, round.provisional_at));
-    }
+  // Dynamische Seiten: dieselbe Auswahl wie die getStaticPaths der jeweiligen Seiten,
+  // damit die Sitemap nie auf eine nicht erzeugte Seite zeigt.
+
+  // Rennseiten: alle Runden aller Saisons (wie racePaths() in src/lib/calendar/paths.ts)
+  const rounds = [...league.data.rounds].sort((a, b) => a.season_id - b.season_id || a.number - b.number);
+  for (const round of rounds) {
+    const season = league.season(round.season_id);
+    if (!season) continue;
+    add(alternates('race', { season: season.slug, round: round.number }), maxIso(round.updated_at, round.final_at, round.provisional_at));
   }
 
-  // Saisonwertungen (Archiv)
-  for (const season of league.archiveSeasons) {
-    add(alternates('seasonStandings', { season: season.slug }), season.updated_at);
+  // Saisonwertungen (wie /saison/[season]/wertung)
+  for (const { params } of seasonStandingsPaths(league)) {
+    add(alternates('seasonStandings', { season: params.season }), league.seasonBySlug(params.season)?.updated_at);
   }
 
-  // Fahrer (pseudonymisierte ohne eigene Seite) und Teams
-  for (const driver of league.drivers) {
-    if (driver.anonymized) continue;
+  // Fahrer mit Profilseite (pseudonymisierte nie) und Teams mit Saisonzuordnung
+  for (const driver of profileDrivers(league)) {
     add(alternates('driver', { slug: driver.slug }), driver.updated_at);
   }
-  const teamIds = new Set(league.data.season_teams.map((st) => st.team_id));
-  for (const team of league.data.teams) {
-    if (!teamIds.has(team.id)) continue;
+  for (const team of teamPageTeams(league)) {
     add(alternates('team', { slug: team.slug }), team.updated_at);
   }
 

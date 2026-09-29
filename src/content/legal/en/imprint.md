@@ -27,7 +27,7 @@ We usually reply within a few days.
 
 ## Hobby project
 
-[LIGANAME] is a private, non-commercial hobby project. We do not make any money from it and do not show advertising. We provide the information on this page as a precaution.
+[LIGANAME] is a private, not-for-profit hobby project. If partners support us, all of it goes back into the league, for example into prizes, technology and streams. Advertising and partners are always labelled “Advertisement” – see [partners](/en/league/partners). **[CHECK: whether partnerships affect the classification as non-commercial]**
 
 ## Unofficial fan league
 

@@ -7,6 +7,8 @@ import { buildRobotsTxt } from '~/lib/content/robots';
 import { buildRss, rfc822, xmlText } from '~/lib/content/rss';
 import { buildSitemapXml, collectSitemapPages, STATIC_SITEMAP_ROUTES } from '~/lib/content/sitemap';
 import { League, LEAGUE_TABLES, type LeagueDataset } from '~/lib/league/league';
+import { driverProfileSlugs, teamPageSlugs } from '~/lib/people';
+import { seasonStandingsPaths } from '~/lib/standings/page';
 import { demoDataset } from '~/lib/seed/demo';
 
 const NOW = new Date('2026-09-29T12:00:00Z');
@@ -111,6 +113,19 @@ describe('Sitemap', () => {
     expect(des).toContain(`/fahrer/${driver.slug}`);
     for (const d of league.decisions) expect(des).toContain(`/stewards/${encodeURIComponent(d.public_ref)}`);
     for (const s of league.archiveSeasons) expect(des).toContain(`/saison/${s.slug}/wertung`);
+  });
+
+  it('passt zu den getStaticPaths der Rennen, Fahrer, Teams und Saisonwertungen', () => {
+    const races = des.filter((p) => p.startsWith('/rennen/'));
+    expect(races).toHaveLength(league.data.rounds.length);
+    const drivers = des.filter((p) => p.startsWith('/fahrer/')).map((p) => decodeURIComponent(p.slice('/fahrer/'.length)));
+    expect(drivers.sort()).toEqual([...driverProfileSlugs(league)].sort());
+    const teams = des.filter((p) => p.startsWith('/teams/')).map((p) => decodeURIComponent(p.slice('/teams/'.length)));
+    expect(teams.sort()).toEqual([...teamPageSlugs(league)].sort());
+    const standings = des.filter((p) => /^\/saison\/[^/]+\/wertung$/.test(p));
+    expect(standings).toHaveLength(seasonStandingsPaths(league).length);
+    const anonymized = league.drivers.filter((d) => d.anonymized);
+    for (const d of anonymized) expect(des).not.toContain(`/fahrer/${d.slug}`);
   });
 
   it('lässt Admin, APIs, Snapshots, Stream ohne Kanal, Entwürfe und die aktuelle Regelwerk-Fassung weg', () => {

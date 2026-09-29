@@ -5,9 +5,18 @@ import { describe, expect, it } from 'vitest';
 import type { Dataset } from '~/lib/db/memory-store';
 import type { NewsRow } from '~/lib/db/types';
 import { newsAlternates, newsArticleJsonLd, newsHref, newsNeedsTranslation, newsSlug, newsTeaser, newsWasUpdated } from '~/lib/content/news';
-import { enhanceTables, findRulesVersion, flattenRuleTree, isValidVersionParam, rulesHaveFallback, rulesUpdatedAt } from '~/lib/content/rules';
+import {
+  enhanceTables,
+  findRulesVersion,
+  flattenRuleTree,
+  isValidVersionParam,
+  rulesHaveFallback,
+  rulesHref,
+  rulesUpdatedAt,
+  sortRulesVersions,
+} from '~/lib/content/rules';
 import { normalizeTwitchChannel, twitchChannelUrl, twitchPlayerUrl } from '~/lib/content/stream';
-import { initials, splitStep } from '~/lib/content/text';
+import { initials, localizedEffort, splitStep } from '~/lib/content/text';
 import { League, LEAGUE_TABLES, type LeagueDataset } from '~/lib/league/league';
 import { demoDataset } from '~/lib/seed/demo';
 import { renderMarkdown } from '~/lib/util/markdown';
@@ -75,6 +84,22 @@ describe('Regelwerk', () => {
     expect(out).toContain('<th scope="col">Code</th>');
     // ohne Tabelle unverändert
     expect(enhanceTables('<p>x</p>', { label: 'a', caption: 'b' })).toBe('<p>x</p>');
+  });
+
+  it('sortiert den Changelog nach Versionsnummer, nicht nach Datum', () => {
+    const versions = [
+      { version: '1.0', published_at: '2026-11-01T00:00:00Z' },
+      { version: '1.10', published_at: '2026-09-01T00:00:00Z' },
+      { version: '1.2', published_at: '2026-09-29T00:00:00Z' },
+    ];
+    expect(sortRulesVersions(versions).map((v) => v.version)).toEqual(['1.10', '1.2', '1.0']);
+    expect(versions[0]!.version).toBe('1.0');
+  });
+
+  it('verlinkt Paragraphen nur, wenn es den Anker gibt', () => {
+    expect(rulesHref(league, 'de', 'p2-5')).toBe('/liga/regelwerk#p2-5');
+    expect(rulesHref(league, 'en', 'p10-2')).toBe('/en/league/rules#p10-2');
+    expect(rulesHref(league, 'de', 'p99-9')).toBe('/liga/regelwerk');
   });
 
   it('der Strafenkatalog im Demo-Regelwerk wird erkannt', () => {
@@ -163,6 +188,19 @@ describe('Text-Helfer', () => {
     });
     expect(splitStep('Kein Doppelpunkt hier')).toEqual({ head: null, rest: 'Kein Doppelpunkt hier' });
     expect(splitStep('Ein sehr langer Satz, der viel zu lang für eine Überschrift ist: und weiter').head).toBeNull();
+  });
+
+  it('übersetzt gängige Angaben zum Zeitaufwand, sonst bleibt Deutsch', () => {
+    expect(localizedEffort('ca. 1–2 h pro Woche', 'de')).toEqual({ text: 'ca. 1–2 h pro Woche', fallback: false });
+    expect(localizedEffort('ca. 1–2 h pro Woche', 'en')).toEqual({ text: 'approx. 1–2 h per week', fallback: false });
+    expect(localizedEffort('ca. 2–3 h pro Renntag (inkl. Vorbereitung)', 'en').text).toBe('approx. 2–3 h per race day (incl. preparation)');
+    expect(localizedEffort('ca. 2–3 h pro Renntag (innerhalb von 72 h nach Ende der Protestfrist)', 'en').text).toBe(
+      'approx. 2–3 h per race day (within 72 h after the protest deadline)',
+    );
+    expect(localizedEffort('bis zu 1,5 Stunden je Rennen', 'en').text).toBe('up to 1.5 h per race');
+    expect(localizedEffort('3 h/Monat', 'en').text).toBe('3 h per month');
+    expect(localizedEffort('nach Absprache', 'en')).toEqual({ text: 'nach Absprache', fallback: true });
+    expect(localizedEffort('ca. 2 h pro Woche (flexibel)', 'en').fallback).toBe(true);
   });
 
   it('bildet Initialen aus Gamertags', () => {

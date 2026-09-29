@@ -16,7 +16,7 @@ import { SITE } from '~/config/site';
 import { alternates, url, useT, type Lang } from '~/i18n';
 import MobileWrap from '~/components/content/MobileWrap.astro';
 import BaseLayout from '~/layouts/BaseLayout.astro';
-import { findRulesVersion, rulesHaveFallback, rulesUpdatedAt } from '~/lib/content/rules';
+import { findRulesVersion, rulesHaveFallback, rulesUpdatedAt, sortRulesVersions } from '~/lib/content/rules';
 import { formatDate } from '~/lib/domain/time';
 import { localized } from '~/lib/league/league';
 import { loadLeague } from '~/lib/server/league';
@@ -36,7 +36,7 @@ const shown = findRulesVersion(league, version);
 if (version && !shown) throw new Error(`Regelwerk-Version nicht gefunden: ${version}`);
 const isVersionPage = version != null;
 const isCurrent = shown != null && shown.id === current?.id;
-const versions = league.rulesVersions;
+const versions = sortRulesVersions(league.rulesVersions);
 
 const tree = shown ? league.rulesTree(shown.id) : [];
 const updated = shown ? rulesUpdatedAt(league, shown) : null;

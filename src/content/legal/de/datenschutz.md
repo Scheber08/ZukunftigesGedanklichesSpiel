@@ -175,12 +175,18 @@ Links zu anderen Plattformen (z. B. Medal, Streamable, Xbox oder PlayStation) si
 
 Wir verwenden nur wenige Cookies und Einträge im lokalen Speicher deines Browsers:
 
-| Was | Wozu | Wie lange | Rechtsgrundlage |
-| --- | --- | --- | --- |
-| Einwilligungs-Speicher | merkt sich deine Auswahl im Cookie-Banner | 12 Monate **[PRÜFEN]** | § 25 Abs. 2 Nr. 2 TDDDG, Art. 6 Abs. 1 lit. f DSGVO |
-| Staff-Sitzung | hält Staff-Mitglieder nach dem Discord-Login angemeldet; nur für Staff | bis zur Abmeldung oder zum Ablauf der Sitzung | § 25 Abs. 2 Nr. 2 TDDDG, Art. 6 Abs. 1 lit. b DSGVO |
-| Google Analytics (_ga, _ga_…) | erkennt wiederkehrende Besuche; nur mit Einwilligung | bis zu 2 Jahre **[PRÜFEN: Laufzeit in GA4 konfigurieren]** | § 25 Abs. 1 TDDDG, Art. 6 Abs. 1 lit. a DSGVO |
-| Cloudflare Turnstile | Bot-Schutz in Formularen | laut Cloudflare **[PRÜFEN]** | § 25 Abs. 2 Nr. 2 TDDDG, Art. 6 Abs. 1 lit. f DSGVO |
+<div class="legal-table" role="region" tabindex="0" aria-labelledby="tabelle-cookies">
+<table>
+<caption id="tabelle-cookies">Cookies und Einträge im lokalen Speicher</caption>
+<thead><tr><th scope="col">Was</th><th scope="col">Wozu</th><th scope="col">Wie lange</th><th scope="col">Rechtsgrundlage</th></tr></thead>
+<tbody>
+<tr><th scope="row">Einwilligungs-Speicher</th><td>merkt sich deine Auswahl im Cookie-Banner</td><td>12 Monate <strong>[PRÜFEN]</strong></td><td>§ 25 Abs. 2 Nr. 2 TDDDG, Art. 6 Abs. 1 lit. f DSGVO</td></tr>
+<tr><th scope="row">Staff-Sitzung</th><td>hält Staff-Mitglieder nach dem Discord-Login angemeldet; nur für Staff</td><td>bis zur Abmeldung oder zum Ablauf der Sitzung</td><td>§ 25 Abs. 2 Nr. 2 TDDDG, Art. 6 Abs. 1 lit. b DSGVO</td></tr>
+<tr><th scope="row">Google Analytics (_ga, _ga_…)</th><td>erkennt wiederkehrende Besuche; nur mit Einwilligung</td><td>bis zu 2 Jahre <strong>[PRÜFEN: Laufzeit in GA4 konfigurieren]</strong></td><td>§ 25 Abs. 1 TDDDG, Art. 6 Abs. 1 lit. a DSGVO</td></tr>
+<tr><th scope="row">Cloudflare Turnstile</th><td>Bot-Schutz in Formularen</td><td>laut Cloudflare <strong>[PRÜFEN]</strong></td><td>§ 25 Abs. 2 Nr. 2 TDDDG, Art. 6 Abs. 1 lit. f DSGVO</td></tr>
+</tbody>
+</table>
+</div>
 
 Nach einem Klick auf ein eingebettetes Video können YouTube oder Twitch eigene Cookies setzen (Abschnitt 11).
 
@@ -197,17 +203,23 @@ Nach einem Klick auf ein eingebettetes Video können YouTube oder Twitch eigene 
 
 ## 14. Speicherdauer im Überblick
 
-| Daten | Speicherdauer |
-| --- | --- |
-| Abgelehnte Anmeldungen | 6 Monate nach Bearbeitung |
-| Daten aktiver Fahrer | solange du teilnimmst; danach Pseudonymisierung (Abschnitt 13) |
-| IP-Hashwerte (Formulare, Missbrauchsschutz) | 30 Tage |
-| Discord-Name für Rückfragen bei Vorfallmeldungen | bis Saisonende |
-| Steward-Entscheidungen | dauerhaft als Teil der Liga-Geschichte (pseudonymisierbar) |
-| Kontaktanfragen | bis zur Erledigung **[PRÜFEN: Höchstfrist]** |
-| Staff-Konten | solange die Staff-Rolle besteht |
-| Google Analytics (nur mit Einwilligung) | 2 Monate |
-| Server-Logs bei Cloudflare | **[PRÜFEN]** |
+<div class="legal-table" role="region" tabindex="0" aria-labelledby="tabelle-speicherdauer">
+<table>
+<caption id="tabelle-speicherdauer">Speicherdauer je Datenart</caption>
+<thead><tr><th scope="col">Daten</th><th scope="col">Speicherdauer</th></tr></thead>
+<tbody>
+<tr><th scope="row">Abgelehnte Anmeldungen</th><td>6 Monate nach Bearbeitung</td></tr>
+<tr><th scope="row">Daten aktiver Fahrer</th><td>solange du teilnimmst; danach Pseudonymisierung (Abschnitt 13)</td></tr>
+<tr><th scope="row">IP-Hashwerte (Formulare, Missbrauchsschutz)</th><td>30 Tage</td></tr>
+<tr><th scope="row">Discord-Name für Rückfragen bei Vorfallmeldungen</th><td>bis Saisonende</td></tr>
+<tr><th scope="row">Steward-Entscheidungen</th><td>dauerhaft als Teil der Liga-Geschichte (pseudonymisierbar)</td></tr>
+<tr><th scope="row">Kontaktanfragen</th><td>bis zur Erledigung <strong>[PRÜFEN: Höchstfrist]</strong></td></tr>
+<tr><th scope="row">Staff-Konten</th><td>solange die Staff-Rolle besteht</td></tr>
+<tr><th scope="row">Google Analytics (nur mit Einwilligung)</th><td>2 Monate</td></tr>
+<tr><th scope="row">Server-Logs bei Cloudflare</th><td><strong>[PRÜFEN]</strong></td></tr>
+</tbody>
+</table>
+</div>
 
 ## 15. Empfänger und Übermittlung in Drittländer
 

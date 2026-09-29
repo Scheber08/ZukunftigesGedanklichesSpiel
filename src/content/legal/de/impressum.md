@@ -27,7 +27,7 @@ Wir antworten in der Regel innerhalb weniger Tage.
 
 ## Hobbyprojekt
 
-[LIGANAME] ist ein privates, nicht kommerzielles Hobbyprojekt. Wir verdienen damit kein Geld und schalten keine Werbung. Die Angaben auf dieser Seite machen wir vorsorglich.
+[LIGANAME] ist ein privates Hobbyprojekt ohne Gewinnabsicht. Unterstützen uns Partner, fließt das vollständig in die Liga, etwa in Preise, Technik und Streams. Werbung und Partner kennzeichnen wir immer als „Anzeige“ – siehe [Partner](/liga/partner). **[PRÜFEN: ob Partnerschaften die Einordnung als nicht kommerziell berühren]**
 
 ## Inoffizielle Fan-Liga
 

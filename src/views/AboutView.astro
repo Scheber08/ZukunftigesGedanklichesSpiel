@@ -18,7 +18,7 @@ import { SITE } from '~/config/site';
 import { alternates, url, useT, type Lang } from '~/i18n';
 import MobileWrap from '~/components/content/MobileWrap.astro';
 import BaseLayout from '~/layouts/BaseLayout.astro';
-import { initials } from '~/lib/content/text';
+import { initials, localizedEffort } from '~/lib/content/text';
 import { localized } from '~/lib/league/league';
 import { loadLeague } from '~/lib/server/league';
 import { breadcrumbJsonLd } from '~/lib/view';
@@ -35,7 +35,12 @@ const discordUrl = league.settings.discord_invite.url;
 
 const hasFallback =
   staff.some((s) => localized(s, 'role', lang).fallback) ||
-  positions.some((p) => localized(p, 'title', lang).fallback || localized(p, 'description', lang).fallback);
+  positions.some(
+    (p) =>
+      localized(p, 'title', lang).fallback ||
+      localized(p, 'description', lang).fallback ||
+      (!!p.effort?.trim() && localizedEffort(p.effort, lang).fallback),
+  );
 
 const values = [
   { key: 'fair', icon: Scale },
@@ -162,18 +167,19 @@ const jsonLd = [
               {positions.map((p) => {
                 const title = localized(p, 'title', lang);
                 const description = localized(p, 'description', lang);
+                const effort = p.effort ? localizedEffort(p.effort, lang) : null;
                 return (
                   <li class="card card-hover flex flex-col p-5">
                     <h3 class="text-xl uppercase" lang={title.fallback ? 'de' : undefined}>
                       {title.text}
                     </h3>
                     <Markdown source={description.text} class="mt-3 flex-1 text-sm text-muted" lang={description.fallback ? 'de' : undefined} />
-                    {p.effort && (
+                    {effort && effort.text && (
                       <p class="mt-4 flex items-start gap-2 border-t border-border pt-4 text-sm">
                         <Clock size={16} aria-hidden="true" class="mt-0.5 shrink-0 text-teal" />
                         <span>
                           <span class="font-semibold">{t('content.about.positions.effort')}:</span>{' '}
-                          <span lang={lang === 'en' ? 'de' : undefined}>{p.effort}</span>
+                          <span lang={effort.fallback ? 'de' : undefined}>{effort.text}</span>
                         </span>
                       </p>
                     )}
