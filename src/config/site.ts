@@ -12,6 +12,11 @@ export const SITE = {
   gridSize: 22,
   teamCount: 11,
   themeColor: '#050505',
+  /**
+   * Aquarell-/Steintextur für den Hero (Plan §3.2: nur Hero, maskiert, ca. 25 % Deckkraft).
+   * Pfad unter public/, z. B. '/brand/hero-texture.webp' – leer = keine Textur.
+   */
+  heroTexture: null as string | null,
 } as const;
 
 /** Hinweis im <title>: „Seite · [LIGANAME]“ (Plan §10). */

@@ -88,6 +88,7 @@ const jsonLd = {
   <!-- 1. Hero -->
   <section class="hero relative isolate overflow-hidden border-b border-border pt-(--header-h)">
     <div class="hero-bg" aria-hidden="true">
+      {SITE.heroTexture && <img class="hero-texture" src={SITE.heroTexture} alt="" width="1600" height="900" decoding="async" fetchpriority="low" />}
       <div class="glow"></div>
     </div>
     <div class="container-page grid items-center gap-10 py-14 md:py-20 lg:grid-cols-[1.1fr_1fr]">
@@ -349,6 +350,17 @@ const jsonLd = {
   .hero-bg .glow {
     left: 45%;
     width: 60%;
+  }
+  /* Textur hinter dem Glow, weich ausgeblendet (Maske) und dezent (Plan §3.2) */
+  .hero-texture {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.25;
+    -webkit-mask-image: radial-gradient(70% 70% at 70% 50%, #000 30%, transparent 75%);
+    mask-image: radial-gradient(70% 70% at 70% 50%, #000 30%, transparent 75%);
   }
   .hero-logo {
     position: absolute;
