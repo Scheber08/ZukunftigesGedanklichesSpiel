@@ -37,6 +37,8 @@ export interface PrivateSettings {
     decisions: string | null;
     news: string | null;
     contact: string | null;
+    /** Social-Grafiken (Plan Phase 2), z. B. #grafiken */
+    graphics: string | null;
   };
   /** Discord-Rollen-IDs je App-Rolle. */
   discord_role_map: { admin: string[]; steward: string[]; redakteur: string[] };
@@ -44,6 +46,11 @@ export interface PrivateSettings {
   discord_invites: { website: string | null; instagram: string | null; tiktok: string | null; youtube: string | null };
   /** Gebündelter Rebuild (Plan §7.2). */
   rebuild: { requested_at: string | null; dispatched_at: string | null; reason: string | null };
+  /**
+   * Zugang für den Telemetrie-Import (Plan Phase 2): Das Companion-Programm schickt das Token
+   * mit; gespeichert wird nur sein SHA-256-Hash.
+   */
+  import_token: { hash: string | null; created_at: string | null; created_by: string | null };
   /** App-Token der Twitch-API (Client-Credentials), vom Cron-Job gepflegt. */
   twitch_token: { access_token: string | null; expires_at: string | null };
 }
@@ -67,6 +74,7 @@ export const PRIVATE_SETTING_KEYS = [
   'discord_invites',
   'rebuild',
   'twitch_token',
+  'import_token',
 ] as const satisfies ReadonlyArray<keyof PrivateSettings>;
 
 export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
@@ -92,11 +100,13 @@ export const DEFAULT_PRIVATE_SETTINGS: PrivateSettings = {
     decisions: null,
     news: null,
     contact: null,
+    graphics: null,
   },
   discord_role_map: { admin: [], steward: [], redakteur: [] },
   discord_invites: { website: null, instagram: null, tiktok: null, youtube: null },
   rebuild: { requested_at: null, dispatched_at: null, reason: null },
   twitch_token: { access_token: null, expires_at: null },
+  import_token: { hash: null, created_at: null, created_by: null },
 };
 
 /** Liest die Einstellungen aus Zeilen und füllt fehlende Schlüssel mit Defaults auf. */

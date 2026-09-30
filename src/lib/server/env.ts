@@ -4,7 +4,9 @@
  */
 import {
   DEMO_MODE,
+  DISCORD_APPLICATION_ID,
   DISCORD_BOT_TOKEN,
+  DISCORD_PUBLIC_KEY,
   DISCORD_GUILD_ID,
   GITHUB_DISPATCH_TOKEN,
   GITHUB_REPOSITORY,
@@ -24,6 +26,8 @@ export const env = {
   supabaseServiceKey: SUPABASE_SERVICE_ROLE_KEY,
   discordGuildId: DISCORD_GUILD_ID,
   discordBotToken: DISCORD_BOT_TOKEN,
+  discordPublicKey: DISCORD_PUBLIC_KEY,
+  discordApplicationId: DISCORD_APPLICATION_ID,
   twitchClientId: TWITCH_CLIENT_ID,
   twitchClientSecret: TWITCH_CLIENT_SECRET,
   turnstileSecret: TURNSTILE_SECRET_KEY,

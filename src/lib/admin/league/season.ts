@@ -79,6 +79,7 @@ export function planSeasonClone(
     protest_window_hours: source.protest_window_hours,
     two_steward_rule: source.two_steward_rule,
     penalty_points_enabled: source.penalty_points_enabled,
+    penalty_points_config: structuredClone(source.penalty_points_config ?? {}),
     lobby_settings: structuredClone(source.lobby_settings ?? {}),
     rules_version_id: input.rules_version_id === undefined ? source.rules_version_id : input.rules_version_id,
     starts_on: input.starts_on ?? null,

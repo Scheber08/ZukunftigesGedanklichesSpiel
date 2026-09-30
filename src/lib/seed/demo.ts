@@ -173,6 +173,7 @@ export function demoDataset(now: Date = new Date()): Dataset {
       protest_window_hours: 48,
       two_steward_rule: false,
       penalty_points_enabled: false,
+      penalty_points_config: {},
       lobby_settings: DEFAULT_LOBBY_SETTINGS,
       rules_version_id: 1,
       starts_on: s1Start,
@@ -189,7 +190,8 @@ export function demoDataset(now: Date = new Date()): Dataset {
       reserve_points_for_constructors: true,
       protest_window_hours: 48,
       two_steward_rule: true,
-      penalty_points_enabled: false,
+      penalty_points_enabled: true,
+      penalty_points_config: { warning_threshold: 6, ban_threshold: 10, expiry_rounds: null },
       lobby_settings: DEFAULT_LOBBY_SETTINGS,
       rules_version_id: 1,
       starts_on: s2Start,
@@ -402,6 +404,7 @@ export function demoDataset(now: Date = new Date()): Dataset {
   mkDecision({
     id: 2,
     public_ref: 'S2-R02-01',
+    penalty_points: 2,
     incident_id: 1,
     round_id: s2r2.id,
     session_id: sessionOf(s2r2.id, 'race').id,
@@ -418,6 +421,7 @@ export function demoDataset(now: Date = new Date()): Dataset {
   mkDecision({
     id: 3,
     public_ref: 'S2-R02-02',
+    penalty_points: 0,
     round_id: s2r2.id,
     session_id: sessionOf(s2r2.id, 'race').id,
     driver_id: 16,
@@ -449,6 +453,7 @@ export function demoDataset(now: Date = new Date()): Dataset {
   mkDecision({
     id: 4,
     public_ref: 'S2-R03-01',
+    penalty_points: 3,
     incident_id: 2,
     round_id: s2r3r.id,
     session_id: sessionOf(s2r3r.id, 'race').id,
@@ -464,6 +469,7 @@ export function demoDataset(now: Date = new Date()): Dataset {
   mkDecision({
     id: 5,
     public_ref: 'S2-R03-02',
+    penalty_points: 2,
     round_id: s2r3r.id,
     session_id: sessionOf(s2r3r.id, 'race').id,
     driver_id: 20,
@@ -513,6 +519,7 @@ export function demoDataset(now: Date = new Date()): Dataset {
   mkDecision({
     id: 6,
     public_ref: 'S2-R04-01',
+    penalty_points: 2,
     incident_id: 4,
     round_id: s2r4.id,
     session_id: sessionOf(s2r4.id, 'race').id,
@@ -575,6 +582,7 @@ export function demoDataset(now: Date = new Date()): Dataset {
           entered_position: c.enteredPosition,
           position: c.position,
           status: c.status,
+          entered_status: entered.find((e) => e.driverId === c.driverId)?.status ?? c.status,
           grid_position: grid?.get(c.driverId) ?? null,
           laps: c.laps,
           total_time_ms: c.totalTimeMs,

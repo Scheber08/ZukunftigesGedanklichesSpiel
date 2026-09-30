@@ -161,6 +161,7 @@ export const WEBHOOK_CHANNEL_LABELS: Record<keyof PrivateSettings['webhooks'], {
   decisions: { label: 'Urteile', channel: '#urteile', hint: 'Veröffentlichte Steward-Entscheidungen.' },
   news: { label: 'News', channel: '#news', hint: 'Optional – neue Artikel mit Teaser.' },
   contact: { label: 'Kontaktanfragen', channel: '#orga', hint: 'Nur Orga – neue Nachrichten aus dem Kontaktformular.' },
+  graphics: { label: 'Social-Grafiken', channel: '#grafiken', hint: 'Optional – erzeugte Grafiken (Ergebnis, Wertung, Aufstellung) als Bild.' },
 };
 
 /** Discord-Invites je Quelle (Plan §8.1: eigener dauerhafter Invite je Quelle). */

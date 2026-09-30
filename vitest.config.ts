@@ -19,6 +19,8 @@ export default defineConfig({
     // Server-Module (Spam-Schutz, Discord, Rebuild) werden gegen den Mock getestet;
     // der Demo-Modus ist der Standard, damit nie versehentlich Supabase angesprochen wird.
     env: { DEMO_MODE: 'true' },
+    // Dateisystem-Scans (Leitplanken-Tests) brauchen unter Last mehr als die Standard-5-s
+    testTimeout: 30_000,
     restoreMocks: true,
     unstubGlobals: true,
   },

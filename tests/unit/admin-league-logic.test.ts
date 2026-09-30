@@ -108,6 +108,7 @@ const season = (over: Partial<SeasonRow> = {}): SeasonRow => ({
   protest_window_hours: 36,
   two_steward_rule: true,
   penalty_points_enabled: false,
+  penalty_points_config: {},
   lobby_settings: { groups: [{ key: 'lobby', title_de: 'Lobby', items: [] }] },
   rules_version_id: 1,
   starts_on: '2026-01-01',

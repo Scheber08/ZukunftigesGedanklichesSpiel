@@ -141,6 +141,9 @@ export default defineConfig({
       SUPABASE_SERVICE_ROLE_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
       DISCORD_GUILD_ID: envField.string({ context: 'server', access: 'public', optional: true }),
       DISCORD_BOT_TOKEN: envField.string({ context: 'server', access: 'secret', optional: true }),
+      // Discord-Bot über Interactions-Endpunkt (Plan Phase 3): öffentlicher Schlüssel + App-ID
+      DISCORD_PUBLIC_KEY: envField.string({ context: 'server', access: 'public', optional: true }),
+      DISCORD_APPLICATION_ID: envField.string({ context: 'server', access: 'public', optional: true }),
       TWITCH_CLIENT_ID: envField.string({ context: 'server', access: 'secret', optional: true }),
       TWITCH_CLIENT_SECRET: envField.string({ context: 'server', access: 'secret', optional: true }),
       TURNSTILE_SECRET_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),

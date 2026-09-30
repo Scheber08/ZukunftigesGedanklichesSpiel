@@ -137,3 +137,56 @@ export function siteUrl(path: string, origin?: string): string {
   const base = origin ?? import.meta.env.SITE ?? 'https://liga.example';
   return new URL(path, base).href;
 }
+
+// ---------------------------------------------------------------------------- Dateien (Grafiken)
+
+export interface WebhookFile {
+  name: string;
+  data: Blob | ArrayBuffer | Uint8Array;
+  contentType?: string;
+}
+
+/**
+ * Webhook mit Datei-Anhang (z. B. Social-Grafik als PNG). Im Embed lässt sich die Datei mit
+ * `image: { url: 'attachment://<name>' }` anzeigen. Wirft nie.
+ */
+export async function sendWebhookFile(
+  url: string | null | undefined,
+  payload: { content?: string; embeds?: Embed[] },
+  file: WebhookFile,
+): Promise<boolean> {
+  if (!url) return false;
+  try {
+    const form = new FormData();
+    form.append(
+      'payload_json',
+      JSON.stringify({
+        username: SITE.name,
+        allowed_mentions: { parse: [] },
+        content: payload.content,
+        embeds: payload.embeds?.map(clampEmbed),
+        attachments: [{ id: 0, filename: file.name }],
+      }),
+    );
+    const blob =
+      file.data instanceof Blob ? file.data : new Blob([file.data as BlobPart], { type: file.contentType ?? 'application/octet-stream' });
+    form.append('files[0]', blob, file.name);
+    const res = await fetch(`${url}?wait=false`, { method: 'POST', body: form });
+    if (!res.ok) console.error(`Discord-Webhook (Datei) fehlgeschlagen: ${res.status}`);
+    return res.ok;
+  } catch (err) {
+    console.error('Discord-Webhook (Datei) nicht erreichbar', err);
+    return false;
+  }
+}
+
+/** Datei an einen konfigurierten Channel schicken (siehe Einstellungen → Webhooks). */
+export async function notifyWithFile(store: Store, channel: WebhookChannel, embed: Embed | null, file: WebhookFile, content?: string): Promise<boolean> {
+  try {
+    const settings = await readPrivateSettings(store);
+    return await sendWebhookFile(settings.webhooks[channel], { content, embeds: embed ? [embed] : undefined }, file);
+  } catch (err) {
+    console.error('Discord-Benachrichtigung (Datei) fehlgeschlagen', err);
+    return false;
+  }
+}

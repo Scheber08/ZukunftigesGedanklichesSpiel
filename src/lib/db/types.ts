@@ -139,6 +139,16 @@ export interface LobbySettings {
   join_steps_en?: string[];
 }
 
+/** Strafpunkte-System je Saison (Plan Phase 2); leere Felder = Standardwerte */
+export interface PenaltyPointsConfig {
+  /** Hinweis ab dieser Summe */
+  warning_threshold?: number | null;
+  /** Rennsperre ab dieser Summe */
+  ban_threshold?: number | null;
+  /** Punkte verfallen nach so vielen gewerteten Runden (null = gelten die ganze Saison) */
+  expiry_rounds?: number | null;
+}
+
 export interface SeasonRow extends Timestamps {
   id: Id;
   number: number;
@@ -151,6 +161,7 @@ export interface SeasonRow extends Timestamps {
   protest_window_hours: number;
   two_steward_rule: boolean;
   penalty_points_enabled: boolean;
+  penalty_points_config: PenaltyPointsConfig;
   lobby_settings: LobbySettings;
   rules_version_id: Id | null;
   starts_on: IsoDate | null;
@@ -302,6 +313,8 @@ export interface ResultRow extends Timestamps {
   entered_position: number;
   position: number | null;
   status: ResultStatus;
+  /** Eingegebener Status vor Steward-Strafen (DSQ-Rücknahme stellt ihn wieder her) */
+  entered_status: ResultStatus | null;
   grid_position: number | null;
   laps: number | null;
   total_time_ms: number | null;

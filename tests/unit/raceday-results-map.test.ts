@@ -31,6 +31,7 @@ function resultRow(over: Partial<ResultRow> = {}): ResultRow {
     entered_position: 2,
     position: 2,
     status: 'classified',
+    entered_status: 'classified',
     grid_position: 4,
     laps: 25,
     total_time_ms: 2_345_678,

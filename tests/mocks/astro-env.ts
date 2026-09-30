@@ -16,6 +16,8 @@ export let SUPABASE_ANON_KEY = str(process.env.SUPABASE_ANON_KEY);
 export let SUPABASE_SERVICE_ROLE_KEY = str(process.env.SUPABASE_SERVICE_ROLE_KEY);
 export let DISCORD_GUILD_ID = str(process.env.DISCORD_GUILD_ID);
 export let DISCORD_BOT_TOKEN = str(process.env.DISCORD_BOT_TOKEN);
+export let DISCORD_PUBLIC_KEY = str(process.env.DISCORD_PUBLIC_KEY);
+export let DISCORD_APPLICATION_ID = str(process.env.DISCORD_APPLICATION_ID);
 export let TWITCH_CLIENT_ID = str(process.env.TWITCH_CLIENT_ID);
 export let TWITCH_CLIENT_SECRET = str(process.env.TWITCH_CLIENT_SECRET);
 export let TURNSTILE_SECRET_KEY = str(process.env.TURNSTILE_SECRET_KEY);
@@ -33,6 +35,8 @@ export interface MockEnv {
   SUPABASE_SERVICE_ROLE_KEY?: string;
   DISCORD_GUILD_ID?: string;
   DISCORD_BOT_TOKEN?: string;
+  DISCORD_PUBLIC_KEY?: string;
+  DISCORD_APPLICATION_ID?: string;
   TWITCH_CLIENT_ID?: string;
   TWITCH_CLIENT_SECRET?: string;
   TURNSTILE_SECRET_KEY?: string;
@@ -52,6 +56,8 @@ export function setMockEnv(values: MockEnv): void {
   if ('SUPABASE_SERVICE_ROLE_KEY' in values) SUPABASE_SERVICE_ROLE_KEY = values.SUPABASE_SERVICE_ROLE_KEY;
   if ('DISCORD_GUILD_ID' in values) DISCORD_GUILD_ID = values.DISCORD_GUILD_ID;
   if ('DISCORD_BOT_TOKEN' in values) DISCORD_BOT_TOKEN = values.DISCORD_BOT_TOKEN;
+  if ('DISCORD_PUBLIC_KEY' in values) DISCORD_PUBLIC_KEY = values.DISCORD_PUBLIC_KEY;
+  if ('DISCORD_APPLICATION_ID' in values) DISCORD_APPLICATION_ID = values.DISCORD_APPLICATION_ID;
   if ('TWITCH_CLIENT_ID' in values) TWITCH_CLIENT_ID = values.TWITCH_CLIENT_ID;
   if ('TWITCH_CLIENT_SECRET' in values) TWITCH_CLIENT_SECRET = values.TWITCH_CLIENT_SECRET;
   if ('TURNSTILE_SECRET_KEY' in values) TURNSTILE_SECRET_KEY = values.TURNSTILE_SECRET_KEY;
