@@ -10,7 +10,7 @@ export interface RobotsOptions {
   sitemapUrl: string;
 }
 
-export const ROBOTS_DISALLOWED_PATHS = ['/admin', '/api', '/_actions', '/_server-islands'] as const;
+export const ROBOTS_DISALLOWED_PATHS = ['/admin', '/api', '/_actions', '/_server-islands', '/overlay'] as const;
 
 export function buildRobotsTxt(opts: RobotsOptions): string {
   if (opts.disallowAll) {

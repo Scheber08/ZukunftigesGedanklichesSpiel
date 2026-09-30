@@ -8,7 +8,7 @@
  * src/lib/view.ts (zentral, übersetzt „Saison N“ für EN).
  */
 
-import type { DecisionRow, DriverNumberRow, DriverRow, Id, RoundEntryRow, RoundRow, SeasonRow, TeamRow } from '../db/types';
+import type { DriverNumberRow, DriverRow, Id, RoundEntryRow, RoundRow, SeasonRow, TeamRow } from '../db/types';
 import { RESULT_VISIBLE_STATUSES } from '../db/types';
 import type { DriverStanding, TeamStanding } from '../domain/standings';
 import type { CareerStats, Duel } from '../domain/stats';
@@ -207,13 +207,6 @@ export function progressionSteps(league: League, kind: 'driver' | 'team', season
     previous = total;
     return step;
   });
-}
-
-/** Strafpunkte-Summe einer Saison aus veröffentlichten Entscheidungen (vorbereitet, Plan §1). */
-export function penaltyPointsTotal(league: League, decisions: readonly DecisionRow[], seasonId: Id): number {
-  return decisions
-    .filter((d) => league.round(d.round_id)?.season_id === seasonId)
-    .reduce((sum, d) => sum + (d.penalty_points ?? 0), 0);
 }
 
 /** Nur http(s)-Links nach außen (Twitch/YouTube). */

@@ -12,7 +12,7 @@ Kurzüberblick für alle, die am Code arbeiten. Der fachliche Plan steht in [`PL
 
 | Pfad | Inhalt |
 |---|---|
-| `src/lib/domain/` | Reine Fachlogik ohne I/O (Punkte, Wertung, Statistik, Grid-Prüfung, Nummern, ICS, Zeitzonen). **Immer mit Unit-Tests** in `tests/unit/`. |
+| `src/lib/domain/` | Reine Fachlogik ohne I/O (Punkte, Wertung, Statistik, Grid-Prüfung, Nummern, ICS, Zeitzonen, Strafpunkte-Konto, Head-to-Head). **Immer mit Unit-Tests** in `tests/unit/`. |
 | `src/lib/db/` | Zeilentypen (`types.ts`), Store-Schnittstelle, Supabase- und Memory-Store. |
 | `src/lib/league/league.ts` | `League`: alle öffentlichen Daten + berechnete Sichten (Wertungen, Profile, Hall of Fame, Inhalte). |
 | `src/lib/server/` | Nur serverseitig: Env, Store-Zugriff, Loader, Auth, Discord, Spam-Schutz, Rebuild, Audit, Cron. |
@@ -21,6 +21,12 @@ Kurzüberblick für alle, die am Code arbeiten. Der fachliche Plan steht in [`PL
 | `src/pages/` | Dünne Routen-Dateien: DE ohne Präfix, EN unter `src/pages/en/`. Sie rendern nur die View. |
 | `src/components/ui/` | Basis-Komponenten (Badge, Flag, DriverLink, TeamName, PageHeader, SectionTitle, Markdown, LocalTime, Legend, ShareButton, EmptyState, TranslationNotice). |
 | `src/components/sport/` | ResultsTable, DriverStandingsTable, TeamStandingsTable, MatrixTable, PointsChart, Countdown (Svelte). |
+| `src/lib/import/` | Telemetrie-/CSV-Import (Plan Phase 2): CSV-Parser, Zuordnung über die Startnummer, Stapel; `service.ts` nur serverseitig. |
+| `tools/telemetry/` | Companion-Programm für den Lobby-PC (Node ≥ 22, ohne Abhängigkeiten): liest die UDP-Pakete des Spiels und lädt das Ergebnis nach `/api/import` hoch. Siehe [`TELEMETRIE.md`](TELEMETRIE.md). |
+| `src/lib/graphics/` | Social-Grafiken: reine Layout-, Motiv- und Datenlogik; `draw.ts` zeichnet im Admin-Browser (Canvas). |
+| `src/lib/tracks/` | Streckenseiten und Rekorde. |
+| `src/lib/server/live-data.ts` | Schlanke Live-Daten für OBS-Overlays und den Discord-Bot (gezielte Abfragen statt `loadLeague()`). Siehe [`OVERLAYS.md`](OVERLAYS.md). |
+| `src/lib/discord-bot/` | Discord-Bot über den Interactions-Endpunkt `/api/discord/interactions` (Ed25519-Signatur, Slash-Befehle). Siehe [`DISCORD-BOT.md`](DISCORD-BOT.md). |
 | `src/actions/` | Astro Actions: `public.ts` (Formulare), `admin/*.ts` (Admin, unter `actions.admin.*`). |
 | `src/layouts/` | `BaseLayout.astro` (öffentlich), `AdminLayout.astro` (Admin). |
 
@@ -61,6 +67,8 @@ Formulare, Admin, APIs: `export const prerender = false;` in der Seiten-Datei. I
 ### Sicherheit
 
 - CSP ist aktiv: **keine `is:inline`-Skripte mit Inline-Code**, keine Inline-Event-Handler (`onclick=`). Client-Code in `<script>`-Blöcken (werden gebündelt) oder Svelte-Islands. Einzige Ausnahme: das Zeitzonen-Skript im `<head>` (`src/lib/tz-inline.mjs`, gegen Layout-Verschiebung), dessen SHA-256-Hash `astro.config.mjs` automatisch in die CSP schreibt. Externe Skripte nur Turnstile und (nach Einwilligung) GA.
+- Einstellungen nur mit Patch-Semantik schreiben: `applySettingPatch()` aus `src/lib/admin/league/settings-patch.ts` überschreibt nur übermittelte Unterschlüssel und lässt `updated_at` bei unveränderten Werten stehen.
+- Fahrer- und Team-Slugs werden gegen `src/lib/admin/league/slugs.ts` geprüft: Feste Unterseiten (z. B. `/fahrer/vergleich`) sind reserviert. Neue feste Unterseiten unter `/fahrer` bzw. `/teams` in `ROUTES` eintragen, dann sind sie automatisch reserviert.
 - Weiterleitungen: Beim Umbenennen von Fahrer-, Team-, Saison- oder News-Slugs `recordSlugChange()` aufrufen; alte URLs leiten per 301 um (Worker, `src/worker.ts`).
 - Öffentliche Daten: `getPublicStore()` liest `drivers`, `decisions` und `incidents` über die Views `drivers_public`, `decisions_public`, `incidents_public` (nur öffentliche Spalten/Zeilen).
 - Secrets nur serverseitig (`src/lib/server/env.ts`). Schreibzugriffe nur über Actions/Endpunkte mit Rollenprüfung (`staffFrom(context, 'admin')`).

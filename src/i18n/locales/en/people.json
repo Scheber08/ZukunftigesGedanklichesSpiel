@@ -177,7 +177,6 @@
   "people.penalties.verdict": "Decision",
   "people.penalties.none": "No published stewards’ decisions.",
   "people.penalties.pointsSoon": "A penalty-points account is ready and will appear here once the league introduces penalty points.",
-  "people.penalties.pointsTotal": "Penalty points {season}",
   "people.penalties.pointsColumn": "Penalty points",
   "people.penalties.all": "Go to the stewards’ register",
   "people.penalties.seconds": "+{n} s",

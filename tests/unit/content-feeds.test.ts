@@ -118,8 +118,13 @@ describe('Sitemap', () => {
   it('passt zu den getStaticPaths der Rennen, Fahrer, Teams und Saisonwertungen', () => {
     const races = des.filter((p) => p.startsWith('/rennen/'));
     expect(races).toHaveLength(league.data.rounds.length);
-    const drivers = des.filter((p) => p.startsWith('/fahrer/')).map((p) => decodeURIComponent(p.slice('/fahrer/'.length)));
+    // /fahrer/vergleich ist eine feste Unterseite (Head-to-Head), kein Profil
+    expect(des).toContain('/fahrer/vergleich');
+    const drivers = des
+      .filter((p) => p.startsWith('/fahrer/') && p !== '/fahrer/vergleich')
+      .map((p) => decodeURIComponent(p.slice('/fahrer/'.length)));
     expect(drivers.sort()).toEqual([...driverProfileSlugs(league)].sort());
+    expect(des).toContain('/strecken');
     const teams = des.filter((p) => p.startsWith('/teams/')).map((p) => decodeURIComponent(p.slice('/teams/'.length)));
     expect(teams.sort()).toEqual([...teamPageSlugs(league)].sort());
     const standings = des.filter((p) => /^\/saison\/[^/]+\/wertung$/.test(p));

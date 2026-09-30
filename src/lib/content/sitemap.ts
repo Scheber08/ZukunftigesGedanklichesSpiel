@@ -10,6 +10,7 @@ import { alternates, type Alternates, type RouteName } from '~/i18n';
 import type { League } from '~/lib/league/league';
 import { profileDrivers, teamPageTeams } from '~/lib/people';
 import { seasonStandingsPaths } from '~/lib/standings/page';
+import { trackSitemapPages } from '~/lib/tracks';
 import { escapeHtml } from '~/lib/util/html';
 import { newsAlternates } from './news';
 import { rulesUpdatedAt } from './rules';
@@ -36,6 +37,7 @@ export const STATIC_SITEMAP_ROUTES = [
   'results',
   'standings',
   'drivers',
+  'driverCompare',
   'teams',
   'stewards',
   'news',
@@ -108,6 +110,9 @@ export function collectSitemapPages(league: League, opts: SitemapOptions): Sitem
   for (const team of teamPageTeams(league)) {
     add(alternates('team', { slug: team.slug }), team.updated_at);
   }
+
+  // Streckenseiten (Übersicht + alle Strecken aus den Liga-Kalendern)
+  for (const p of trackSitemapPages(league)) add(p.alternates, p.lastmod);
 
   // Steward-Entscheidungen
   for (const decision of league.decisions) {

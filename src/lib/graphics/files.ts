@@ -3,8 +3,11 @@
  */
 import { formatBySize } from './formats';
 
-/** Höchstgröße einer Grafik für den Discord-Versand (Discord erlaubt ohne Boost 10 MB). */
-export const MAX_GRAPHIC_BYTES = 8 * 1024 * 1024;
+/**
+ * Höchstgröße einer Grafik für den Discord-Versand (Discord erlaubt ohne Boost 10 MB). Muss unter
+ * security.actionBodySizeLimit in astro.config.mjs (6 MB) bleiben; echte PNGs liegen bei 0,2–2 MB.
+ */
+export const MAX_GRAPHIC_BYTES = 5 * 1024 * 1024;
 export const PNG_TYPE = 'image/png';
 export const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
 
@@ -61,7 +64,7 @@ export type PngCheck =
   | { ok: false; code: 'BAD_REQUEST' | 'CONTENT_TOO_LARGE' | 'UNSUPPORTED_MEDIA_TYPE'; message: string };
 
 /**
- * Prüft eine hochgeladene Grafik: Größe (nicht leer, höchstens 8 MB), MIME-Typ image/png,
+ * Prüft eine hochgeladene Grafik: Größe (nicht leer, höchstens MAX_GRAPHIC_BYTES), MIME-Typ image/png,
  * PNG-Signatur und ein bekanntes Grafik-Format (Pixelmaße aus dem IHDR-Chunk).
  * `head` sind die ersten Bytes der Datei (mindestens 24).
  */

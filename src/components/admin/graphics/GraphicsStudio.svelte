@@ -279,7 +279,7 @@
     try {
       const blob = await exportPng();
       lastBytes = blob.size;
-      if (blob.size > MAX_GRAPHIC_BYTES) throw new Error(`Die Grafik ist mit ${formatBytes(blob.size)} zu groß für Discord (höchstens 8 MB).`);
+      if (blob.size > MAX_GRAPHIC_BYTES) throw new Error(`Die Grafik ist mit ${formatBytes(blob.size)} zu groß für Discord (höchstens 5 MB).`);
       const form = new FormData();
       form.append('file', new File([blob], current.fileName, { type: 'image/png' }));
       form.append('title', current.discordTitle.slice(0, 200));

@@ -177,7 +177,6 @@
   "people.penalties.verdict": "Entscheidung",
   "people.penalties.none": "Keine veröffentlichten Steward-Entscheidungen.",
   "people.penalties.pointsSoon": "Ein Strafpunkte-Konto ist vorbereitet und erscheint hier, sobald die Liga Strafpunkte einführt.",
-  "people.penalties.pointsTotal": "Strafpunkte {season}",
   "people.penalties.pointsColumn": "Strafpunkte",
   "people.penalties.all": "Zum Steward-Register",
   "people.penalties.seconds": "+{n} s",

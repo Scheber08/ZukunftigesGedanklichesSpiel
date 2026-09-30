@@ -62,7 +62,7 @@ const severe = new Set(['time_penalty', 'position_penalty', 'grid_penalty_next',
                 <span class:list={[severe.has(d.verdict) && 'text-danger', d.verdict === 'warning' && 'text-warning']}>{t(`people.verdict.${d.verdict}`)}</span>
                 {detail && <span class="muted"> · {detail}</span>}
               </td>
-              {penaltyPoints && <td class="num">{d.penalty_points ?? '–'}</td>}
+              {penaltyPoints && <td class="num">{(d.penalty_points ?? 0) > 0 ? d.penalty_points : '–'}</td>}
               <td class="num muted">{d.published_at ? formatDate(d.published_at, lang) : '–'}</td>
             </tr>
           );

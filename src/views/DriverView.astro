@@ -27,13 +27,14 @@ import SectionTitle from '~/components/ui/SectionTitle.astro';
 import TeamName from '~/components/ui/TeamName.astro';
 import { alternates, url, useT, type Lang } from '~/i18n';
 import BaseLayout from '~/layouts/BaseLayout.astro';
+import PenaltyPointsPanel from '~/components/people/PenaltyPointsPanel.astro';
+import { driverPenaltyAccount } from '~/components/stewards/penalty-points';
 import { formatDate } from '~/lib/domain/time';
 import {
   driverDuels,
   driverRole,
   hasStats,
   numberPeriods,
-  penaltyPointsTotal,
   progressionSteps,
   resultsBySeason,
   safeExternalUrl,
@@ -83,7 +84,8 @@ const dotdRounds = driver ? dotdRoundIds(league, driver.id) : new Set<number>();
 // Vergleich nur mit veröffentlichten Ergebnissen (sonst gibt es nichts zu vergleichen)
 const compareHref = driver && resultGroups.length > 0 ? `${url(lang, 'driverCompare')}?a=${encodeURIComponent(driver.slug)}` : null;
 const penaltyEnabled = season?.penalty_points_enabled ?? false;
-const penaltyTotal = season && penaltyEnabled ? penaltyPointsTotal(league, decisions, season.id) : 0;
+// Strafpunkte-Konto der aktuellen Saison (null, wenn das System dort nicht aktiv ist)
+const penaltyAccount = driver && season ? driverPenaltyAccount(league, season, driver.id) : null;
 
 const links = driver?.show_links
   ? [
@@ -356,12 +358,7 @@ if (!driver) Astro.response.status = 404;
           <!-- Strafenregister -->
           <section id="penalties" class="profile-section pb-16" aria-labelledby="penalties-title">
             <SectionTitle id="penalties-title" title={t('people.penalties.title')} href={url(lang, 'stewards')} linkLabel={t('people.penalties.all')} />
-            {season && penaltyEnabled && (
-              <p class="penalty-account card mb-4 p-4">
-                <span class="micro">{t('people.penalties.pointsTotal', { season: seasonName })}</span>
-                <span class="tabular">{penaltyTotal}</span>
-              </p>
-            )}
+            {season && penaltyAccount && <PenaltyPointsPanel lang={lang} account={penaltyAccount} season={season} class="mb-4" />}
             {decisions.length === 0 ? (
               <p class="card p-5 text-sm text-muted">{t('people.penalties.none')}</p>
             ) : (
@@ -413,17 +410,5 @@ if (!driver) Astro.response.status = 404;
     font-family: var(--font-display);
     font-weight: 900;
     font-size: 1.25rem;
-  }
-  .penalty-account {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 1rem;
-    max-width: 24rem;
-  }
-  .penalty-account .tabular {
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 1.75rem;
   }
 </style>

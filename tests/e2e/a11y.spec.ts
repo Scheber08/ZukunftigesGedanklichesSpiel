@@ -110,6 +110,7 @@ test.describe('Tastatur', () => {
 
     await seat.focus();
     await page.keyboard.press('Enter');
+    await expect(seat).toHaveAttribute('aria-pressed', 'true');
     const driver = page.locator('.gb-pool .pool-driver:visible:not([disabled])').first();
     await expect(driver).toBeVisible();
     const gamertag = ((await driver.locator('.gamertag').textContent()) ?? '').trim();

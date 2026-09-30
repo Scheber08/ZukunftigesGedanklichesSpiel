@@ -101,6 +101,8 @@ export default defineConfig({
 
   security: {
     checkOrigin: true,
+    // Social-Grafiken (PNG bis 5 MB) gehen per Action an Discord; Standard wären 1 MB.
+    actionBodySizeLimit: 6 * 1024 * 1024,
     csp: {
       directives: [
         "default-src 'self'",

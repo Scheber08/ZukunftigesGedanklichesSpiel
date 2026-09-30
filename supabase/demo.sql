@@ -4,7 +4,7 @@
 -- AUTOMATISCH ERZEUGT von scripts/generate-seed-sql.ts – nicht von Hand bearbeiten.
 -- Neu erzeugen: npm run db:seed:generate -- --demo
 --
--- Termine relativ zu 2026-09-30T14:09:43.529Z erzeugt (Option --now=…).
+-- Termine relativ zu 2026-09-30T15:22:05.072Z erzeugt (Option --now=…).
 -- NUR für eine Test-Datenbank! Einspielen NACH seed.sql. Vorhandene Demo-Zeilen werden aktualisiert.
 -- Alle Gamertags sind erfunden. Nicht in der Produktionsdatenbank verwenden.
 -- =============================================================================
@@ -54,8 +54,8 @@ insert into public.rounds (id, season_id, number, track_id, local_start, timezon
   (9, 2, 1, 1, '2026-09-08T20:00:00', 'Europe/Berlin', '2026-09-08T18:00:00.000Z', 'standard', 'final', '2026-09-08T20:30:00.000Z', '2026-09-10T20:30:00.000Z', '2026-09-11T18:00:00.000Z', 'https://www.youtube.com/@beispiel', NULL),
   (10, 2, 2, 3, '2026-09-15T20:00:00', 'Europe/Berlin', '2026-09-15T18:00:00.000Z', 'standard', 'final', '2026-09-15T20:30:00.000Z', '2026-09-17T20:30:00.000Z', '2026-09-18T18:00:00.000Z', NULL, NULL),
   (11, 2, 3, 4, '2026-09-22T20:00:00', 'Europe/Berlin', '2026-09-22T18:00:00.000Z', 'sprint', 'final', '2026-09-22T20:30:00.000Z', '2026-09-24T20:30:00.000Z', '2026-09-25T18:00:00.000Z', 'https://www.youtube.com/@beispiel', NULL),
-  (12, 2, 4, 6, '2026-09-29T10:00:00', 'Europe/Berlin', '2026-09-29T08:00:00.000Z', 'standard', 'provisional', '2026-09-29T10:30:00.000Z', '2026-10-01T10:30:00.000Z', NULL, NULL, NULL),
-  (13, 2, 5, 7, '2026-09-30T13:00:00', 'Europe/Berlin', '2026-09-30T11:00:00.000Z', 'standard', 'lineup_published', NULL, NULL, NULL, NULL, NULL),
+  (12, 2, 4, 6, '2026-09-29T11:00:00', 'Europe/Berlin', '2026-09-29T09:00:00.000Z', 'standard', 'provisional', '2026-09-29T11:30:00.000Z', '2026-10-01T11:30:00.000Z', NULL, NULL, NULL),
+  (13, 2, 5, 7, '2026-09-30T14:00:00', 'Europe/Berlin', '2026-09-30T12:00:00.000Z', 'standard', 'lineup_published', NULL, NULL, NULL, NULL, NULL),
   (14, 2, 6, 10, '2026-10-07T20:00:00', 'Europe/Berlin', '2026-10-07T18:00:00.000Z', 'standard', 'scheduled', NULL, NULL, NULL, NULL, NULL),
   (15, 2, 7, 11, '2026-10-14T20:00:00', 'Europe/Berlin', '2026-10-14T18:00:00.000Z', 'standard', 'scheduled', NULL, NULL, NULL, NULL, NULL),
   (16, 2, 8, 12, '2026-10-21T20:00:00', 'Europe/Berlin', '2026-10-21T18:00:00.000Z', 'sprint', 'scheduled', NULL, NULL, NULL, NULL, NULL),
@@ -1579,8 +1579,8 @@ on conflict (id) do update set season_id = excluded.season_id, round_id = exclud
 insert into public.incidents (id, round_id, session_id, reporter_driver_id, reporter_contact, involved_driver_ids, lap, corner, description, clip_url, clip_timestamp, submitted_at, ip_hash, source, status) values
   (1, 10, 21, 9, 'gravel_gustav', '{9,10}'::bigint[], 3, 'Kurve 1', 'Beim Anbremsen auf Kurve 1 wurde ich von hinten getroffen und habe mich gedreht.', 'https://youtu.be/beispiel?t=754', '12:34', '2026-09-16T14:00:00.000Z', NULL, 'report', 'decided'),
   (2, 11, 24, 14, 'eaurouge_emil', '{14,13}'::bigint[], 8, 'Kurve 10', 'Ich wurde beim Überholversuch von der Strecke gedrängt.', 'https://medal.tv/games/f1/clips/beispiel', '0:42', '2026-09-24T00:00:00.000Z', NULL, 'report', 'decided'),
-  (3, 12, 26, 5, 'drs_dani', '{5,11}'::bigint[], 1, 'Kurve 11', 'Kontakt beim Einlenken, ich musste in die Auslaufzone.', 'https://www.twitch.tv/videos/123456789', '1:02:10', '2026-09-29T14:00:00.000Z', 'demo', 'report', 'new'),
-  (4, 12, 26, 19, 'maxattackmia', '{19,22}'::bigint[], 14, 'Kurve 17', 'Unsicheres Wiedereinfahren nach Dreher direkt vor mir.', 'https://streamable.com/beispiel', NULL, '2026-09-29T17:00:00.000Z', 'demo', 'report', 'in_review')
+  (3, 12, 26, 5, 'drs_dani', '{5,11}'::bigint[], 1, 'Kurve 11', 'Kontakt beim Einlenken, ich musste in die Auslaufzone.', 'https://www.twitch.tv/videos/123456789', '1:02:10', '2026-09-29T15:00:00.000Z', 'demo', 'report', 'new'),
+  (4, 12, 26, 19, 'maxattackmia', '{19,22}'::bigint[], 14, 'Kurve 17', 'Unsicheres Wiedereinfahren nach Dreher direkt vor mir.', 'https://streamable.com/beispiel', NULL, '2026-09-29T18:00:00.000Z', 'demo', 'report', 'in_review')
 on conflict (id) do update set round_id = excluded.round_id, session_id = excluded.session_id, reporter_driver_id = excluded.reporter_driver_id, reporter_contact = excluded.reporter_contact, involved_driver_ids = excluded.involved_driver_ids, lap = excluded.lap, corner = excluded.corner, description = excluded.description, clip_url = excluded.clip_url, clip_timestamp = excluded.clip_timestamp, submitted_at = excluded.submitted_at, ip_hash = excluded.ip_hash, source = excluded.source, status = excluded.status;
 
 -- decisions (6)
@@ -1636,13 +1636,13 @@ on conflict (id) do update set name = excluded.name, logo = excluded.logo, url =
 -- settings (2)
 insert into public.settings (key, value, is_public) values
   ('registration', '{"state":"open","free_seats":0,"free_reserve":4,"note_de":"Alle 22 Cockpits sind vergeben – im Reservepool ist noch Platz.","note_en":"All 22 cockpits are taken – there is still room in the reserve pool."}'::jsonb, true),
-  ('discord_counts', '{"members":214,"online":38,"checked_at":"2026-09-30T14:09:43.529Z"}'::jsonb, true)
+  ('discord_counts', '{"members":214,"online":38,"checked_at":"2026-09-30T15:22:05.072Z"}'::jsonb, true)
 on conflict (key) do update set value = excluded.value, is_public = excluded.is_public;
 
 -- registrations (2)
 insert into public.registrations (id, gamertag, discord_username, ea_id, platform, input_device, nationality, desired_number, wanted_role, availability, experience, reference_time, consents, status, admin_notes, ip_hash, driver_id, processed_by, processed_at) values
-  (1, 'Newcomer_Nele', 'nele_racing', 'Newcomer_Nele', 'playstation', 'controller', 'DE', 42, 'any', 'regular', 'Zwei Saisons in einer anderen Liga', '1:29.812 (Suzuka, Time Trial)', '{"age16":true,"rules":true,"at":"2026-09-29T08:09:43.529Z","rules_version":"1.0"}'::jsonb, 'new', NULL, 'demo', NULL, NULL, NULL),
-  (2, 'Sidepod_Sid', 'sid.sidepod', NULL, 'xbox', 'wheel', NULL, 9, 'reserve', 'mostly', NULL, NULL, '{"age16":true,"rules":true,"at":"2026-09-27T06:09:43.529Z","rules_version":"1.0"}'::jsonb, 'contacted', 'Auf Discord angeschrieben.', NULL, NULL, NULL, '2026-09-28T02:09:43.529Z')
+  (1, 'Newcomer_Nele', 'nele_racing', 'Newcomer_Nele', 'playstation', 'controller', 'DE', 42, 'any', 'regular', 'Zwei Saisons in einer anderen Liga', '1:29.812 (Suzuka, Time Trial)', '{"age16":true,"rules":true,"at":"2026-09-29T09:22:05.072Z","rules_version":"1.0"}'::jsonb, 'new', NULL, 'demo', NULL, NULL, NULL),
+  (2, 'Sidepod_Sid', 'sid.sidepod', NULL, 'xbox', 'wheel', NULL, 9, 'reserve', 'mostly', NULL, NULL, '{"age16":true,"rules":true,"at":"2026-09-27T07:22:05.072Z","rules_version":"1.0"}'::jsonb, 'contacted', 'Auf Discord angeschrieben.', NULL, NULL, NULL, '2026-09-28T03:22:05.072Z')
 on conflict (id) do update set gamertag = excluded.gamertag, discord_username = excluded.discord_username, ea_id = excluded.ea_id, platform = excluded.platform, input_device = excluded.input_device, nationality = excluded.nationality, desired_number = excluded.desired_number, wanted_role = excluded.wanted_role, availability = excluded.availability, experience = excluded.experience, reference_time = excluded.reference_time, consents = excluded.consents, status = excluded.status, admin_notes = excluded.admin_notes, ip_hash = excluded.ip_hash, driver_id = excluded.driver_id, processed_by = excluded.processed_by, processed_at = excluded.processed_at;
 
 -- contact_messages (1)
