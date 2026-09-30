@@ -32,6 +32,26 @@ const steps = hub ? raceDaySteps(hub.facts) : [];
 const fmt = (iso: string | null) => (iso ? `${formatDateTime(iso, 'de')} Uhr` : '–');
 const publicUrl = hub ? url('de', 'race', { season: hub.season.slug, round: hub.round.number }) : null;
 const publicVisible = hub != null && hub.round.status !== 'scheduled';
+
+// Passende Social-Grafiken (Plan Phase 2) je Rundenstatus – das Grafik-Werkzeug zeigt nur veröffentlichte Daten
+const GRAPHIC_LINKS: Record<string, Array<{ motif: string; label: string }>> = {
+  scheduled: [{ motif: 'raceweek', label: 'Race-Week' }],
+  lineup_published: [
+    { motif: 'raceweek', label: 'Race-Week' },
+    { motif: 'grid', label: 'Aufstellung' },
+  ],
+  provisional: [
+    { motif: 'result', label: 'Ergebnis' },
+    { motif: 'pole', label: 'Pole' },
+    { motif: 'grid', label: 'Startaufstellung' },
+    { motif: 'standings-drivers', label: 'Fahrerwertung' },
+  ],
+};
+GRAPHIC_LINKS.final = GRAPHIC_LINKS.provisional!;
+GRAPHIC_LINKS.corrected = GRAPHIC_LINKS.provisional!;
+const graphicLinks = hub ? (GRAPHIC_LINKS[hub.round.status] ?? []) : [];
+const graphicHref = (motif: string) =>
+  hub ? `/admin/grafiken?${new URLSearchParams({ motiv: motif, saison: String(hub.season.id), runde: String(hub.round.id) }).toString()}` : '/admin/grafiken';
 ---
 
 <AdminLayout title={label} breadcrumbs={[{ label: 'Runden', href: '/admin/runden' }, { label }]}>
@@ -136,6 +156,27 @@ const publicVisible = hub != null && hub.round.status !== 'scheduled';
             </a>
           </p>
         </section>
+
+        {graphicLinks.length > 0 && (
+          <section aria-labelledby="graphics-title" class="card mb-8 p-4">
+            <h2 id="graphics-title" class="text-xl uppercase">
+              Social-Grafiken
+            </h2>
+            <p class="mt-1 text-sm text-muted">
+              Grafik im Liga-Design für Instagram, Story, YouTube oder Discord – aus den veröffentlichten Daten dieser Runde.
+            </p>
+            <ul class="mt-3 flex flex-wrap gap-2" aria-label="Grafik erstellen">
+              {graphicLinks.map((g) => (
+                <li>
+                  <a href={graphicHref(g.motif)} class="btn btn-ghost btn-sm">
+                    {g.label}
+                    <span class="sr-only"> – Grafik erstellen</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {hub.corrections.length > 0 && (
           <section aria-labelledby="corr-title">
