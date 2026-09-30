@@ -30,7 +30,7 @@ const aria = (n: string, hint = false) => fieldAria(fid(n), hint, err(n));
   </Field>
   {
     mode === 'edit' ? (
-      <Field id={fid('slug')} label="Slug (Profil-URL)" hint="Adresse /fahrer/<slug>. Folgt dem Gamertag, solange du ihn nicht selbst änderst. Alte Adressen leiten per 301 weiter." error={err('slug')}>
+      <Field id={fid('slug')} label="Slug (Profil-URL)" hint="Adresse /fahrer/<slug>. Folgt dem Gamertag, solange du ihn nicht selbst änderst. Alte Adressen leiten per 301 weiter. Namen fester Unterseiten wie „vergleich“ sind reserviert." error={err('slug')}>
         <input id={fid('slug')} name="slug" class="input font-mono" value={v('slug')} maxlength="60" {...aria('slug', true)} />
       </Field>
     ) : (

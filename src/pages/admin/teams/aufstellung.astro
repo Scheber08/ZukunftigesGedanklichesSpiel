@@ -3,6 +3,8 @@
  * Saisonaufstellung (Plan §5 „Teams und Cockpits“, §6.2 `seats`): Teams der Saison mit
  * Reihenfolge, zwei Cockpits pro Team, Transfers „gültig ab Runde X“ (der bisherige Eintrag
  * endet mit Runde X−1). Ein Fahrer kann nie in zwei Cockpits gleichzeitig sitzen.
+ * Liegt X auf oder vor der letzten gewerteten Runde, gilt der Wechsel rückwirkend (Konstrukteurs-
+ * punkte) – dann warnt das Formular und die Action verlangt eine ausdrückliche Bestätigung.
  */
 export const prerender = false;
 
@@ -17,8 +19,8 @@ import AdminLayout from '~/layouts/AdminLayout.astro';
 import { DRIVER_STATUS_LABELS } from '~/lib/admin/league/labels';
 import { actionOutcome, formValues } from '~/lib/admin/league/page';
 import { FROZEN_MESSAGE, isSeasonFrozen } from '~/lib/admin/league/season';
-import { findSeatConflicts, roundRangeLabel, seatAt } from '~/lib/admin/league/seats';
-import { RESULT_VISIBLE_STATUSES, type DriverRow } from '~/lib/db/types';
+import { findSeatConflicts, roundListLabel, roundRangeLabel, scoredRoundNumbers, seatAt } from '~/lib/admin/league/seats';
+import { RESULT_VISIBLE_STATUSES, type DriverRow, type SeatRow } from '~/lib/db/types';
 import { currentNumber } from '~/lib/domain/numbers';
 import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
@@ -52,6 +54,11 @@ const [seasonTeams, seats, rounds] = season
 const frozen = isSeasonFrozen(season);
 const sortedRounds = [...rounds].sort((a, b) => a.number - b.number);
 const withResults = sortedRounds.filter((r) => RESULT_VISIBLE_STATUSES.includes(r.status));
+const lineupPublished = sortedRounds.filter((r) => r.status === 'lineup_published');
+const scored = scoredRoundNumbers(rounds);
+const lastScored = scored.at(-1) ?? null;
+/** Gewertete Runden, die ein Cockpit-Eintrag abdeckt (Entfernen wirkt dort rückwirkend). */
+const scoredIn = (s: Pick<SeatRow, 'from_round' | 'to_round'>) => scored.filter((n) => n >= s.from_round && (s.to_round == null || n <= s.to_round));
 const nextOpen = sortedRounds.find((r) => r.status !== 'cancelled' && !RESULT_VISIBLE_STATUSES.includes(r.status));
 const defaultRound = nextOpen?.number ?? (sortedRounds.at(-1)?.number ?? 0) + 1;
 const viewRound = Math.max(1, Number(q.get('runde')) || defaultRound);
@@ -109,7 +116,26 @@ const postedSlot = seatForm.active ? `${seatForm.str('team_id')}:${seatForm.str(
         <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
           <p class="text-muted">
             <span class="text-2xl font-bold text-fg tabular">{occupied}</span> von {seasonTeamList.length * 2} Cockpits besetzt (Stand R{viewRound})
-            {withResults.length > 0 && <span class="block text-sm">Runden mit Ergebnis: {withResults.map((r) => `R${r.number}`).join(', ')} – deren Ergebnisse bleiben bei Transfers unverändert.</span>}
+            {withResults.length > 0 && (
+              <span class="block text-sm">
+                Runden mit Ergebnis: {roundListLabel(scored)}. Transfers ab R{(lastScored ?? 0) + 1} lassen sie unberührt; ein Wechsel ab R{lastScored} oder
+                früher gilt rückwirkend und braucht eine Bestätigung.
+              </span>
+            )}
+            {lineupPublished.length > 0 && (
+              <span class="block text-sm">
+                Aufstellung bereits veröffentlicht:{' '}
+                {lineupPublished.map((r, i) => (
+                  <>
+                    {i > 0 && ', '}
+                    <a class="underline hover:text-teal" href={`/admin/runden/${r.id}/grid`}>
+                      R{r.number}
+                    </a>
+                  </>
+                ))}{' '}
+                – Transfers ändern sie nicht automatisch, bitte im Grid-Builder prüfen.
+              </span>
+            )}
           </p>
           <form method="GET" action="/admin/teams/aufstellung" class="flex items-end gap-2">
             <input type="hidden" name="saison" value={season.id} />
@@ -220,7 +246,35 @@ const postedSlot = seatForm.active ? `${seatForm.str('team_id')}:${seatForm.str(
                               <input id={`${fid}-release`} type="checkbox" name="release_other" value="true" checked={own && seatForm.bool('release_other', false)} />
                               <span>Bisheriges Cockpit des Fahrers ab dieser Runde freigeben (Wechsel innerhalb des Grids)</span>
                             </label>
-                            {own && outcome.error && (
+                            {lastScored != null && (
+                              <div class="alert alert-warning grid gap-2 text-sm" data-retro-box data-last-scored={lastScored} data-for={`${fid}-from`}>
+                                <p id={`${fid}-retro-hint`}>
+                                  <span class="font-semibold">Rückwirkende Änderung: </span>
+                                  Gewertet sind {roundListLabel(scored)}. Liegt „Gültig ab Runde“ auf R{lastScored} oder davor, ändert der Wechsel rückwirkend
+                                  die Cockpit-Zuordnung dieser Runden und damit die Konstrukteurspunkte.
+                                </p>
+                                <label class="checkbox" for={`${fid}-retro`}>
+                                  <input
+                                    id={`${fid}-retro`}
+                                    type="checkbox"
+                                    name="confirm_retro"
+                                    value="true"
+                                    checked={own && seatForm.bool('confirm_retro', false)}
+                                    data-retro-confirm
+                                    aria-invalid={own && seatForm.err('confirm_retro') ? 'true' : undefined}
+                                    aria-describedby={`${fid}-retro-hint${own && seatForm.err('confirm_retro') ? ` ${fid}-retro-error` : ''}`}
+                                  />
+                                  <span>Rückwirkende Änderung bestätigen (nur nötig ab R{lastScored} oder früher)</span>
+                                </label>
+                                {own &&
+                                  seatForm.err('confirm_retro')?.map((m) => (
+                                    <p class="field-error" id={`${fid}-retro-error`} role="alert">
+                                      {m}
+                                    </p>
+                                  ))}
+                              </div>
+                            )}
+                            {own && outcome.error && !seatForm.err('confirm_retro') && (
                               <p class="field-error" role="alert">
                                 {outcome.error.message}
                               </p>
@@ -247,7 +301,14 @@ const postedSlot = seatForm.active ? `${seatForm.str('team_id')}:${seatForm.str(
                             <p class="text-sm">
                               Cockpit {s.seat_no}: <span class="font-semibold">{name(s.driver_id)}</span> ({roundRangeLabel(s)})
                             </p>
-                            <ConfirmField id={`seat-remove-${s.id}`} label="Diesen Eintrag entfernen (Fehlerkorrektur)" />
+                            <ConfirmField
+                              id={`seat-remove-${s.id}`}
+                              label={
+                                scoredIn(s).length > 0
+                                  ? `Diesen Eintrag entfernen (Fehlerkorrektur) – betrifft rückwirkend die gewerteten Runden ${roundListLabel(scoredIn(s))} und deren Konstrukteurspunkte`
+                                  : 'Diesen Eintrag entfernen (Fehlerkorrektur)'
+                              }
+                            />
                             <div>
                               <button type="submit" class="btn btn-danger">
                                 Entfernen
@@ -352,3 +413,24 @@ const postedSlot = seatForm.active ? `${seatForm.str('team_id')}:${seatForm.str(
     )
   }
 </AdminLayout>
+
+<script>
+  // Hinweis „rückwirkend“ nur zeigen (und die Bestätigung verlangen), wenn „Gültig ab Runde“ auf
+  // oder vor der letzten gewerteten Runde liegt. Ohne JavaScript bleibt der Hinweis sichtbar,
+  // die Action prüft ohnehin serverseitig.
+  for (const box of document.querySelectorAll<HTMLElement>('[data-retro-box]')) {
+    const last = Number(box.dataset.lastScored);
+    const input = document.getElementById(box.dataset.for ?? '');
+    const confirm = box.querySelector<HTMLInputElement>('[data-retro-confirm]');
+    if (!(input instanceof HTMLInputElement) || !confirm || !Number.isFinite(last)) continue;
+    const update = () => {
+      const from = Number(input.value);
+      const retro = input.value.trim() !== '' && Number.isFinite(from) && from <= last;
+      box.hidden = !retro;
+      confirm.required = retro;
+      if (!retro) confirm.checked = false;
+    };
+    input.addEventListener('input', update);
+    update();
+  }
+</script>

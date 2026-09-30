@@ -54,6 +54,7 @@
   "forms.join.status.closed": "Sign-ups closed",
   "forms.join.status.freeSeats": "Free cockpits: {n}",
   "forms.join.status.freeReserve": "Free reserve places: {n}",
+  "forms.join.status.updated": "As of {date}",
   "forms.join.status.waitlistText": "All places are taken at the moment. Sign up anyway – you will go on the waiting list and we will get in touch as soon as a place opens up.",
   "forms.join.status.closedText": "We are not taking new sign-ups at the moment. Drop by on Discord – that is where we announce when they reopen.",
   "forms.join.requirements.title": "Requirements",

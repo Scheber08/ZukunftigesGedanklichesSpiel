@@ -54,6 +54,7 @@
   "forms.join.status.closed": "Anmeldung geschlossen",
   "forms.join.status.freeSeats": "Freie Cockpits: {n}",
   "forms.join.status.freeReserve": "Freie Reserveplätze: {n}",
+  "forms.join.status.updated": "Stand: {date}",
   "forms.join.status.waitlistText": "Gerade sind alle Plätze vergeben. Melde dich trotzdem an – du kommst auf die Warteliste und wir melden uns, sobald etwas frei wird.",
   "forms.join.status.closedText": "Gerade nehmen wir keine neuen Anmeldungen an. Schau im Discord vorbei – dort kündigen wir an, wann es wieder losgeht.",
   "forms.join.requirements.title": "Voraussetzungen",

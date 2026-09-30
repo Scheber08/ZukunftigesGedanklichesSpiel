@@ -1,9 +1,11 @@
 ---
 /**
- * Einstellungen (Plan §5 „Einstellungen“, §8.1–8.3), nur Admin:
+ * Einstellungen (Plan §5 „Einstellungen“, §8.1–8.3, Phase 3 Discord-Bot), nur Admin:
  * Discord-Invite (+ Invites je Quelle), Webhooks je Channel (maskiert, mit Test),
  * Social-Links, Twitch-Kanal (leer = aus), GA4-Messungs-ID, Discord-Rollen je App-Rolle,
- * Anmeldestatus, Startseiten-Claim und der Stand des gebündelten Neubaus.
+ * Discord-Bot (Status, Interactions-Endpunkt, Selbstrollen), Anmeldestatus und der Stand
+ * des gebündelten Neubaus. Der Startseiten-Claim wird nur angezeigt – gepflegt wird er an
+ * EINER Stelle: Seiten-Inhalte → Texte (Redaktion und Admins).
  */
 export const prerender = false;
 
@@ -13,6 +15,7 @@ import Field from '~/components/admin/ui/Field.astro';
 import Notice from '~/components/admin/core/Notice.astro';
 import Section from '~/components/admin/core/Section.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
+import { interactionsEndpoint, MAX_SELF_ROLES, selfRolesWithStaffRights } from '~/lib/admin/league/discord-bot';
 import { maskSecret } from '~/lib/admin/league/forms';
 import {
   INVITE_SOURCE_LABELS,
@@ -28,6 +31,7 @@ import type { PrivateSettings, RegistrationState } from '~/lib/settings';
 import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 import { env, isDemoMode } from '~/lib/server/env';
+import { siteUrl } from '~/lib/server/discord';
 import { readPrivateSettings, readPublicSettings } from '~/lib/server/settings';
 
 if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
@@ -40,19 +44,23 @@ const outcome = await actionOutcome(Astro, [
   A.settingsAnalytics,
   A.settingsRoles,
   A.settingsRegistration,
-  A.settingsHome,
+  A.settingsSelfRoleSave,
+  A.settingsSelfRoleRemove,
   A.settingsRebuild,
 ]);
 if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
 
 const store = getServiceStore();
-const [pub, priv, seasons, accounts, reserveDrivers] = await Promise.all([
+const [pub, priv, seasons, accounts, reserveDrivers, settingRows] = await Promise.all([
   readPublicSettings(store),
   readPrivateSettings(store),
   store.select('seasons'),
   store.select('staff_accounts'),
   store.select('drivers', { eq: { status: 'reserve' } }),
+  store.select('settings', { in: { key: ['home', 'registration'] } }),
 ]);
+/** Zuletzt geändert (updated_at der Einstellung), null = noch nie gespeichert */
+const changedAt = (key: string) => settingRows.find((r) => r.key === key)?.updated_at ?? null;
 const now = new Date();
 const demo = isDemoMode();
 const rebuild = rebuildSummary(priv.rebuild, now);
@@ -70,7 +78,16 @@ const fSocial = formValues(outcome, A.settingsSocial);
 const fGa = formValues(outcome, A.settingsAnalytics);
 const fRoles = formValues(outcome, A.settingsRoles);
 const fReg = formValues(outcome, A.settingsRegistration);
-const fHome = formValues(outcome, A.settingsHome);
+const fSelf = formValues(outcome, A.settingsSelfRoleSave);
+const selfRoles = priv.discord_self_roles.roles;
+const riskyRoles = selfRolesWithStaffRights(selfRoles, priv.discord_role_map);
+const endpoint = interactionsEndpoint(siteUrl('/'));
+const botStatus = [
+  { label: 'DISCORD_APPLICATION_ID', ok: !!env.discordApplicationId, hint: 'Application ID aus dem Entwicklerportal (General Information).' },
+  { label: 'DISCORD_PUBLIC_KEY', ok: !!env.discordPublicKey, hint: 'Public Key – damit prüft der Worker die Signatur jeder Interaktion.' },
+  { label: 'DISCORD_BOT_TOKEN', ok: !!env.discordBotToken, hint: 'Bot-Token – für Rollenprüfung beim Login und die Rollenvergabe.' },
+  { label: 'DISCORD_GUILD_ID', ok: !!env.discordGuildId, hint: 'ID des Liga-Servers.' },
+];
 const states = Object.keys(REGISTRATION_STATE_LABELS) as RegistrationState[];
 const stateHints: Record<RegistrationState, string> = {
   open: 'Formular offen, freie Plätze werden angezeigt.',
@@ -81,7 +98,15 @@ const yesNo = (v: boolean) => (v ? 'eingerichtet' : 'fehlt');
 ---
 
 <AdminLayout title="Einstellungen" breadcrumbs={[{ label: 'Einstellungen' }]}>
-  <Notice outcome={outcome} warnings={demo ? ['Demo-Modus: Einstellungen landen nur im Speicher, Webhooks und Neubau sind ohne Wirkung.'] : []} />
+  <Notice
+    outcome={outcome}
+    warnings={[
+      ...(demo ? ['Demo-Modus: Einstellungen landen nur im Speicher, Webhooks und Neubau sind ohne Wirkung.'] : []),
+      ...riskyRoles.map(
+        (r) => `Die Selbstrolle „${r.label_de}“ (${r.role_id}) gibt zugleich Rechte im Admin-Bereich – entferne sie unter „Discord-Bot“ oder aus den Discord-Rollen.`,
+      ),
+    ]}
+  />
 
   <nav aria-label="Abschnitte" class="mb-6">
     <ul class="flex flex-wrap gap-2 text-sm">
@@ -90,6 +115,7 @@ const yesNo = (v: boolean) => (v ? 'eingerichtet' : 'fehlt');
       <li><a class="btn btn-ghost" href="#social">Social & Twitch</a></li>
       <li><a class="btn btn-ghost" href="#analytics">Analytics</a></li>
       <li><a class="btn btn-ghost" href="#rollen">Rollen</a></li>
+      <li><a class="btn btn-ghost" href="#discord-bot">Discord-Bot</a></li>
       <li><a class="btn btn-ghost" href="#anmeldung">Anmeldestatus</a></li>
       <li><a class="btn btn-ghost" href="#startseite">Startseite</a></li>
       <li><a class="btn btn-ghost" href="#rebuild">Neubau</a></li>
@@ -323,10 +349,128 @@ const yesNo = (v: boolean) => (v ? 'eingerichtet' : 'fehlt');
   </Section>
 
   <Section
+    title="Discord-Bot"
+    id="discord-bot"
+    description="Serverloser Bot mit Slash-Befehlen (nächstes Rennen, Wertung) und Rollenvergabe. Discord ruft dafür den Interactions-Endpunkt der Website auf."
+  >
+    <h3 class="mb-2 text-lg uppercase">Status</h3>
+    <ul class="mb-4 grid gap-3 sm:grid-cols-2">
+      {
+        botStatus.map((b) => (
+          <li class="flex items-start gap-2">
+            {b.ok ? <Badge variant="green">gesetzt</Badge> : <Badge variant="warning">fehlt</Badge>}
+            <span class="min-w-0">
+              <span class="break-all font-mono text-sm">{b.label}</span>
+              <span class="block text-sm text-muted">{b.hint}</span>
+            </span>
+          </li>
+        ))
+      }
+    </ul>
+    <p class="mb-6 text-sm text-muted">Die Werte sind Worker-Secrets (wrangler secret put) und werden hier nie angezeigt.</p>
+
+    <div class="mb-6 grid gap-2">
+      <label class="label" for="bot-endpoint">Interactions-Endpunkt</label>
+      <div class="flex flex-wrap gap-2">
+        <input id="bot-endpoint" class="input min-w-0 flex-1 font-mono text-sm" value={endpoint} readonly aria-describedby="bot-endpoint-hint" />
+        <button type="button" class="btn btn-secondary" data-copy="bot-endpoint">Kopieren</button>
+      </div>
+      <p id="bot-endpoint-hint" class="field-hint">
+        Im Discord-Entwicklerportal unter General Information → Interactions Endpoint URL eintragen. Discord prüft die Adresse beim Speichern mit
+        einer signierten Anfrage – dafür muss DISCORD_PUBLIC_KEY gesetzt sein.
+      </p>
+      <p class="sr-only" role="status" aria-live="polite" data-copy-status></p>
+    </div>
+
+    <h3 class="mb-1 text-lg uppercase">Selbstrollen</h3>
+    <p class="mb-3 max-w-prose text-sm text-muted">
+      Rollen, die sich Mitglieder per Bot selbst geben oder nehmen dürfen (z. B. „Renntag-Ping“), höchstens {MAX_SELF_ROLES}. Rollen mit Rechten im
+      Admin-Bereich sind ausgeschlossen.
+    </p>
+    <p class="alert alert-warning mb-4 text-sm">
+      <span class="font-semibold">Rollen-Hierarchie: </span>
+      Der Bot braucht die Berechtigung „Rollen verwalten“, und seine eigene Rolle muss unter Server-Einstellungen → Rollen ÜBER allen Selbstrollen
+      stehen. Sonst lehnt Discord die Vergabe ab.
+    </p>
+    {
+      selfRoles.length === 0 ? (
+        <p class="mb-6 text-muted">Noch keine Selbstrollen – der Bot bietet dann keine Rollenvergabe an.</p>
+      ) : (
+        <div class="table-wrap mb-6">
+          <table class="timing-table">
+            <caption class="sr-only">Selbstrollen des Discord-Bots</caption>
+            <thead>
+              <tr>
+                <th scope="col">Bezeichnung (DE)</th>
+                <th scope="col">Bezeichnung (EN)</th>
+                <th scope="col">Rollen-ID</th>
+                <th scope="col">
+                  <span class="sr-only">Aktion</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {selfRoles.map((r) => (
+                <tr>
+                  <th scope="row">{r.label_de}</th>
+                  <td lang="en">{r.label_en}</td>
+                  <td class="font-mono text-sm">{r.role_id}</td>
+                  <td>
+                    <form method="POST" action={A.settingsSelfRoleRemove}>
+                      <input type="hidden" name="role_id" value={r.role_id} />
+                      <button type="submit" class="btn btn-danger btn-sm min-h-11">
+                        Entfernen<span class="sr-only"> ({r.label_de})</span>
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    <form method="POST" action={A.settingsSelfRoleSave} class="grid gap-4">
+      <h4 class="text-base font-semibold">Selbstrolle hinzufügen oder umbenennen</h4>
+      <div class="grid gap-4 sm:grid-cols-3">
+        <Field id="self-role-id" label="Rollen-ID" required hint="17–20 Ziffern. Bekannte ID = Bezeichnungen ändern." error={fSelf.err('role_id')}>
+          <input
+            id="self-role-id"
+            name="role_id"
+            class="input font-mono"
+            inputmode="numeric"
+            pattern="[0-9]{17,20}"
+            minlength="17"
+            maxlength="20"
+            autocomplete="off"
+            spellcheck="false"
+            value={fSelf.str('role_id')}
+            required
+            {...fieldAria('self-role-id', true, fSelf.err('role_id'))}
+          />
+        </Field>
+        <Field id="self-role-de" label="Bezeichnung (DE)" required error={fSelf.err('label_de')}>
+          <input id="self-role-de" name="label_de" class="input" maxlength="60" value={fSelf.str('label_de')} required {...fieldAria('self-role-de', false, fSelf.err('label_de'))} />
+        </Field>
+        <Field id="self-role-en" label="Bezeichnung (EN)" hint="Leer = deutsche Bezeichnung." error={fSelf.err('label_en')}>
+          <input id="self-role-en" name="label_en" class="input" maxlength="60" lang="en" value={fSelf.str('label_en')} {...fieldAria('self-role-en', true, fSelf.err('label_en'))} />
+        </Field>
+      </div>
+      <div>
+        <button type="submit" class="btn btn-primary">Selbstrolle speichern</button>
+      </div>
+    </form>
+  </Section>
+
+  <Section
     title="Anmeldestatus"
     id="anmeldung"
     description="Steuert die Seite „Mitfahren“ und die Anzeige freier Plätze. Die Texte kann auch die Redaktion unter Seiten-Inhalte → Texte pflegen."
   >
+    <p class="mb-4 text-sm text-muted">
+      Zuletzt geändert: {changedAt('registration') ? formatDateTime(changedAt('registration')!, 'de') : 'noch nie'} – „Mitfahren“ zeigt dieses Datum als
+      Stand an.
+    </p>
     <form method="POST" action={A.settingsRegistration} class="grid gap-4">
       <fieldset class="grid min-w-0 gap-2">
         <legend class="label mb-1">Zustand</legend>
@@ -370,19 +514,23 @@ const yesNo = (v: boolean) => (v ? 'eingerichtet' : 'fehlt');
   </Section>
 
   <Section title="Startseite" id="startseite" description="Claim unter dem Logo im Hero der Startseite.">
-    <form method="POST" action={A.settingsHome} class="grid gap-4">
-      <div class="grid gap-4 sm:grid-cols-2">
-        <Field id="set-claim-de" label="Claim (DE)" required error={fHome.err('claim_de')}>
-          <input id="set-claim-de" name="claim_de" class="input" value={fHome.str('claim_de', pub.home.claim_de)} maxlength="160" required {...fieldAria('set-claim-de', false, fHome.err('claim_de'))} />
-        </Field>
-        <Field id="set-claim-en" label="Claim (EN)" required error={fHome.err('claim_en')}>
-          <input id="set-claim-en" name="claim_en" class="input" value={fHome.str('claim_en', pub.home.claim_en)} maxlength="160" required lang="en" {...fieldAria('set-claim-en', false, fHome.err('claim_en'))} />
-        </Field>
+    <dl class="grid gap-4 sm:grid-cols-2">
+      <div>
+        <dt class="micro">Claim (DE)</dt>
+        <dd class="mt-1 break-words">{pub.home.claim_de}</dd>
       </div>
       <div>
-        <button type="submit" class="btn btn-primary">Speichern</button>
+        <dt class="micro">Claim (EN)</dt>
+        <dd class="mt-1 break-words" lang="en">{pub.home.claim_en}</dd>
       </div>
-    </form>
+    </dl>
+    <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <p class="min-w-0 flex-1 text-sm text-muted">
+        Gepflegt wird der Claim an einer Stelle: Seiten-Inhalte → Texte (Redaktion und Admins).
+        {changedAt('home') && <> Zuletzt geändert: {formatDateTime(changedAt('home')!, 'de')}.</>}
+      </p>
+      <a class="btn btn-secondary" href="/admin/inhalte/texte">Claim bearbeiten</a>
+    </div>
   </Section>
 
   <Section
@@ -417,3 +565,28 @@ const yesNo = (v: boolean) => (v ? 'eingerichtet' : 'fehlt');
     </form>
   </Section>
 </AdminLayout>
+
+<script>
+  // „Kopieren“ für den Interactions-Endpunkt: Zwischenablage, sonst Text markieren (Strg+C).
+  const status = document.querySelector<HTMLElement>('[data-copy-status]');
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy]')) {
+    const input = document.getElementById(button.dataset.copy ?? '');
+    if (!(input instanceof HTMLInputElement)) continue;
+    button.addEventListener('click', async () => {
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(input.value);
+        copied = true;
+      } catch {
+        input.focus();
+        input.select();
+      }
+      const text = copied ? 'Adresse kopiert.' : 'Adresse markiert – mit Strg+C kopieren.';
+      if (status) status.textContent = text;
+      button.textContent = copied ? 'Kopiert' : 'Markiert';
+      window.setTimeout(() => {
+        button.textContent = 'Kopieren';
+      }, 2500);
+    });
+  }
+</script>

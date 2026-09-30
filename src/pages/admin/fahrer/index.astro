@@ -109,7 +109,24 @@ const filterHref = (s: string | null) => {
   <Section title={`${list.length} Fahrer`} id="liste">
     {
       list.length === 0 ? (
-        <p class="text-muted">Keine Fahrer gefunden.</p>
+        <p class="text-muted">
+          {q || status ? (
+            <>
+              Keine Fahrer gefunden{q ? ` für „${q}“` : ''}{status ? ` mit Status „${DRIVER_STATUS_LABELS[status]}“` : ''}.{' '}
+              <a class="inline-flex min-h-[44px] items-center underline" href="/admin/fahrer">
+                Filter zurücksetzen
+              </a>
+            </>
+          ) : (
+            <>
+              Noch keine Fahrer. Lege unten einen an oder nimm eine{' '}
+              <a class="underline" href="/admin/anmeldungen">
+                Anmeldung
+              </a>{' '}
+              an.
+            </>
+          )}
+        </p>
       ) : (
         <div class="table-wrap">
           <table class="timing-table">

@@ -20,6 +20,7 @@ import { DRIVER_STATUS_BADGE, DRIVER_STATUS_LABELS, REGISTRATION_STATUS_LABELS }
 import { freeNumbers, numberState } from '~/lib/admin/league/numbers';
 import { actionOutcome, fieldAria, formValues } from '~/lib/admin/league/page';
 import { roundRangeLabel } from '~/lib/admin/league/seats';
+import { isReservedSlug, reservedSlugMessage } from '~/lib/admin/league/slugs';
 import { numberHistory } from '~/lib/domain/numbers';
 import { formatDateTime } from '~/lib/domain/time';
 import { hasRole } from '~/lib/server/auth';
@@ -90,7 +91,10 @@ const teamOf = (id: number) => teams.find((t) => t.id === id);
 
   <Notice
     outcome={outcome}
-    warnings={driver.anonymized ? ['Dieser Fahrer wurde auf Wunsch pseudonymisiert. Ergebnisse bleiben für die Wertung erhalten, persönliche Daten sind gelöscht.'] : []}
+    warnings={[
+      ...(driver.anonymized ? ['Dieser Fahrer wurde auf Wunsch pseudonymisiert. Ergebnisse bleiben für die Wertung erhalten, persönliche Daten sind gelöscht.'] : []),
+      ...(!driver.anonymized && isReservedSlug('driver', driver.slug) ? [`${reservedSlugMessage('driver', driver.slug)} Die Profilseite ist unter diesem Slug nicht erreichbar.`] : []),
+    ]}
   />
 
   <p class="mb-6 flex flex-wrap items-center gap-2 text-sm text-muted">

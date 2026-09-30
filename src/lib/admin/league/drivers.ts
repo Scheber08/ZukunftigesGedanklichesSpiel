@@ -4,12 +4,14 @@
 import type { DriverNumberRow, DriverRow, Id, RegistrationRow, RoundRow, SeasonRow } from '~/lib/db/types';
 import { isNumberAvailable, MAX_NUMBER, MIN_PUBLIC_NUMBER } from '~/lib/domain/numbers';
 import { gamertagKey, normalizeGamertag, slugify, uniqueSlug } from '~/lib/domain/text';
+import { autoSlug, RESERVED_DRIVER_SLUGS } from './slugs';
 
-/** Eindeutiger Slug für einen Gamertag (der eigene aktuelle Slug zählt nicht als belegt). */
+/**
+ * Eindeutiger Slug für einen Gamertag (der eigene aktuelle Slug zählt nicht als belegt).
+ * Reservierte Slugs fester Unterseiten (z. B. „vergleich“) bekommen einen Zähler („vergleich-2“).
+ */
 export function driverSlug(gamertag: string, takenSlugs: Iterable<string>, ownSlug?: string): string {
-  const taken = new Set(takenSlugs);
-  if (ownSlug) taken.delete(ownSlug);
-  return uniqueSlug(slugify(gamertag), taken);
+  return autoSlug('driver', gamertag, takenSlugs, ownSlug);
 }
 
 /** Wurde der Slug automatisch aus dem Gamertag erzeugt (ggf. mit Zähler „-2“)? */
@@ -72,6 +74,7 @@ export function pseudonymizedDriverPatch(
 ): Pick<DriverRow, 'gamertag' | 'slug' | 'anonymized' | 'nationality_code' | 'twitch_url' | 'youtube_url' | 'show_links' | 'status' | 'reserve_order'> {
   const taken = new Set(takenSlugs);
   taken.delete(driver.slug);
+  for (const r of RESERVED_DRIVER_SLUGS) taken.add(r);
   return {
     gamertag: pseudonym(driver.id),
     slug: uniqueSlug(`ehemaliger-fahrer-${driver.id}`, taken),

@@ -2,7 +2,9 @@
 /**
  * Texte der Startseite und des Anmeldestatus (Plan §5 Seiten-Inhalte): Claim DE/EN,
  * Anmeldestatus (offen / Warteliste / geschlossen), freie Plätze und Hinweis DE/EN.
- * Gespeichert als öffentliche Einstellungen „home“ und „registration“. Rolle: Redaktion/Admin.
+ * Gespeichert als öffentliche Einstellungen „home“ und „registration“ (Patch-Semantik).
+ * Einzige Stelle für den Startseiten-Claim – die Einstellungsseite zeigt ihn nur an.
+ * Rolle: Redaktion/Admin.
  */
 import { actions } from 'astro:actions';
 import ActionMessage from '~/components/admin/ui/ActionMessage.astro';
@@ -13,6 +15,7 @@ import NoAccess from '~/components/admin/content/NoAccess.astro';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import { fieldErrors, flashMessage, pick, submittedValues } from '~/lib/admin/content/form';
 import { REGISTRATION_STATE_LABELS } from '~/lib/admin/content/labels';
+import { formatDateTime } from '~/lib/domain/time';
 import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 import { readPublicSettings } from '~/lib/server/settings';
@@ -29,7 +32,14 @@ const submitted = await submittedValues(Astro.request, Boolean(result?.error));
 const errors = fieldErrors(result?.error);
 
 let settings: PublicSettings = DEFAULT_PUBLIC_SETTINGS;
-if (allowed) settings = await readPublicSettings(getServiceStore());
+let changed: Record<string, string> = {};
+if (allowed) {
+  const store = getServiceStore();
+  const [pub, rows] = await Promise.all([readPublicSettings(store), store.select('settings', { in: { key: ['home', 'registration'] } })]);
+  settings = pub;
+  changed = Object.fromEntries(rows.map((r) => [r.key, r.updated_at]));
+}
+const changedText = (key: string) => (changed[key] ? `Zuletzt geändert: ${formatDateTime(changed[key]!, 'de')}.` : 'Noch nicht geändert (Standardtext).');
 const v = {
   claim_de: pick(submitted, 'claim_de', settings.home.claim_de),
   claim_en: pick(submitted, 'claim_en', settings.home.claim_en),
@@ -62,7 +72,9 @@ const flash = flashMessage(Astro.url, { saved: 'Texte gespeichert – sichtbar n
             <h2 id="h-home" class="mb-1 text-2xl">
               Startseite
             </h2>
-            <p class="mb-4 text-sm text-muted">Der Claim steht groß im Hero-Bereich unter dem Liganamen.</p>
+            <p class="mb-4 text-sm text-muted">
+              Der Claim steht groß im Hero-Bereich unter dem Liganamen. Nur hier gepflegt – die Einstellungen zeigen ihn lediglich an. {changedText('home')}
+            </p>
             <div class="grid gap-4">
               <Field id="claim_de" label="Claim (DE)" required error={err('claim_de')}>
                 <input class="input" id="claim_de" name="claim_de" required maxlength="160" lang="de" value={v.claim_de} aria-invalid={err('claim_de') ? 'true' : undefined} aria-describedby={err('claim_de') ? 'claim_de-error' : undefined} />
@@ -77,7 +89,9 @@ const flash = flashMessage(Astro.url, { saved: 'Texte gespeichert – sichtbar n
             <h2 id="h-reg" class="mb-1 text-2xl">
               Anmeldestatus
             </h2>
-            <p class="mb-4 text-sm text-muted">Erscheint auf der Startseite und auf „Mitfahren“.</p>
+            <p class="mb-4 text-sm text-muted">
+              Erscheint auf der Startseite und auf „Mitfahren“ (dort mit Datum „Stand“). {changedText('registration')}
+            </p>
             <fieldset class="grid gap-2">
               <legend class="label mb-1">Status</legend>
               {STATES.map((s) => (

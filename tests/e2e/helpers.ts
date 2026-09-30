@@ -40,10 +40,15 @@ export async function expectNoA11yViolations(page: Page, options: { exclude?: st
   expect(report, `axe-Verstöße auf ${new URL(page.url()).pathname}`).toEqual([]);
 }
 
-/** Genau eine h1 pro Seite (Plan §10). */
+/**
+ * Genau eine h1 pro Seite (Plan §10). Gezählt wird das Dokument selbst: Playwright-Locators
+ * durchdringen Shadow-DOM, und gegen den Dev-Server (E2E_LIVE) bringt die Astro-Dev-Toolbar
+ * eigene h1 in ihrem Shadow-DOM mit. Unsere Seiten und Islands nutzen kein Shadow-DOM.
+ */
 export async function expectSingleH1(page: Page): Promise<void> {
-  await expect(page.locator('h1')).toHaveCount(1);
-  await expect(page.locator('h1')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.querySelectorAll('h1').length), { message: 'Anzahl h1 im Dokument' }).toBe(1);
+  // Die Toolbar hängt am Ende von <body> – die erste h1 ist die der Seite
+  await expect(page.locator('h1').first()).toBeVisible();
 }
 
 /** Die Seite darf nicht breiter als das Fenster sein (Tabellen scrollen in .table-wrap). */
@@ -63,11 +68,26 @@ export async function expectNoHorizontalScroll(page: Page): Promise<void> {
   expect(overflow.extra, `horizontal scrollbar – zu breit: ${overflow.offenders.join(', ')}`).toBeLessThanOrEqual(0);
 }
 
-/** Wartet, bis alle Astro-Islands hydriert sind (Astro entfernt dann das ssr-Attribut). */
-export async function waitForIslands(page: Page): Promise<void> {
-  await page.waitForFunction(() => [...document.querySelectorAll('astro-island')].every((el) => !el.hasAttribute('ssr')), null, {
-    timeout: 20_000,
-  });
+/**
+ * Wartet, bis alle Astro-Islands hydriert sind (Astro entfernt dann das ssr-Attribut).
+ *
+ * Erst muss das Dokument vollständig geparst sein: Direkt nach einer Weiterleitung (z. B. dem
+ * Demo-Login) ist die neue URL schon gesetzt, das HTML aber noch nicht da. Ohne diese Bedingung
+ * fände die Prüfung noch KEINE Islands und wäre sofort „erfüllt“ – der Test klickte dann auf das
+ * serverseitig gerenderte, noch nicht hydrierte Markup (unter Last flaky, z. B. der
+ * Grid-Builder-Tastaturtest). `min` verlangt zusätzlich eine Mindestanzahl Islands.
+ */
+export async function waitForIslands(page: Page, options: { min?: number } = {}): Promise<void> {
+  await page.waitForLoadState('load');
+  await page.waitForFunction(
+    (min) => {
+      if (document.readyState !== 'complete') return false;
+      const islands = [...document.querySelectorAll('astro-island')];
+      return islands.length >= min && islands.every((el) => !el.hasAttribute('ssr'));
+    },
+    options.min ?? 0,
+    { timeout: 20_000 },
+  );
 }
 
 /**
@@ -87,10 +107,14 @@ export async function openTab(page: Page, name: string | RegExp): Promise<void> 
 
 export type DemoRole = 'Admin' | 'Steward' | 'Redaktion';
 
-/** Demo-Login (nur im Demo-Modus) über die Knöpfe auf /admin/login. */
+/**
+ * Demo-Login (nur im Demo-Modus) über die Knöpfe auf /admin/login. Kehrt erst zurück, wenn die
+ * Zielseite nach der Weiterleitung vollständig geladen ist (nicht schon beim URL-Wechsel).
+ */
 export async function demoLogin(page: Page, role: DemoRole, next = '/admin'): Promise<void> {
   await page.goto(`/admin/login?next=${encodeURIComponent(next)}`);
   await page.getByRole('button', { name: `Als Demo-${role} anmelden`, exact: true }).click();
+  await page.waitForURL((url) => !url.pathname.startsWith('/admin/login'), { waitUntil: 'load' });
   await expect(page).not.toHaveURL(/\/admin\/login/);
 }
 

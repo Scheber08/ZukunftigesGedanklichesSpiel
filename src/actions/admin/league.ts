@@ -39,10 +39,13 @@ import {
   roundHasResults,
   syncSessions,
 } from '~/lib/admin/league/ops';
+import { planSelfRoleRemove, planSelfRoleUpsert } from '~/lib/admin/league/discord-bot';
 import { WEBHOOK_CHANNEL_LABELS } from '~/lib/admin/league/labels';
 import type { AdminActionData } from '~/lib/admin/league/page';
 import { FROZEN_MESSAGE, isSeasonFrozen, openRoundsBeforeFinish } from '~/lib/admin/league/season';
-import { planSeatChange } from '~/lib/admin/league/seats';
+import { planSeatChange, retroConfirmMessage, seatChangeRetro } from '~/lib/admin/league/seats';
+import { applySettingPatch, isPublicSettingKey, writeSettingValue, type SettingKey, type SettingValue } from '~/lib/admin/league/settings-patch';
+import { autoSlug, slugProblem } from '~/lib/admin/league/slugs';
 import { insertOne, selectOne, UNIQUE_VIOLATION, type Store } from '~/lib/db/store';
 import {
   DRIVER_STATUSES,
@@ -55,14 +58,14 @@ import {
   type SeasonRow,
 } from '~/lib/db/types';
 import { isHttpUrl, normalizeGamertag, slugify } from '~/lib/domain/text';
-import type { PrivateSettings, PublicSettings } from '~/lib/settings';
+import type { PrivateSettings } from '~/lib/settings';
 import { audit } from '~/lib/server/audit';
 import { getServiceStore } from '~/lib/server/db';
 import { EMBED_TEAL, inviteCodeFromUrl, sendWebhook, type WebhookChannel } from '~/lib/server/discord';
 import { isDemoMode } from '~/lib/server/env';
 import { requestRebuild } from '~/lib/server/rebuild';
 import { recordSlugChange } from '~/lib/server/redirects';
-import { readPrivateSettings, readPublicSettings, writeSetting } from '~/lib/server/settings';
+import { readPrivateSettings } from '~/lib/server/settings';
 import { staffFrom, toActionError } from '../_helpers';
 
 // ============================================================================ Helfer
@@ -832,8 +835,18 @@ const teamSave = defineAction({
     const store = getServiceStore();
     try {
       const all = await store.select('teams');
-      const slug = input.slug || slugify(input.name);
-      if (all.some((t) => t.slug === slug && t.id !== input.id)) throw fieldError({ slug: `Der Slug „${slug}“ ist schon vergeben.` });
+      const current = input.id ? all.find((t) => t.id === input.id) : undefined;
+      if (input.id && !current) throw notFound('Team');
+      const others = all.filter((t) => t.id !== input.id).map((t) => t.slug);
+      // Eigener Slug: prüfen (vergeben, reserviert); leer: aus dem Namen, eindeutig und nie reserviert
+      let slug: string;
+      if (input.slug) {
+        const problem = slugProblem('team', input.slug, others, current?.slug);
+        if (problem) throw fieldError({ slug: problem });
+        slug = input.slug;
+      } else {
+        slug = autoSlug('team', input.name, others);
+      }
       const row = {
         name: input.name,
         short_name: input.short_name.toUpperCase(),
@@ -843,9 +856,8 @@ const teamSave = defineAction({
         game_team_id: input.game_team_id ?? null,
         active: input.active,
       };
-      if (input.id) {
-        const before = all.find((t) => t.id === input.id);
-        if (!before) throw notFound('Team');
+      if (current) {
+        const before = current;
         const [saved] = await store.update('teams', { id: before.id }, row);
         await slugChanged(store, 'team', before.slug, row.slug);
         await audit(store, staff, 'update', 'teams', before.id, before, saved);
@@ -965,6 +977,8 @@ const seatSave = defineAction({
     driver_id: optId,
     from_round: int('Gültig ab Runde', 1, 99),
     release_other: bool,
+    /** Pflicht, wenn „ab Runde X“ auf oder vor der letzten gewerteten Runde liegt */
+    confirm_retro: z.boolean().optional(),
   }),
   handler: async (input, context) => {
     const staff = staffFrom(context, 'admin');
@@ -974,11 +988,15 @@ const seatSave = defineAction({
       assertNotFrozen(season);
       const [inSeason] = await store.select('season_teams', { eq: { season_id: season.id, team_id: input.team_id } });
       if (!inSeason) throw bad('Das Team gehört nicht zu dieser Saison.');
-      const [seats, drivers, teams] = await Promise.all([
+      const [seats, drivers, teams, rounds] = await Promise.all([
         store.select('seats', { eq: { season_id: season.id } }),
         store.select('drivers'),
         store.select('teams'),
+        store.select('rounds', { eq: { season_id: season.id } }),
       ]);
+      // Rückwirkender Wechsel (Konstrukteurspunkte bereits gewerteter Runden) nur mit Bestätigung
+      const retro = seatChangeRetro(rounds, input.from_round);
+      if (retro.retroactive && !input.confirm_retro) throw fieldError({ confirm_retro: retroConfirmMessage(retro, input.from_round) });
       if (input.driver_id != null) {
         const d = drivers.find((x) => x.id === input.driver_id);
         if (!d) throw fieldError({ driver_id: 'Fahrer nicht gefunden.' });
@@ -1004,9 +1022,24 @@ const seatSave = defineAction({
       const touched = new Set<Id>([...plan.deletes, ...plan.updates.map((u) => u.id)]);
       const beforeRows = seats.filter((s) => touched.has(s.id));
       await applySeatPlan(store, plan);
-      await audit(store, staff, 'update', 'seats', null, { seats: beforeRows }, { deleted: plan.deletes, updated: plan.updates, inserted: plan.insert });
+      await audit(
+        store,
+        staff,
+        'update',
+        'seats',
+        null,
+        { seats: beforeRows },
+        {
+          deleted: plan.deletes,
+          updated: plan.updates,
+          inserted: plan.insert,
+          ...(retro.retroactive ? { retroactive_rounds: retro.affectedRounds } : {}),
+        },
+      );
       await requestRebuild(store, `Cockpit ${season.name}`);
-      return done(plan.notes.length > 0 ? 'seat_moved' : 'seat_saved', `/admin/teams/aufstellung?saison=${season.id}#team-${input.team_id}`);
+      const target = `/admin/teams/aufstellung?saison=${season.id}#team-${input.team_id}`;
+      if (retro.retroactive) return done('seat_saved_retro', target, retro.affectedRounds.length);
+      return done(plan.notes.length > 0 ? 'seat_moved' : 'seat_saved', target);
     } catch (err) {
       fail(err);
     }
@@ -1078,8 +1111,10 @@ const driverSave = defineAction({
         throw fieldError({ youtube_url: 'Bitte einen YouTube-Link eintragen.' });
       }
       const next = nextDriverSlug({ gamertag, slug: input.slug }, before, drivers.map((d) => d.slug));
-      if (next.custom && drivers.some((d) => d.slug === next.slug && d.id !== input.id)) {
-        throw fieldError({ slug: `Der Slug „${next.slug}“ ist schon vergeben.` });
+      if (next.custom) {
+        // Selbst eingetragener Slug: nicht vergeben und nicht für feste Unterseiten reserviert
+        const problem = slugProblem('driver', next.slug, drivers.filter((d) => d.id !== input.id).map((d) => d.slug), before?.slug);
+        if (problem) throw fieldError({ slug: problem });
       }
       const slug = next.slug;
       if (input.joined_season_id != null && !(await selectOne(store, 'seasons', { id: input.joined_season_id }))) {
@@ -1336,32 +1371,40 @@ const registrationDelete = defineAction({
 
 // ============================================================================ Einstellungen (nur Admin)
 
-const WEBHOOK_CHANNELS = ['registrations', 'lineup', 'results', 'incidents', 'decisions', 'news', 'contact'] as const satisfies readonly WebhookChannel[];
+/** Alle Webhook-Channels inkl. Social-Grafiken (Plan Phase 2). */
+const WEBHOOK_CHANNELS = ['registrations', 'lineup', 'results', 'incidents', 'decisions', 'news', 'contact', 'graphics'] as const satisfies readonly WebhookChannel[];
 
-async function savePublic<K extends keyof PublicSettings>(
+type AuditStaff = Parameters<typeof audit>[1];
+
+/**
+ * Objekt-Einstellung mit Patch-Semantik speichern: nur die übermittelten Unterschlüssel
+ * ändern sich, alle anderen Felder bleiben erhalten. Protokolliert (optional maskiert) und
+ * fordert bei öffentlichen Schlüsseln einen Neubau an.
+ */
+async function patchSettings<K extends SettingKey>(
   store: Store,
-  staff: Parameters<typeof audit>[1],
+  staff: AuditStaff,
   key: K,
-  value: PublicSettings[K],
-): Promise<void> {
-  const before = (await readPublicSettings(store))[key];
-  await writeSetting(store, key, value as never);
+  patch: Partial<SettingValue<K>>,
+  mask?: (v: SettingValue<K>) => unknown,
+): Promise<SettingValue<K>> {
+  const { before, after, changed } = await applySettingPatch(store, key, patch);
+  if (!changed) return after;
+  const m = mask ?? ((v: SettingValue<K>) => v);
+  await audit(store, staff, 'update', 'settings', key, m(before) as object, m(after) as object);
+  if (isPublicSettingKey(key)) await requestRebuild(store, `Einstellung ${key}`);
+  return after;
+}
+
+/** Einzelwert-Einstellung (Twitch-Kanal, GA-ID) setzen. */
+async function setSettingValue<K extends 'twitch_channel' | 'ga_measurement_id'>(store: Store, staff: AuditStaff, key: K, value: SettingValue<K>): Promise<void> {
+  const { before, changed } = await writeSettingValue(store, key, value);
+  if (!changed) return;
   await audit(store, staff, 'update', 'settings', key, { [key]: before }, { [key]: value });
   await requestRebuild(store, `Einstellung ${key}`);
 }
 
-async function savePrivate<K extends keyof PrivateSettings>(
-  store: Store,
-  staff: Parameters<typeof audit>[1],
-  key: K,
-  value: PrivateSettings[K],
-  mask?: (v: PrivateSettings[K]) => unknown,
-): Promise<void> {
-  const before = (await readPrivateSettings(store))[key];
-  await writeSetting(store, key, value as never);
-  const m = mask ?? ((v: PrivateSettings[K]) => v);
-  await audit(store, staff, 'update', 'settings', key, { [key]: m(before) }, { [key]: m(value) });
-}
+const maskWebhooks = (v: PrivateSettings['webhooks']) => Object.fromEntries(Object.entries(v).map(([k, url]) => [k, url ? maskSecret(url) : null]));
 
 const inviteField = (label: string) =>
   z
@@ -1389,8 +1432,8 @@ const settingsDiscord = defineAction({
     const store = getServiceStore();
     try {
       const url = input.invite_url || null;
-      await savePublic(store, staff, 'discord_invite', { url, code: inviteCodeFromUrl(url) });
-      await savePrivate(store, staff, 'discord_invites', {
+      await patchSettings(store, staff, 'discord_invite', { url, code: inviteCodeFromUrl(url) });
+      await patchSettings(store, staff, 'discord_invites', {
         website: input.invite_website || null,
         instagram: input.invite_instagram || null,
         tiktok: input.invite_tiktok || null,
@@ -1410,21 +1453,19 @@ const settingsWebhooks = defineAction({
     const staff = staffFrom(context, 'admin');
     const store = getServiceStore();
     try {
-      const current = (await readPrivateSettings(store)).webhooks;
-      const next = { ...current };
+      const patch: Partial<PrivateSettings['webhooks']> = {};
       const errors: Record<string, string> = {};
       for (const ch of WEBHOOK_CHANNELS) {
         const raw = String(form.get(`wh_${ch}`) ?? '').trim();
-        if (form.has(`clear_${ch}`)) next[ch] = null;
+        if (form.has(`clear_${ch}`)) patch[ch] = null;
         else if (raw !== '') {
           if (!isDiscordWebhookUrl(raw)) errors[`wh_${ch}`] = 'Keine gültige Discord-Webhook-URL (https://discord.com/api/webhooks/…).';
-          else next[ch] = raw;
+          else patch[ch] = raw;
         }
       }
       if (Object.keys(errors).length > 0) throw fieldError(errors);
-      await savePrivate(store, staff, 'webhooks', next, (v) =>
-        Object.fromEntries(Object.entries(v).map(([k, url]) => [k, url ? maskSecret(url) : null])),
-      );
+      if (Object.keys(patch).length === 0) return done('settings_unchanged', '/admin/einstellungen#webhooks');
+      await patchSettings(store, staff, 'webhooks', patch, maskWebhooks);
       return done('settings_saved', '/admin/einstellungen#webhooks');
     } catch (err) {
       fail(err);
@@ -1478,12 +1519,12 @@ const settingsSocial = defineAction({
     try {
       const twitch = parseTwitchChannel(input.twitch_channel);
       if (twitch.error) throw fieldError({ twitch_channel: twitch.error });
-      await savePublic(store, staff, 'socials', {
+      await patchSettings(store, staff, 'socials', {
         instagram: input.instagram || null,
         tiktok: input.tiktok || null,
         youtube: input.youtube || null,
       });
-      await savePublic(store, staff, 'twitch_channel', twitch.channel);
+      await setSettingValue(store, staff, 'twitch_channel', twitch.channel);
       return done('settings_saved', '/admin/einstellungen#social');
     } catch (err) {
       fail(err);
@@ -1504,7 +1545,7 @@ const settingsAnalytics = defineAction({
     const staff = staffFrom(context, 'admin');
     const store = getServiceStore();
     try {
-      await savePublic(store, staff, 'ga_measurement_id', input.ga_measurement_id ? input.ga_measurement_id.toUpperCase() : null);
+      await setSettingValue(store, staff, 'ga_measurement_id', input.ga_measurement_id ? input.ga_measurement_id.toUpperCase() : null);
       return done('settings_saved', '/admin/einstellungen#analytics');
     } catch (err) {
       fail(err);
@@ -1524,15 +1565,23 @@ const settingsRoles = defineAction({
         steward: parseSnowflakes(input.steward),
         redakteur: parseSnowflakes(input.redakteur),
       };
+      // Staff-Rollen dürfen nie zugleich Selbstrollen sein (sonst könnte sich jeder Rechte geben)
+      const selfRoles = new Set((await readPrivateSettings(store)).discord_self_roles.roles.map((r) => r.role_id));
       const errors: Record<string, string> = {};
       for (const [k, v] of Object.entries(parsed)) {
         if (v.invalid.length > 0) errors[k] = `Keine gültigen Rollen-IDs: ${v.invalid.join(', ')} (je 15–21 Ziffern)`;
+        else {
+          const self = v.ids.filter((x) => selfRoles.has(x));
+          if (self.length > 0) {
+            errors[k] = `${self.join(', ')} ist als Selbstrolle eingetragen (jedes Mitglied kann sie sich geben) – entferne sie zuerst unter „Discord-Bot“.`;
+          }
+        }
       }
       if (Object.keys(errors).length > 0) throw fieldError(errors);
       if (!isDemoMode() && parsed.admin.ids.length === 0) {
         throw fieldError({ admin: 'Mindestens eine Admin-Rolle ist nötig – sonst sperrst du dich selbst aus.' });
       }
-      await savePrivate(store, staff, 'discord_role_map', {
+      await patchSettings(store, staff, 'discord_role_map', {
         admin: parsed.admin.ids,
         steward: parsed.steward.ids,
         redakteur: parsed.redakteur.ids,
@@ -1544,6 +1593,11 @@ const settingsRoles = defineAction({
   },
 });
 
+/**
+ * Anmeldestatus (Zustand, freie Plätze, Hinweis). Dieselben Felder pflegt die Redaktion unter
+ * Seiten-Inhalte → Texte; dank Patch-Semantik überschreiben sich die Formulare nicht gegenseitig.
+ * Der Startseiten-Claim hat nur noch EINE Quelle: Seiten-Inhalte → Texte.
+ */
 const settingsRegistration = defineAction({
   accept: 'form',
   input: z.object({
@@ -1557,7 +1611,7 @@ const settingsRegistration = defineAction({
     const staff = staffFrom(context, 'admin');
     const store = getServiceStore();
     try {
-      await savePublic(store, staff, 'registration', {
+      await patchSettings(store, staff, 'registration', {
         state: input.state,
         free_seats: input.free_seats,
         free_reserve: input.free_reserve,
@@ -1571,15 +1625,42 @@ const settingsRegistration = defineAction({
   },
 });
 
-const settingsHome = defineAction({
+/** Discord-Bot: Selbstrolle hinzufügen bzw. die Bezeichnungen einer bestehenden Rolle ändern. */
+const settingsSelfRoleSave = defineAction({
   accept: 'form',
-  input: z.object({ claim_de: req('Claim (DE)', 160), claim_en: req('Claim (EN)', 160) }),
+  input: z.object({
+    role_id: z.string({ error: 'Rollen-ID fehlt.' }).trim().max(32, 'Rollen-ID: nur Ziffern, 17–20 Stellen.'),
+    label_de: z.string().max(200, 'Bezeichnung (DE): zu lang.').optional(),
+    label_en: z.string().max(200, 'Bezeichnung (EN): zu lang.').optional(),
+  }),
   handler: async (input, context) => {
     const staff = staffFrom(context, 'admin');
     const store = getServiceStore();
     try {
-      await savePublic(store, staff, 'home', { claim_de: input.claim_de, claim_en: input.claim_en });
-      return done('settings_saved', '/admin/einstellungen#startseite');
+      const priv = await readPrivateSettings(store);
+      const plan = planSelfRoleUpsert(priv.discord_self_roles.roles, input, priv.discord_role_map);
+      if (Object.keys(plan.errors).length > 0) throw fieldError(plan.errors);
+      await patchSettings(store, staff, 'discord_self_roles', { roles: plan.roles });
+      return done(plan.updated ? 'self_role_updated' : 'self_role_added', '/admin/einstellungen#discord-bot');
+    } catch (err) {
+      fail(err);
+    }
+  },
+});
+
+/** Discord-Bot: Selbstrolle entfernen (die Rolle auf dem Discord-Server bleibt bestehen). */
+const settingsSelfRoleRemove = defineAction({
+  accept: 'form',
+  input: z.object({ role_id: z.string({ error: 'Rollen-ID fehlt.' }).trim().max(32, 'Ungültige Rollen-ID.') }),
+  handler: async (input, context) => {
+    const staff = staffFrom(context, 'admin');
+    const store = getServiceStore();
+    try {
+      const priv = await readPrivateSettings(store);
+      const plan = planSelfRoleRemove(priv.discord_self_roles.roles, input.role_id);
+      if (!plan.removed) throw notFound('Selbstrolle');
+      await patchSettings(store, staff, 'discord_self_roles', { roles: plan.roles });
+      return done('self_role_removed', '/admin/einstellungen#discord-bot');
     } catch (err) {
       fail(err);
     }
@@ -1679,7 +1760,8 @@ export const leagueActions = {
   settingsAnalytics,
   settingsRoles,
   settingsRegistration,
-  settingsHome,
+  settingsSelfRoleSave,
+  settingsSelfRoleRemove,
   settingsRebuild,
   contactUpdate,
   contactDelete,

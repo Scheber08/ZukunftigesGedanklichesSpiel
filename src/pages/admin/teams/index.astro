@@ -119,7 +119,7 @@ const f = formValues(outcome, actions.admin.teamSave);
         <Field id="team-short" label="Kurzname" required hint="2–5 Zeichen, z. B. MCL." error={f.err('short_name')}>
           <input id="team-short" name="short_name" class="input uppercase" value={f.str('short_name')} minlength="2" maxlength="5" required {...fieldAria('team-short', true, f.err('short_name'))} />
         </Field>
-        <Field id="team-slug" label="Slug" hint="Leer = aus dem Namen." error={f.err('slug')}>
+        <Field id="team-slug" label="Slug" hint="Leer = aus dem Namen. Namen fester Unterseiten (z. B. „vergleich“) sind reserviert." error={f.err('slug')}>
           <input id="team-slug" name="slug" class="input font-mono" value={f.str('slug')} maxlength="40" {...fieldAria('team-slug', true, f.err('slug'))} />
         </Field>
         <Field id="team-game" label="Spiel-ID (UDP)" hint="Team-ID aus der Telemetrie, für den späteren Import." error={f.err('game_team_id')}>

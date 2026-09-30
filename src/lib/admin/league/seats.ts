@@ -3,9 +3,57 @@
  * Transfers während der Saison „gültig ab Runde X“. Ein Fahrer darf nie in zwei
  * Cockpits gleichzeitig sitzen. Reine Planungsfunktionen.
  */
-import type { Id, SeatRow } from '~/lib/db/types';
+import { RESULT_VISIBLE_STATUSES, type Id, type RoundRow, type SeatRow } from '~/lib/db/types';
 
 type Seat = Pick<SeatRow, 'id' | 'season_id' | 'team_id' | 'seat_no' | 'driver_id' | 'from_round' | 'to_round'>;
+
+// ---------------------------------------------------------------------------- Rückwirkende Änderungen
+
+export interface RetroCheck {
+  /** „Gültig ab Runde X“ liegt auf oder vor der letzten gewerteten Runde */
+  retroactive: boolean;
+  /** Höchste Rundennummer mit Ergebnis (vorläufig, final oder korrigiert), sonst null */
+  lastScoredRound: number | null;
+  /** Gewertete Runden ab X (aufsteigend) – deren Cockpit-Zuordnung ändert sich rückwirkend */
+  affectedRounds: number[];
+}
+
+/** Rundennummern mit gewertetem Ergebnis (vorläufig, final, korrigiert), aufsteigend. */
+export function scoredRoundNumbers(rounds: ReadonlyArray<Pick<RoundRow, 'number' | 'status'>>): number[] {
+  return rounds
+    .filter((r) => RESULT_VISIBLE_STATUSES.includes(r.status))
+    .map((r) => r.number)
+    .sort((a, b) => a - b);
+}
+
+/**
+ * Transfer bzw. Cockpit-Wechsel „ab Runde X“ (Plan §5 „Teams und Cockpits“): Liegt X auf oder
+ * vor der letzten bereits gewerteten Runde, ändert der Wechsel rückwirkend die Zuordnung von
+ * Fahrer und Cockpit – und damit Stamm-/Reserve-Rolle und Konstrukteurspunkte, sobald diese
+ * Runden neu berechnet werden (Korrektur, Steward-Urteil, erneutes Speichern). Das darf nur
+ * mit ausdrücklicher Bestätigung passieren.
+ */
+export function seatChangeRetro(rounds: ReadonlyArray<Pick<RoundRow, 'number' | 'status'>>, fromRound: number): RetroCheck {
+  const scored = scoredRoundNumbers(rounds);
+  const lastScoredRound = scored.at(-1) ?? null;
+  const retroactive = lastScoredRound != null && Number.isFinite(fromRound) && fromRound <= lastScoredRound;
+  return { retroactive, lastScoredRound, affectedRounds: retroactive ? scored.filter((n) => n >= fromRound) : [] };
+}
+
+/** Kurze Rundenliste „R2, R3, R4“ bzw. „R1–R6“ bei vielen aufeinanderfolgenden Runden. */
+export function roundListLabel(numbers: readonly number[]): string {
+  if (numbers.length === 0) return '';
+  const sorted = [...numbers].sort((a, b) => a - b);
+  const consecutive = sorted.every((n, i) => i === 0 || n === sorted[i - 1]! + 1);
+  if (consecutive && sorted.length > 3) return `R${sorted[0]}–R${sorted.at(-1)}`;
+  return sorted.map((n) => `R${n}`).join(', ');
+}
+
+/** Verständliche Meldung, wenn die Bestätigung für einen rückwirkenden Wechsel fehlt. */
+export function retroConfirmMessage(check: RetroCheck, fromRound: number): string {
+  const rounds = roundListLabel(check.affectedRounds);
+  return `Runde ${fromRound} liegt auf oder vor der letzten gewerteten Runde (R${check.lastScoredRound}). Der Wechsel ändert rückwirkend die Cockpit-Zuordnung der gewerteten Runden (${rounds}) – und damit deren Konstrukteurspunkte. Setze das Häkchen „Rückwirkende Änderung bestätigen“ oder wähle eine spätere Runde.`;
+}
 
 export interface SeatChangeInput {
   season_id: Id;

@@ -37,6 +37,7 @@ import {
   versionsToArchive,
   versionTaken,
 } from '~/lib/admin/content/rules';
+import { applySettingPatch } from '~/lib/admin/league/settings-patch';
 import { audit, type AuditAction } from '~/lib/server/audit';
 import type { Staff } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
@@ -44,7 +45,6 @@ import { EMBED_TEAL, notify, siteUrl } from '~/lib/server/discord';
 import { env, isDemoMode } from '~/lib/server/env';
 import { requestRebuild } from '~/lib/server/rebuild';
 import { recordSlugChange } from '~/lib/server/redirects';
-import { patchSetting, readPublicSettings } from '~/lib/server/settings';
 import { staffFrom, toActionError } from '../_helpers';
 
 // ---------------------------------------------------------------------------- Helfer
@@ -894,18 +894,27 @@ const inhalteActions = {
       const staff = staffFrom(context, 'redakteur');
       const store = getServiceStore();
       try {
-        const before = await readPublicSettings(store);
-        const home = { claim_de: input.claim_de, claim_en: input.claim_en };
-        const registration = {
+        // Einzige Quelle des Startseiten-Claims (die Einstellungsseite zeigt ihn nur an).
+        // Patch-Semantik: nur diese Unterschlüssel ändern sich, weitere Felder bleiben erhalten.
+        const home = await applySettingPatch(store, 'home', { claim_de: input.claim_de, claim_en: input.claim_en });
+        const registration = await applySettingPatch(store, 'registration', {
           state: input.registration_state,
           free_seats: input.free_seats,
           free_reserve: input.free_reserve,
           note_de: orNull(input.note_de),
           note_en: orNull(input.note_en),
-        };
-        await patchSetting(store, 'home', home);
-        await patchSetting(store, 'registration', registration);
-        await audit(store, staff, 'update', 'settings', 'home,registration', { home: before.home, registration: before.registration }, { home, registration });
+        });
+        // Unverändert gespeichert: kein Protokolleintrag, kein Neubau
+        if (!home.changed && !registration.changed) return { ok: true };
+        await audit(
+          store,
+          staff,
+          'update',
+          'settings',
+          'home,registration',
+          { home: home.before, registration: registration.before },
+          { home: home.after, registration: registration.after },
+        );
         await requestRebuild(store, 'Texte der Startseite/Anmeldestatus');
         return { ok: true };
       } catch (err) {

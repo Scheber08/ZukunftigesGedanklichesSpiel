@@ -32,7 +32,9 @@ import { countryOptions } from '~/lib/forms/countries';
 import { collectErrors } from '~/lib/forms/errors';
 import { LIMITS } from '~/lib/forms/schemas';
 import { posted, postedChecked, postedForm } from '~/lib/forms/values';
+import { formatDate } from '~/lib/domain/time';
 import { REQUIREMENTS } from '~/lib/seed/content/guide';
+import { getPublicStore } from '~/lib/server/db';
 import { loadPublicSettings } from '~/lib/server/league';
 import { breadcrumbJsonLd } from '~/lib/view';
 
@@ -43,8 +45,18 @@ const { lang } = Astro.props;
 const t = useT(lang);
 Astro.response.headers.set('Cache-Control', 'private, no-store');
 
-const settings = await loadPublicSettings();
+const [settings, regRows] = await Promise.all([
+  loadPublicSettings(),
+  // Nur der Zeitstempel der Einstellung „registration“ (Stand des Anmeldestatus)
+  getPublicStore()
+    .select('settings', { eq: { key: 'registration' }, limit: 1 })
+    .catch(() => []),
+]);
 const reg = settings.registration;
+const regUpdatedAt = regRows[0]?.updated_at ?? null;
+const regUpdatedLabel = regUpdatedAt ? formatDate(regUpdatedAt, lang, { day: 'numeric', month: 'long', year: 'numeric' }) : null;
+// „Stand: {date}“ – Datum als <time>, Text davor/danach aus der Übersetzung
+const [updatedBefore = '', updatedAfter = ''] = t('forms.join.status.updated').split('{date}');
 const regNote = lang === 'de' ? reg.note_de : (reg.note_en ?? reg.note_de);
 const open = reg.state !== 'closed';
 const discordUrl = settings.discord_invite.url;
@@ -111,7 +123,20 @@ const steps = [1, 2, 3, 4] as const;
             )
           }
         </div>
-        {regNote && <p class="text-sm text-muted md:ml-auto md:max-w-sm">{regNote}</p>}
+        {
+          (regNote || regUpdatedLabel) && (
+            <div class="grid gap-1 text-sm text-muted md:ml-auto md:max-w-sm md:text-right">
+              {regNote && <p>{regNote}</p>}
+              {regUpdatedLabel && (
+                <p class="text-xs">
+                  {updatedBefore}
+                  <time datetime={regUpdatedAt!}>{regUpdatedLabel}</time>
+                  {updatedAfter}
+                </p>
+              )}
+            </div>
+          )
+        }
       </div>
     </section>
 

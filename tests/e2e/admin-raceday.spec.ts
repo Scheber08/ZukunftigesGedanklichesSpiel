@@ -288,3 +288,30 @@ test.describe('Zugriffsschutz', () => {
     expect(response?.headers()['x-robots-tag']).toContain('noindex');
   });
 });
+
+test.describe('Saisonaufstellung', () => {
+  // Nur lesend: Das Formular wird nie mit gültigen Werten abgeschickt.
+  test('Transfer „ab Runde X“ in gewertete Runden verlangt eine Bestätigung', async ({ page }) => {
+    await demoLogin(page, 'Admin', '/admin/teams/aufstellung');
+    const card = page.locator('section[id^="team-"]').first();
+    await card.getByText(/^(Transfer \/ neu besetzen|Cockpit besetzen)$/).first().click();
+    const form = card.locator('form').filter({ has: page.locator('input[name="from_round"]') }).first();
+    const box = form.locator('[data-retro-box]');
+    const last = Number(await box.getAttribute('data-last-scored'));
+    expect(last, 'Demo-Saison ohne gewertete Runde').toBeGreaterThan(0);
+    const from = form.getByLabel('Gültig ab Runde');
+    const confirm = form.getByRole('checkbox', { name: /Rückwirkende Änderung bestätigen/ });
+
+    await from.fill(String(last + 1));
+    await expect(box).toBeHidden();
+    await from.fill(String(last));
+    await expect(box).toBeVisible();
+    await expect(box).toContainText('Konstrukteurspunkte');
+    await expect(confirm).toHaveJSProperty('required', true);
+
+    // Ohne Häkchen verhindert schon der Browser das Absenden
+    await form.getByRole('button', { name: 'Übernehmen' }).click();
+    await expect(page).toHaveURL(/\/admin\/teams\/aufstellung$/);
+    expect(await confirm.evaluate((el) => (el as HTMLInputElement).validity.valueMissing)).toBe(true);
+  });
+});
