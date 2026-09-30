@@ -14,6 +14,7 @@ const PUBLIC_PAGES = [
   '/ergebnisse',
   '/fahrer',
   '/fahrer/apexanna',
+  '/fahrer/vergleich',
   '/teams',
   '/teams/mclaren',
   '/stewards',
@@ -27,6 +28,8 @@ const PUBLIC_PAGES = [
   '/liga/faq',
   '/liga/ueber-uns',
   '/hall-of-fame',
+  '/strecken',
+  '/strecken/melbourne',
   '/archiv',
   '/kontakt',
   '/impressum',
@@ -37,6 +40,8 @@ const PUBLIC_PAGES = [
   '/en/races/2/4',
   '/en/drivers/apexanna',
   '/en/join',
+  '/en/stewards',
+  '/en/tracks',
   '/en/league/rules',
 ];
 
@@ -70,17 +75,23 @@ test.describe('axe – Admin-Bereich', () => {
     ['Admin', '/admin/kalender'],
     ['Admin', '/admin/anmeldungen'],
     ['Admin', '/admin/einstellungen'],
+    ['Admin', '/admin/runden/12/import'],
+    ['Admin', '/admin/auszeichnungen'],
+    ['Admin', '/admin/saisons/2'],
     ['Steward', '/admin/stewards'],
     ['Steward', '/admin/stewards/neu'],
     ['Redaktion', '/admin/news'],
     ['Redaktion', '/admin/news/neu'],
     ['Redaktion', '/admin/regelwerk'],
+    ['Redaktion', '/admin/grafiken'],
+    ['Redaktion', '/admin/overlays'],
   ];
 
   for (const [role, path] of ADMIN_PAGES) {
     test(`${path} (Demo-${role})`, async ({ page }) => {
       await demoLogin(page, role, path);
-      await expect(page).toHaveURL(new RegExp(`${path.replace(/\//g, '\\/')}$`));
+      // Seiten wie /admin/grafiken schreiben ihre Auswahl als Query in die URL – nur den Pfad prüfen
+      await expect(page).toHaveURL(new RegExp(`${path.replace(/\//g, '\\/')}(\\?.*)?$`));
       await waitForIslands(page);
       await expectSingleH1(page);
       await expectNoA11yViolations(page);
