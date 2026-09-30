@@ -27,6 +27,7 @@ import {
   resultPayload,
   standingsPayload,
   tickerPayload,
+  type SnapshotPart,
 } from '~/lib/server/live-data';
 
 const NOW = new Date('2026-10-15T12:00:00Z');
@@ -68,7 +69,7 @@ const dataset = demoDataset(NOW);
 const league = leagueFrom(dataset);
 const season = league.currentSeason!;
 
-async function snapshot(parts = ['results', 'entries', 'seats'] as const, data: Dataset = demoDataset(NOW), now = NOW) {
+async function snapshot(parts: SnapshotPart[] = ['results', 'entries', 'seats'], data: Dataset = demoDataset(NOW), now = NOW) {
   return loadLiveSnapshot(new MemoryStore(data), parts, now);
 }
 

@@ -21,6 +21,7 @@
     "db:seed:generate": "node --experimental-strip-types scripts/generate-seed-sql.ts",
     "db:seed:demo": "node --experimental-strip-types scripts/generate-seed-sql.ts --demo",
     "db:seed:check": "node --experimental-strip-types scripts/generate-seed-sql.ts --check",
+    "discord:register": "node --experimental-strip-types scripts/discord-register-commands.ts",
     "deploy": "astro build && wrangler deploy",
     "cf-typegen": "wrangler types"
   },

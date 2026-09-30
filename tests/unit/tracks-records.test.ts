@@ -111,7 +111,7 @@ describe('Rekorde', () => {
     const template = data.results![0]!;
     data.results!.push({ ...template, id: 99_001, session_id: race.id, position: 1, best_lap_ms: 1000, status: 'classified', is_fastest_lap: true } as ResultRow);
     const l = leagueFrom(data);
-    const rec = trackRecords(l, r5.track_id);
+    const rec = trackRecords(l, r5.track_id!);
     expect(rec.races).toBe(0);
     expect(rec.fastestRaceLap).toBeNull();
     expect(rec.wins).toEqual([]);
@@ -127,12 +127,12 @@ describe('Rekorde', () => {
     victim.best_lap_ms = 60_000;
     victim.status = 'dsq';
     victim.position = null;
-    const rec = trackRecords(leagueFrom(data), suzuka.id);
+    const rec = trackRecords(leagueFrom(data), suzuka.id!);
     expect(rec.fastestRaceLap?.ms).toBeGreaterThan(60_000);
     // ohne DSQ wäre es der Rekord
     victim.status = 'classified';
     victim.position = 10;
-    expect(trackRecords(leagueFrom(data), suzuka.id).fastestRaceLap?.ms).toBe(60_000);
+    expect(trackRecords(leagueFrom(data), suzuka.id!).fastestRaceLap?.ms).toBe(60_000);
   });
 
   it('bei gleicher Zeit gilt, wer sie zuerst gefahren ist', () => {
@@ -143,7 +143,7 @@ describe('Rekorde', () => {
     const rows = data.results!.filter((r) => r.session_id === race.id && r.status === 'classified');
     rows[3]!.best_lap_ms = 50_000;
     rows[1]!.best_lap_ms = 50_000;
-    const rec = trackRecords(leagueFrom(data), suzuka.id);
+    const rec = trackRecords(leagueFrom(data), suzuka.id!);
     // gleiche Runde → kleinere eingegebene Position zuerst
     expect(rec.fastestRaceLap?.result.id).toBe(rows[1]!.id);
   });
