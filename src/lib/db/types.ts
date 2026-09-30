@@ -140,6 +140,16 @@ export interface LobbySettings {
 }
 
 /** Strafpunkte-System je Saison (Plan Phase 2); leere Felder = Standardwerte */
+/** Renntag-Fristen je Saison (Plan §11.1). Fehlende Werte = Standard 24 h / 2 h / 72 h. */
+export interface RacedayDeadlines {
+  /** Aufstellung steht so viele Stunden vor dem Start */
+  lineup_hours_before?: number | null;
+  /** Ergebnis ist so viele Stunden nach dem Start eingetragen */
+  results_hours_after?: number | null;
+  /** Stewards entscheiden so viele Stunden nach Ende der Protestfrist */
+  decisions_hours_after_protest?: number | null;
+}
+
 export interface PenaltyPointsConfig {
   /** Hinweis ab dieser Summe */
   warning_threshold?: number | null;
@@ -162,6 +172,8 @@ export interface SeasonRow extends Timestamps {
   two_steward_rule: boolean;
   penalty_points_enabled: boolean;
   penalty_points_config: PenaltyPointsConfig;
+  /** Renntag-Fristen (Plan §11.1); fehlende Werte = Standard */
+  raceday_deadlines: RacedayDeadlines;
   lobby_settings: LobbySettings;
   rules_version_id: Id | null;
   starts_on: IsoDate | null;
@@ -251,6 +263,8 @@ export interface DriverRow extends Timestamps {
   youtube_url: string | null;
   show_links: boolean;
   anonymized: boolean;
+  /** 16–17 Jahre: öffentlich nur Gamertag (Plan §9.3); nie in drivers_public */
+  is_minor: boolean;
 }
 
 export interface DriverPrivateRow extends Timestamps {
@@ -412,6 +426,8 @@ export interface NewsRow extends Timestamps {
   cover_image: string | null;
   cover_alt_de: string | null;
   cover_alt_en: string | null;
+  /** Eigenes Vorschaubild 1200×630 (sonst Titelbild bzw. Liga-Standard) */
+  og_image: string | null;
   category: NewsCategory;
   round_id: Id | null;
   author_id: string | null;

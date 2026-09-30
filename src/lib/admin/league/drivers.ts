@@ -154,6 +154,7 @@ export function planAcceptRegistration(
       youtube_url: null,
       show_links: false,
       anonymized: false,
+      is_minor: false,
     },
     private: {
       discord_username: reg.discord_username || null,

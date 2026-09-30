@@ -109,6 +109,7 @@ const season = (over: Partial<SeasonRow> = {}): SeasonRow => ({
   two_steward_rule: true,
   penalty_points_enabled: false,
   penalty_points_config: {},
+  raceday_deadlines: {},
   lobby_settings: { groups: [{ key: 'lobby', title_de: 'Lobby', items: [] }] },
   rules_version_id: 1,
   starts_on: '2026-01-01',
