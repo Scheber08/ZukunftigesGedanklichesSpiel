@@ -166,14 +166,14 @@
       <span class="micro">Windows (PowerShell)</span>
       <button type="button" class="btn btn-ghost btn-sm" onclick={() => copy(psCommand, 'ps')}>{copied === 'ps' ? 'Kopiert' : 'Kopieren'}</button>
     </div>
-    <pre class="mono" aria-label="Befehl für PowerShell"><code>{psCommand}</code></pre>
+    <pre class="mono"><code>{psCommand}</code></pre>
   </div>
   <div class="cmd mt-3">
     <div class="cmd-head">
       <span class="micro">macOS/Linux (Bash)</span>
       <button type="button" class="btn btn-ghost btn-sm" onclick={() => copy(shCommand, 'sh')}>{copied === 'sh' ? 'Kopiert' : 'Kopieren'}</button>
     </div>
-    <pre class="mono" aria-label="Befehl für Bash"><code>{shCommand}</code></pre>
+    <pre class="mono"><code>{shCommand}</code></pre>
   </div>
   <p class="small muted mt-3">
     Weitere Optionen: <code>--dry-run</code> (nur lokal sichern), <code>--record feldtest.ndjson</code> (Pakete mitschneiden),
@@ -219,7 +219,7 @@
   pre {
     margin: 0;
     padding: 0.75rem;
-    overflow-x: auto;
-    white-space: pre;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 </style>

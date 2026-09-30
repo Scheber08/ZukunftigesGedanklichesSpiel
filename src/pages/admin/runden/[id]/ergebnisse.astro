@@ -45,6 +45,11 @@ let importError: string | null = null;
 if (ctx && importId != null) {
   try {
     prefill = await importPrefill(getServiceStore(), ctx.basics.round.id, importId);
+    if (prefill.rows.length === 0) {
+      // Nichts zuzuordnen – nicht mit einer leeren Tabelle das gespeicherte Ergebnis überschreiben
+      importError = `Keine Zeile des Stapels #${prefill.batchId} ließ sich einem Fahrer der Aufstellung zuordnen – bitte Startnummern und Grid-Builder prüfen.`;
+      prefill = null;
+    }
   } catch (err) {
     if (!(err instanceof RacedayError)) throw err;
     importError = err.headline;
