@@ -26,6 +26,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { label: 'Regelwerk', href: '/admin/regelwerk', roles: ['admin'], group: 'Inhalte' },
   { label: 'Seiten-Inhalte', href: '/admin/inhalte', roles: ['redakteur', 'admin'], group: 'Inhalte' },
   { label: 'Grafiken', href: '/admin/grafiken', roles: ['redakteur', 'admin'], group: 'Inhalte' },
+  { label: 'Stream-Overlays', href: '/admin/overlays', roles: ['redakteur', 'admin'], group: 'Inhalte' },
   { label: 'Kontaktanfragen', href: '/admin/kontakt', roles: ['admin'], group: 'System' },
   { label: 'Einstellungen', href: '/admin/einstellungen', roles: ['admin'], group: 'System' },
   { label: 'Audit-Log', href: '/admin/audit', roles: ['admin'], group: 'System' },

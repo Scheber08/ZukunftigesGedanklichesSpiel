@@ -2,6 +2,7 @@
  * Alle Astro Actions. Öffentliche Formulare direkt, Admin-Aktionen unter `admin.*`
  * (die Middleware setzt dafür `locals.staff`, jede Action prüft die Rolle selbst).
  */
+import { awardsActions } from './admin/awards';
 import { contentActions } from './admin/content';
 import { extrasActions } from './admin/extras';
 import { graphicsActions } from './admin/graphics';
@@ -19,5 +20,6 @@ export const server = {
     ...importActions,
     ...graphicsActions,
     ...extrasActions,
+    ...awardsActions,
   },
 };
