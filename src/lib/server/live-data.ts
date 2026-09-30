@@ -44,6 +44,7 @@ import { currentNumber } from '../domain/numbers';
 import { driverStandings, teamStandings, type DriverStanding, type StandingsInput, type TeamStanding } from '../domain/standings';
 import { gamertagKey } from '../domain/text';
 import { formatDateLong, formatTime, timeZoneName } from '../domain/time';
+import { isReservedDriverSlug } from '../people';
 import { countryName, roundLabel, seasonLabel, trackName } from '../view';
 import { getPublicStore, storeVersion } from './db';
 
@@ -497,7 +498,10 @@ export interface DriverProfile {
   path: string;
 }
 
-/** Fahrer mit Profilseite (nicht pseudonymisiert und mit Nummer, Cockpit, Ergebnis oder Aufstellung). */
+/**
+ * Fahrer mit Profilseite (nicht pseudonymisiert und mit Nummer, Cockpit, Ergebnis oder Aufstellung).
+ * Reservierte Slugs („vergleich“/„compare“) haben keine Profilseite – der Link führte sonst zum Vergleich.
+ */
 export function profileDrivers(snap: LiveSnapshot): DriverRow[] {
   const referenced = new Set<Id>([
     ...snap.numbers.map((n) => n.driver_id),
@@ -505,7 +509,9 @@ export function profileDrivers(snap: LiveSnapshot): DriverRow[] {
     ...snap.results.map((r) => r.driver_id),
     ...snap.entries.map((e) => e.driver_id),
   ]);
-  return snap.drivers.filter((d) => !d.anonymized && referenced.has(d.id)).sort((a, b) => a.gamertag.localeCompare(b.gamertag, 'de'));
+  return snap.drivers
+    .filter((d) => !d.anonymized && !isReservedDriverSlug(d.slug) && referenced.has(d.id))
+    .sort((a, b) => a.gamertag.localeCompare(b.gamertag, 'de'));
 }
 
 /**

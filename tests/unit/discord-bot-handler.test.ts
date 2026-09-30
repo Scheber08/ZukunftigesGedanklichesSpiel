@@ -188,6 +188,19 @@ describe('/rolle', () => {
     expect(setRole).not.toHaveBeenCalled();
   });
 
+  it('ohne DISCORD_GUILD_ID ist /rolle aus (auch kein Autocomplete)', async () => {
+    const { deps, setRole } = makeDeps({ guildId: null });
+    const r = await handleInteraction(command('role', [{ name: 'role', type: 3, value: PING_ROLE }]), deps);
+    expect(data(r).content).toMatch(/noch nicht eingerichtet/);
+    expect(data(r).flags).toBe(64);
+    const auto = await handleInteraction(
+      { type: InteractionType.AUTOCOMPLETE, locale: 'de', guild_id: GUILD, member: { user: { id: USER }, roles: [] }, data: { name: 'role', options: [{ name: 'role', type: 3, value: '', focused: true }] } },
+      deps,
+    );
+    expect((auto.data as { choices: unknown[] }).choices).toEqual([]);
+    expect(setRole).not.toHaveBeenCalled();
+  });
+
   it('Fehler der Discord-API und fehlendes Token werden verständlich gemeldet', async () => {
     for (const [result, text] of [
       ['forbidden', /darf diese Rolle gerade nicht/],

@@ -235,6 +235,16 @@ describe('Fahrersuche (Discord /fahrer)', () => {
     expect(driverSuggestions(snap, 'Apex')).toEqual([]);
   });
 
+  it('reservierte Slugs (vergleich/compare) haben keine Profilseite und werden nicht gefunden', async () => {
+    const data = demoDataset(NOW);
+    const sam = data.drivers!.find((d) => d.gamertag === 'Slipstream_Sam')!;
+    sam.slug = 'vergleich';
+    const snap = await snapshot(['results', 'seats'], data);
+    expect(findDriver(snap, 'vergleich').driver).toBeNull();
+    expect(findDriver(snap, 'Slipstream_Sam').driver).toBeNull();
+    expect(driverSuggestions(snap, 'Slip')).toEqual([]);
+  });
+
   it('Vorschläge: Anfang vor Teiltreffer, höchstens 25', async () => {
     const snap = await snapshot();
     const s = driverSuggestions(snap, 's');

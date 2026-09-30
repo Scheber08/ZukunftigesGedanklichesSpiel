@@ -98,6 +98,9 @@ const seasonStatus = { planned: 'geplant', active: 'aktiv', finished: 'abgeschlo
 const dotdCount = rounds.filter((r) => dotdOf(r.id)).length;
 const withResults = rounds.filter((r) => canHaveDotd(r)).length;
 
+// Runden ohne (sichtbares) Ergebnis: eine übrig gebliebene Auszeichnung (z. B. Ergebnis zurückgezogen)
+// ist öffentlich unsichtbar, bleibt hier aber sichtbar und entfernbar.
+
 /** Fehler im Formular dieser Runde? (Feld markieren) */
 const failedRound = (roundId: Id) =>
   outcome.error != null && sameAction(outcome.action, A.awardDotdSet) && outcome.posted?.get('round_id') === String(roundId);
@@ -141,7 +144,7 @@ const rookieFailed = outcome.error != null && sameAction(outcome.action, A.award
         <Section
           title="Saison-Auszeichnungen"
           id="saison-awards"
-          description="Fahrer- und Konstrukteurs-Champion setzt der Saisonabschluss automatisch (Hall of Fame). Rookie of the Year wählst du hier."
+          description="Fahrer- und Konstrukteurs-Champion setzt der Saisonabschluss automatisch (Hall of Fame). Rookie of the Year wählst du hier – er erscheint mit der abgeschlossenen Saison in der Hall of Fame."
         >
           <dl class="award-facts">
             <div>
@@ -263,12 +266,30 @@ const rookieFailed = outcome.error != null && sameAction(outcome.action, A.award
                         <RoundStatusBadge status={round.status} lang="de" />
                       </span>
                     </div>
-                    {!open ? (
-                      <p class="mt-2 text-sm text-muted">
-                        {round.status === 'cancelled' ? 'Abgesagt.' : 'Noch kein Ergebnis veröffentlicht.'}
-                      </p>
-                    ) : candidates.length === 0 ? (
-                      <p class="mt-2 text-sm text-muted">Im Rennergebnis steht noch niemand.</p>
+                    {!open || candidates.length === 0 ? (
+                      <>
+                        <p class="mt-2 text-sm text-muted">
+                          {!open
+                            ? round.status === 'cancelled'
+                              ? 'Abgesagt.'
+                              : 'Noch kein Ergebnis veröffentlicht.'
+                            : 'Im Rennergebnis steht noch niemand.'}
+                        </p>
+                        {current && (
+                          <div class="mt-3 flex flex-wrap items-center gap-3">
+                            <p class="text-sm">
+                              Gespeichert: <strong>{driverName(current.driver_id)}</strong>{' '}
+                              <span class="text-muted">(öffentlich nicht sichtbar, solange kein Rennergebnis veröffentlicht ist)</span>
+                            </p>
+                            <form method="POST" action={A.awardDotdRemove}>
+                              <input type="hidden" name="round_id" value={round.id} />
+                              <button type="submit" class="btn btn-danger" aria-label={`Fahrer des Tages ${label} entfernen`}>
+                                Entfernen
+                              </button>
+                            </form>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <>
                         <p class="mt-2 text-sm">

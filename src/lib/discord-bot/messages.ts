@@ -2,7 +2,7 @@
  * Antworten des Liga-Bots (reine Logik): Embeds für /naechstes-rennen, /wertung und /fahrer,
  * Hilfen für Sprache, Markdown-Escaping, Discord-Zeitstempel und Link-Buttons.
  * Alle Antworten mit `allowed_mentions: { parse: [] }` – der Bot pingt nie jemanden.
- * Getestet in tests/unit/discord-bot-messages.test.ts.
+ * Getestet in tests/unit/discord-bot-commands.test.ts (Helfer) und discord-bot-handler.test.ts (Antworten).
  */
 
 import type { NextRacePayload, StandingsPayload } from '~/components/overlay/types';

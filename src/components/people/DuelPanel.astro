@@ -71,12 +71,12 @@ const sessions = (r: (typeof detail.rounds)[number]): SessionDuel[] => [r.quali,
             <div class="duel-row">
               <dt class="micro text-center">{r.label}</dt>
               <dd class="duel-values">
-                <span class:list={['v tabular', r.x > r.y && 'lead']}>{r.x}</span>
+                <span class:list={['v tabular', r.x > r.y && 'lead']} aria-hidden="true">{r.x}</span>
                 <span class="bar" aria-hidden="true">
                   <span class="bar-a" style={`width: ${share(r.x, r.y)}%`} />
                   <span class="bar-b" />
                 </span>
-                <span class:list={['v tabular text-right', r.y > r.x && 'lead']}>{r.y}</span>
+                <span class:list={['v tabular text-right', r.y > r.x && 'lead']} aria-hidden="true">{r.y}</span>
                 <span class="sr-only">{t('people.duel.score', { a: nameA, x: r.x, b: nameB, y: r.y })}</span>
               </dd>
               {r.none > 0 && <dd class="text-center text-xs text-muted">{t('people.duel.noDuelCount', { n: r.none })}</dd>}
@@ -88,6 +88,9 @@ const sessions = (r: (typeof detail.rounds)[number]): SessionDuel[] => [r.quali,
           <div class="table-wrap mt-3">
             <table class="timing-table" id={`${id}-rounds`}>
               <caption class="sr-only">{t('people.duel.caption', { a: nameA, b: nameB })}</caption>
+              <colgroup span="1" />
+              <colgroup span="2" />
+              <colgroup span="2" />
               <thead>
                 <tr>
                   <th scope="col" class="sticky-col" rowspan="2">

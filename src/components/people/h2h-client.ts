@@ -187,9 +187,10 @@ export function initCompare(): void {
       h(
         'dd',
         { class: 'h2h-duel-values' },
-        h('span', { class: `h2h-v tabular${x > y ? ' lead' : ''}` }, String(x)),
+        // Sichtbare Zahlen nur fürs Auge, Screenreader lesen den Satz darunter
+        h('span', { class: `h2h-v tabular${x > y ? ' lead' : ''}`, 'aria-hidden': 'true' }, String(x)),
         h('span', { class: 'h2h-bar', 'aria-hidden': 'true' }, bar, h('span', { class: 'h2h-bar-b' })),
-        h('span', { class: `h2h-v tabular text-right${y > x ? ' lead' : ''}` }, String(y)),
+        h('span', { class: `h2h-v tabular text-right${y > x ? ' lead' : ''}`, 'aria-hidden': 'true' }, String(y)),
         h('span', { class: 'sr-only' }, tx('score', { a: a.name, x, b: b.name, y })),
       ),
       detail ? h('dd', { class: 'text-center text-xs text-muted' }, detail) : null,
@@ -321,6 +322,11 @@ export function initCompare(): void {
             'table',
             { class: 'timing-table' },
             h('caption', { class: 'sr-only' }, tx('sharedCaption', { a: a.name, b: b.name, scope })),
+            // Spaltengruppen, damit die Kopfzellen „Qualifying“/„Rennen“ (scope=colgroup) greifen
+            h('colgroup', { span: 1 }),
+            h('colgroup', { span: 2 }),
+            h('colgroup', { span: 2 }),
+            h('colgroup', { span: 1 }),
             h(
               'thead',
               {},

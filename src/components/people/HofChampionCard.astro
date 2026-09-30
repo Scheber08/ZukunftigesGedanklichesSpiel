@@ -2,6 +2,7 @@
 /**
  * Große Champion-Karte einer abgeschlossenen Saison (Plan §4.8): Fahrer- und
  * Konstrukteurs-Champion mit Punkten, Teamfarbe nur als Streifen, Link zum Endstand.
+ * Dazu – falls im Admin unter „Auszeichnungen“ vergeben – der Rookie des Jahres.
  */
 import Trophy from '@lucide/astro/icons/trophy';
 import DriverLink from '~/components/ui/DriverLink.astro';
@@ -31,6 +32,13 @@ const titleNumber = driverId != null ? (league.driverResults(driverId).find((r) 
 const team = teamId != null ? league.team(teamId) : undefined;
 const teamPoints = teamId != null ? league.teamStandings(season.id).find((s) => s.teamId === teamId)?.points : undefined;
 const headingId = `champion-${season.slug}`;
+// Rookie of the Year (eine Auszeichnung je Saison; bei Dubletten die zuletzt geänderte)
+const rookieAward = league
+  .awardsOf(season.id)
+  .filter((a) => a.type === 'rookie_of_the_year' && a.driver_id != null)
+  .sort((a, b) => b.updated_at.localeCompare(a.updated_at) || b.id - a.id)[0];
+const rookie = rookieAward?.driver_id != null ? league.driver(rookieAward.driver_id) : undefined;
+const rookieTeam = rookieAward?.team_id != null ? league.team(rookieAward.team_id) : undefined;
 ---
 
 <article class="champion card" aria-labelledby={headingId}>
@@ -79,6 +87,15 @@ const headingId = `champion-${season.slug}`;
       )
     }
   </div>
+
+  {
+    rookie && (
+      <p class="rookie">
+        <span class="micro">{t('people.hof.rookie')}</span>
+        <DriverLink lang={lang} driver={rookie} team={rookieTeam} />
+      </p>
+    )
+  }
 
   {
     season.status !== 'planned' && (
@@ -131,6 +148,14 @@ const headingId = `champion-${season.slug}`;
   }
   .champ-name :global(.gamertag) {
     font-weight: 900;
+  }
+  .rookie {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.75rem;
+    padding: 0 1rem;
+    font-size: 0.9375rem;
   }
   .more {
     display: inline-flex;

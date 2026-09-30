@@ -88,7 +88,8 @@ Einstellung `discord_self_roles`.
 - Rollen, die im Admin-Bereich Rechte geben (Discord-Rollen für Admin/Steward/Redaktion), vergibt der
   Bot **nie**, auch wenn sie versehentlich als Selbstrolle eingetragen sind.
 - Höchstens 25 Selbstrollen (Grenze der Discord-Auswahlliste).
-- `/rolle` funktioniert nur auf dem Server aus `DISCORD_GUILD_ID`, nicht per Direktnachricht.
+- `/rolle` funktioniert nur auf dem Server aus `DISCORD_GUILD_ID`, nicht per Direktnachricht. Ohne
+  `DISCORD_GUILD_ID` ist `/rolle` aus („Die Rollenvergabe ist noch nicht eingerichtet“).
 
 ### 7. Befehle registrieren
 

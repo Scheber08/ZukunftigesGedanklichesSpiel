@@ -152,7 +152,7 @@ const jsonLd = [
           <dd class="flex min-w-0 flex-wrap items-center gap-x-2">
             <Flag code={track?.country_code} lang={lang} decorative />
             {track ? (
-              <a href={url(lang, 'track', { slug: track.slug })} class:list={['track-link', cancelled && 'line-through']}>
+              <a href={url(lang, 'track', { slug: track.slug })} class:list={['track-link', cancelled && 'is-cancelled']}>
                 {trackName(track, lang)}
               </a>
             ) : null}
@@ -300,6 +300,10 @@ const jsonLd = [
   }
   .track-link:hover {
     color: var(--color-teal);
+  }
+  /* Abgesagt: durchgestrichen statt unterstrichen (die Utility line-through verliert gegen die Unterstreichung oben) */
+  .track-link.is-cancelled {
+    text-decoration-line: line-through;
   }
   .register-link {
     display: inline-flex;

@@ -47,7 +47,7 @@ export interface Interaction {
 export interface BotDeps {
   siteUrl: (path: string) => string;
   siteName: string;
-  /** Liga-Server; Rollen nur dort (null = nicht geprüft) */
+  /** Liga-Server (DISCORD_GUILD_ID); Rollen nur dort – ohne Angabe ist /rolle aus */
   guildId: string | null;
   snapshot: (parts: SnapshotPart[]) => Promise<LiveSnapshot>;
   /** Konfigurierte Selbstrollen und Rollen, die nie selbst vergeben werden dürfen (Staff) */
@@ -127,7 +127,9 @@ async function handleCommand(i: Interaction, deps: BotDeps, lang: Lang): Promise
 
 async function handleRole(i: Interaction, deps: BotDeps, lang: Lang): Promise<InteractionResponse> {
   const userId = i.member?.user?.id;
-  if (!i.guild_id || !userId || (deps.guildId && i.guild_id !== deps.guildId)) return textMessage(t(lang, 'bot.role.guildOnly'));
+  // Ohne bekannten Liga-Server keine Rollenvergabe (sonst ginge /rolle auf jedem Server mit dem Bot)
+  if (!deps.guildId) return textMessage(t(lang, 'bot.role.notConfigured'));
+  if (!i.guild_id || !userId || i.guild_id !== deps.guildId) return textMessage(t(lang, 'bot.role.guildOnly'));
   const { roles, blocked } = await deps.selfRoles();
   if (roles.length === 0) return textMessage(t(lang, 'bot.role.none'));
   const role = matchSelfRole(roles, stringOption(i, OPTION_NAMES.role));
@@ -161,7 +163,7 @@ async function handleAutocomplete(i: Interaction, deps: BotDeps, lang: Lang): Pr
       return autocomplete(driverSuggestions(snap, typed).map((d) => ({ name: d.gamertag, value: d.slug })));
     }
     case 'role': {
-      if (!i.guild_id || (deps.guildId && i.guild_id !== deps.guildId)) return autocomplete([]);
+      if (!deps.guildId || i.guild_id !== deps.guildId) return autocomplete([]);
       const { roles, blocked } = await deps.selfRoles();
       const memberRoles = i.member?.roles ?? [];
       const q = typed.trim().toLowerCase();

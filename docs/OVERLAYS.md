@@ -57,8 +57,8 @@ Streamlabs Desktop und andere Programme mit Browser-Quelle funktionieren genauso
 
 - Die Seite bringt die Daten beim Laden mit; danach fragt ein Skript alle **20 Sekunden**
   `/api/overlay/<name>.json` ab und zeichnet nur bei Änderungen neu (kein Flackern, das Laufband läuft
-  weiter). Nach dem Veröffentlichen eines Ergebnisses im Admin ist es nach spätestens etwa einer halben
-  Minute im Stream.
+  weiter). Nach dem Veröffentlichen eines Ergebnisses im Admin ist es spätestens nach etwa einer Minute
+  im Stream (Abfrage alle 20 s, dazu bis zu 15 s Cache der JSON-Daten und 10 s im Worker).
 - Die Daten kommen direkt aus der Datenbank – kein Warten auf den Rebuild der statischen Seiten.
 - Ist die Website kurz nicht erreichbar, bleibt der letzte Stand stehen; ein kleiner gelber Punkt
   oben rechts im Overlay zeigt die Störung. Die Abstände zwischen den Abfragen werden dann länger
