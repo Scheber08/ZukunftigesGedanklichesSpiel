@@ -1,11 +1,14 @@
 ---
 /**
- * Fahrerprofil (Plan §4.5): Kopf mit großer Startnummer, Kennzahlen (Karriere/Saison),
- * Punkteverlauf, Teamkollegen-Duell, Ergebnisse nach Saison, Einsätze als Ersatz,
- * Nummern-Historie und öffentliches Strafenregister.
+ * Fahrerprofil (Plan §4.5): Kopf mit großer Startnummer, Kennzahlen (Karriere/Saison, inkl.
+ * Fahrer des Tages), Punkteverlauf, Teamkollegen-Duell, Ergebnisse nach Saison, Einsätze als
+ * Ersatz, Nummern-Historie und öffentliches Strafenregister. Link zum Fahrer-Vergleich.
  * Öffentlich nur Gamertag, Nummer, Flagge (optional) und Plattform – kein Realname, kein Alter.
+ *
+ * Abschnitte: jeweils ein Eintrag in `nav` (Sprungmarken) und eine <section id=… class="profile-section">.
  */
 import ExternalLink from '@lucide/astro/icons/external-link';
+import GitCompareArrows from '@lucide/astro/icons/git-compare-arrows';
 import DecisionTable from '~/components/people/DecisionTable.astro';
 import DriverResults from '~/components/people/DriverResults.astro';
 import DuelPanel from '~/components/people/DuelPanel.astro';
@@ -35,6 +38,7 @@ import {
   resultsBySeason,
   safeExternalUrl,
 } from '~/lib/people';
+import { dotdCount, dotdRoundIds, hasDotd } from '~/lib/people/awards';
 import { loadLeague } from '~/lib/server/league';
 import { breadcrumbJsonLd, countryName, seasonLabel } from '~/lib/view';
 
@@ -70,6 +74,14 @@ const lastTeam = !team && role === 'former' ? league.team(resultGroups[0]?.rows.
 const numbers = driver ? numberPeriods(league, driver.id) : [];
 const reserveApps = driver ? league.reserveAppearances(driver.id) : [];
 const decisions = driver ? league.decisionsForDriver(driver.id) : [];
+// Fahrer des Tages: Kennzahl nur, wenn die Liga die Auszeichnung vergibt
+const dotdStats =
+  driver && hasDotd(league)
+    ? { career: dotdCount(league, driver.id), season: season ? dotdCount(league, driver.id, season.id) : 0 }
+    : null;
+const dotdRounds = driver ? dotdRoundIds(league, driver.id) : new Set<number>();
+// Vergleich nur mit veröffentlichten Ergebnissen (sonst gibt es nichts zu vergleichen)
+const compareHref = driver && resultGroups.length > 0 ? `${url(lang, 'driverCompare')}?a=${encodeURIComponent(driver.slug)}` : null;
 const penaltyEnabled = season?.penalty_points_enabled ?? false;
 const penaltyTotal = season && penaltyEnabled ? penaltyPointsTotal(league, decisions, season.id) : 0;
 
@@ -177,6 +189,15 @@ if (!driver) Astro.response.status = 404;
             )}
           </dl>
 
+          {compareHref && (
+            <p class="mt-5">
+              <a href={compareHref} class="btn btn-secondary btn-sm" aria-label={t('people.driver.compareLabel', { name: driver.gamertag })}>
+                <GitCompareArrows size={16} aria-hidden="true" />
+                <span>{t('people.driver.compare')}</span>
+              </a>
+            </p>
+          )}
+
           {links.length > 0 && (
             <div class="mt-5 flex flex-wrap items-center gap-3">
               <span class="micro">{t('people.driver.links')}</span>
@@ -205,6 +226,7 @@ if (!driver) Astro.response.status = 404;
               season={seasonStats}
               seasonName={seasonName || undefined}
               championship={standing ? { position: standing.position, tied: standing.tied } : null}
+              dotd={dotdStats}
             />
           </section>
 
@@ -246,7 +268,7 @@ if (!driver) Astro.response.status = 404;
             {resultGroups.length === 0 ? (
               <p class="card p-5 text-sm text-muted">{t('people.results.none')}</p>
             ) : (
-              <DriverResults lang={lang} league={league} groups={resultGroups} />
+              <DriverResults lang={lang} league={league} groups={resultGroups} dotdRounds={dotdRounds} />
             )}
           </section>
 

@@ -151,7 +151,11 @@ const jsonLd = [
           <dt class="sr-only">{t('calendar.race.track')}</dt>
           <dd class="flex min-w-0 flex-wrap items-center gap-x-2">
             <Flag code={track?.country_code} lang={lang} decorative />
-            <span class:list={[cancelled && 'line-through']}>{trackName(track, lang)}</span>
+            {track ? (
+              <a href={url(lang, 'track', { slug: track.slug })} class:list={['track-link', cancelled && 'line-through']}>
+                {trackName(track, lang)}
+              </a>
+            ) : null}
             <span class="text-muted">· {countryName(track?.country_code, lang)}</span>
           </dd>
         </div>
@@ -283,6 +287,19 @@ const jsonLd = [
     .race-head :global(.race-head-map) {
       justify-self: end;
     }
+  }
+  .track-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-weight: 600;
+    color: var(--color-fg);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--color-teal) 60%, transparent);
+    text-underline-offset: 3px;
+  }
+  .track-link:hover {
+    color: var(--color-teal);
   }
   .register-link {
     display: inline-flex;

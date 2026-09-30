@@ -11,6 +11,7 @@ import DriverLink from '~/components/ui/DriverLink.astro';
 import { useT, type Lang } from '~/i18n';
 import { formatLapTime } from '~/lib/domain/laptime';
 import type { League } from '~/lib/league/league';
+import { dotdOfRound } from '~/lib/people/awards';
 
 interface Props {
   lang: Lang;
@@ -21,8 +22,7 @@ const { lang, league, roundId } = Astro.props;
 const t = useT(lang);
 const summary = league.roundSummary(roundId);
 const winner = summary?.podium.find((r) => r.position === 1);
-const round = league.round(roundId);
-const dotd = round ? league.awardsOf(round.season_id).find((a) => a.round_id === roundId && a.type === 'driver_of_the_day') : undefined;
+const dotd = dotdOfRound(league, roundId);
 interface Item {
   key: 'winner' | 'pole' | 'fl' | 'dotd';
   label: string;
@@ -41,9 +41,8 @@ if (summary?.fastestLap) {
   const f = summary.fastestLap;
   items.push({ key: 'fl', label: t('legend.fastestLap'), driverId: f.driver_id, teamId: f.team_id, reserve: f.role === 'reserve', extra: formatLapTime(f.best_lap_ms) });
 }
-if (dotd?.driver_id != null) {
-  const teamId = league.entriesOf(roundId).find((e) => e.driver_id === dotd.driver_id)?.team_id ?? null;
-  items.push({ key: 'dotd', label: t('calendar.results.driverOfTheDay'), driverId: dotd.driver_id, teamId, reserve: false, extra: null });
+if (dotd) {
+  items.push({ key: 'dotd', label: t('calendar.results.driverOfTheDay'), driverId: dotd.driverId, teamId: dotd.teamId, reserve: dotd.reserve, extra: null });
 }
 ---
 

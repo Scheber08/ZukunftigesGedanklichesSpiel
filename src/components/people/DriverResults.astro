@@ -2,8 +2,9 @@
 /**
  * Ergebnisliste eines Fahrers nach Saison gruppiert (Plan §4.5): Runde (Link zur Rennseite),
  * Session, Team, Start, Position/Status, Punkte und Marken (Pole „P“, schnellste Runde mit
- * Stoppuhr, Reserve „R“). Jede Saison als Akkordeon, die neueste ist offen.
+ * Stoppuhr, Fahrer des Tages mit Orden, Reserve „R“). Jede Saison als Akkordeon, die neueste ist offen.
  */
+import Award from '@lucide/astro/icons/award';
 import Timer from '@lucide/astro/icons/timer';
 import RoundLink from '~/components/people/RoundLink.astro';
 import TeamName from '~/components/ui/TeamName.astro';
@@ -16,8 +17,10 @@ interface Props {
   lang: Lang;
   league: League;
   groups: SeasonResults[];
+  /** Runden, in denen der Fahrer Fahrer des Tages war (Marke an der Rennzeile) */
+  dotdRounds?: ReadonlySet<number>;
 }
-const { lang, league, groups } = Astro.props;
+const { lang, league, groups, dotdRounds = new Set<number>() } = Astro.props;
 const t = useT(lang);
 ---
 
@@ -54,6 +57,7 @@ const t = useT(lang);
                   const firstOfRound = !prev || prev.round.id !== row.round.id;
                   const label = roundLabel(row.round, league.track(row.round.track_id), lang);
                   const classified = r.status === 'classified' && r.position != null;
+                  const dotd = row.session.type === 'race' && dotdRounds.has(row.round.id);
                   return (
                     <tr class:list={[firstOfRound && i > 0 && 'round-start']}>
                       <th scope="row" class="sticky-col font-normal">
@@ -86,6 +90,12 @@ const t = useT(lang);
                             <span class="text-teal" title={t('legend.fastestLap')}>
                               <Timer size={15} aria-hidden="true" />
                               <span class="sr-only">{t('legend.fastestLap')}</span>
+                            </span>
+                          )}
+                          {dotd && (
+                            <span class="dotd" title={t('people.results.dotd')}>
+                              <Award size={15} aria-hidden="true" />
+                              <span class="sr-only">{t('people.results.dotd')}</span>
                             </span>
                           )}
                           {r.role === 'reserve' && (
@@ -123,6 +133,10 @@ const t = useT(lang);
     font-weight: 800;
     color: var(--color-green);
     text-decoration: none;
+  }
+  .dotd {
+    display: inline-flex;
+    color: var(--color-teal);
   }
   .res {
     padding: 0 0.3rem;

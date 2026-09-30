@@ -18,8 +18,10 @@ interface Props {
   seasonName?: string;
   /** WM-Position in der aktuellen Saison */
   championship?: { position: number; tied: boolean } | null;
+  /** Anzahl „Fahrer des Tages“ (Karriere / aktuelle Saison); null = Kennzahl ausblenden */
+  dotd?: { career: number; season: number } | null;
 }
-const { lang, id, career, season = null, seasonName, championship = null } = Astro.props;
+const { lang, id, career, season = null, seasonName, championship = null, dotd = null } = Astro.props;
 const t = useT(lang);
 
 type Tile = { key: string; label: string; value: string; detail?: string; highlight?: boolean };
@@ -49,7 +51,7 @@ function detail(stats: CareerStats, key: StatKey): string | undefined {
   return undefined;
 }
 
-function tiles(stats: CareerStats, withChampionship: boolean): Tile[] {
+function tiles(stats: CareerStats, withChampionship: boolean, dotdValue: number | null): Tile[] {
   const list: Tile[] = [];
   if (withChampionship && championship) {
     list.push({
@@ -62,13 +64,16 @@ function tiles(stats: CareerStats, withChampionship: boolean): Tile[] {
   }
   for (const key of STAT_KEYS) {
     list.push({ key, label: t(`people.stats.${key}`), value: value(stats, key), detail: detail(stats, key), highlight: key === 'points' });
+    if (key === 'fastestLaps' && dotdValue != null) {
+      list.push({ key: 'dotd', label: t('people.stats.dotd'), value: String(dotdValue), detail: dotdValue > 0 ? t('people.stats.dotdDetail') : undefined });
+    }
   }
   if (stats.sprintWins > 0) list.push({ key: 'sprintWins', label: t('people.stats.sprintWins'), value: String(stats.sprintWins) });
   return list;
 }
 
-const careerTiles = tiles(career, false);
-const seasonTiles = season ? tiles(season, true) : [];
+const careerTiles = tiles(career, false, dotd?.career ?? null);
+const seasonTiles = season ? tiles(season, true, dotd?.season ?? null) : [];
 const hasCareer = hasStats(career);
 const hasSeason = season != null && hasStats(season);
 const name = `${id}-scope`;
@@ -150,11 +155,20 @@ const name = `${id}-scope`;
                 </tr>
               )}
               {STAT_KEYS.map((key) => (
-                <tr>
-                  <th scope="row" class="sticky-col font-normal">{t(`people.stats.${key}`)}</th>
-                  <td class="num">{value(career, key)}</td>
-                  {season && <td class="num">{value(season, key)}</td>}
-                </tr>
+                <>
+                  <tr>
+                    <th scope="row" class="sticky-col font-normal">{t(`people.stats.${key}`)}</th>
+                    <td class="num">{value(career, key)}</td>
+                    {season && <td class="num">{value(season, key)}</td>}
+                  </tr>
+                  {key === 'fastestLaps' && dotd && (
+                    <tr>
+                      <th scope="row" class="sticky-col font-normal">{t('people.stats.dotd')}</th>
+                      <td class="num">{dotd.career}</td>
+                      {season && <td class="num">{dotd.season}</td>}
+                    </tr>
+                  )}
+                </>
               ))}
               {career.sprintWins > 0 && (
                 <tr>

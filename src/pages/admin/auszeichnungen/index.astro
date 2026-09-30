@@ -1,0 +1,368 @@
+---
+/**
+ * Auszeichnungen (Plan Phase 2, nur Admins): je Saison alle Runden mit Fahrer des Tages
+ * (Driver of the Day) – setzen, ändern, entfernen, optional in Discord #results posten –
+ * sowie die Saison-Awards (Champions aus dem Saisonabschluss, Rookie of the Year).
+ * Funktioniert ohne JavaScript (Formular-Actions, Post/Redirect/Get).
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import Notice from '~/components/admin/core/Notice.astro';
+import Section from '~/components/admin/core/Section.astro';
+import Forbidden from '~/components/admin/raceday/Forbidden.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { url } from '~/i18n';
+import { actionOutcome, sameAction } from '~/lib/admin/league/page';
+import { listSeasons, pickSeason } from '~/lib/admin/raceday/queries';
+import type { AwardRow, Id, ResultRow } from '~/lib/db/types';
+import { formatDateTime } from '~/lib/domain/time';
+import { awardFlash, canHaveDotd, dotdCandidates, rookieCandidates } from '~/lib/people/awards-admin';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { readPrivateSettings } from '~/lib/server/settings';
+import { roundLabel, seasonLabel } from '~/lib/view';
+
+const A = actions.admin;
+const allowed = hasRole(Astro.locals.staff, 'admin');
+if (!allowed) Astro.response.status = 403;
+
+const outcome = allowed
+  ? await actionOutcome(Astro, [A.awardDotdSet, A.awardDotdRemove, A.awardRookieSet, A.awardRookieRemove])
+  : { redirect: null, action: null, error: null, posted: null };
+if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
+
+const store = getServiceStore();
+const seasons = allowed ? await listSeasons(store) : [];
+const season = pickSeason(seasons, Astro.url.searchParams.get('saison'));
+
+const [allRounds, tracks, drivers, teams, raceSessions, awards, privateSettings] =
+  allowed && season
+    ? await Promise.all([
+        store.select('rounds'),
+        store.select('tracks'),
+        store.select('drivers'),
+        store.select('teams'),
+        store.select('sessions', { eq: { type: 'race' } }),
+        store.select('awards', { eq: { season_id: season.id } }),
+        readPrivateSettings(store),
+      ])
+    : [[], [], [], [], [], [] as AwardRow[], null];
+
+// Rennergebnisse veröffentlichter Runden (alle Saisons: für „Debüt“ beim Rookie of the Year)
+const roundById = new Map(allRounds.map((r) => [r.id, r]));
+const visibleRaces = raceSessions.filter((s) => {
+  const r = roundById.get(s.round_id);
+  return r != null && canHaveDotd(r);
+});
+const raceResults: ResultRow[] = visibleRaces.length ? await store.select('results', { in: { session_id: visibleRaces.map((s) => s.id) } }) : [];
+const raceOfRound = new Map(visibleRaces.map((s) => [s.round_id, s]));
+const roundOfSession = new Map(visibleRaces.map((s) => [s.id, roundById.get(s.round_id)!]));
+
+const driverName = (id: Id | null | undefined) => (id == null ? '–' : (drivers.find((d) => d.id === id)?.gamertag ?? `#${id}`));
+const teamName = (id: Id | null | undefined) => (id == null ? null : (teams.find((t) => t.id === id)?.name ?? null));
+const trackOf = (trackId: Id) => tracks.find((t) => t.id === trackId);
+
+const rounds = season ? allRounds.filter((r) => r.season_id === season.id).sort((a, b) => a.number - b.number) : [];
+const dotdOf = (roundId: Id) =>
+  awards.filter((a) => a.type === 'driver_of_the_day' && a.round_id === roundId).sort((a, b) => a.id - b.id)[0];
+const candidatesOf = (roundId: Id) => {
+  const race = raceOfRound.get(roundId);
+  return race ? dotdCandidates(raceResults.filter((r) => r.session_id === race.id)) : [];
+};
+const candidateLabel = (c: ReturnType<typeof dotdCandidates>[number]) => {
+  const pos = c.position != null ? `P${c.position}` : c.status.toUpperCase();
+  const team = teamName(c.teamId);
+  return `${pos} · ${driverName(c.driverId)}${team ? ` (${team})` : ''}${c.role === 'reserve' ? ' · Reserve' : ''}`;
+};
+
+const champion = awards.find((a) => a.type === 'champion');
+const constructors = awards.find((a) => a.type === 'constructors');
+const rookie = awards.filter((a) => a.type === 'rookie_of_the_year').sort((a, b) => a.id - b.id)[0];
+const rookieOptions = season
+  ? rookieCandidates(
+      season.id,
+      seasons,
+      raceResults.map((r) => {
+        const round = roundOfSession.get(r.session_id)!;
+        return { driverId: r.driver_id, teamId: r.team_id, seasonId: round.season_id, roundStart: round.start_utc };
+      }),
+      (id) => driverName(id),
+    )
+  : [];
+
+const flash = outcome.error ? null : awardFlash(Astro.url.searchParams.get('ok'));
+const resultsWebhook = privateSettings?.webhooks.results ?? null;
+const seasonStatus = { planned: 'geplant', active: 'aktiv', finished: 'abgeschlossen' } as const;
+const dotdCount = rounds.filter((r) => dotdOf(r.id)).length;
+const withResults = rounds.filter((r) => canHaveDotd(r)).length;
+
+/** Fehler im Formular dieser Runde? (Feld markieren) */
+const failedRound = (roundId: Id) =>
+  outcome.error != null && sameAction(outcome.action, A.awardDotdSet) && outcome.posted?.get('round_id') === String(roundId);
+const rookieFailed = outcome.error != null && sameAction(outcome.action, A.awardRookieSet);
+---
+
+<AdminLayout title="Auszeichnungen" breadcrumbs={[{ label: 'Auszeichnungen' }]}>
+  {
+    !allowed ? (
+      <Forbidden roles="Admins" />
+    ) : !season ? (
+      <p class="alert alert-warning">Es gibt noch keine Saison. Lege zuerst unter „Saisons“ eine an.</p>
+    ) : (
+      <>
+        <Notice outcome={outcome} />
+        {flash && (
+          <p class:list={['alert mb-6', flash.warning ? 'alert-warning' : 'alert-success']} role="status">
+            <span class="font-semibold">{flash.warning ? 'Hinweis: ' : 'Erledigt: '}</span>
+            {flash.text}
+          </p>
+        )}
+
+        <form method="GET" class="mb-6 flex flex-wrap items-end gap-3" aria-label="Saison wählen">
+          <div class="field">
+            <label for="saison" class="label">
+              Saison
+            </label>
+            <select id="saison" name="saison" class="select w-full sm:w-auto sm:min-w-56">
+              {seasons.map((s) => (
+                <option value={s.id} selected={s.id === season.id}>
+                  {seasonLabel(s, 'de')} ({seasonStatus[s.status]})
+                </option>
+              ))}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-secondary">
+            Anzeigen
+          </button>
+        </form>
+
+        <Section
+          title="Saison-Auszeichnungen"
+          id="saison-awards"
+          description="Fahrer- und Konstrukteurs-Champion setzt der Saisonabschluss automatisch (Hall of Fame). Rookie of the Year wählst du hier."
+        >
+          <dl class="award-facts">
+            <div>
+              <dt class="micro">Fahrer-Champion</dt>
+              <dd>
+                {champion?.driver_id != null ? (
+                  <strong>{driverName(champion.driver_id)}</strong>
+                ) : (
+                  <span class="text-muted">wird beim Saisonabschluss gesetzt</span>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt class="micro">Konstrukteurs-Champion</dt>
+              <dd>
+                {constructors?.team_id != null ? (
+                  <strong>{teamName(constructors.team_id) ?? `#${constructors.team_id}`}</strong>
+                ) : (
+                  <span class="text-muted">wird beim Saisonabschluss gesetzt</span>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt class="micro">Rookie of the Year</dt>
+              <dd>
+                {rookie?.driver_id != null ? (
+                  <strong>
+                    {driverName(rookie.driver_id)}
+                    {teamName(rookie.team_id) && <span class="font-normal text-muted"> ({teamName(rookie.team_id)})</span>}
+                  </strong>
+                ) : (
+                  <span class="text-muted">noch nicht gewählt</span>
+                )}
+              </dd>
+            </div>
+          </dl>
+          <p class="mt-3 text-sm">
+            <a class="inline-flex min-h-[44px] items-center underline" href={`/admin/saisons/${season.id}`}>
+              Saison bearbeiten und abschließen
+            </a>
+          </p>
+
+          <h3 class="mt-4 text-lg uppercase">Rookie of the Year</h3>
+          {rookieOptions.length === 0 ? (
+            <p class="mt-2 text-sm text-muted">In dieser Saison gibt es noch kein veröffentlichtes Rennergebnis.</p>
+          ) : (
+            <div class="mt-3 flex flex-wrap items-end gap-3">
+              <form method="POST" action={A.awardRookieSet} class="flex flex-wrap items-end gap-3">
+                <input type="hidden" name="season_id" value={season.id} />
+                <div class="field">
+                  <label for="rookie-driver" class="label">
+                    Fahrer
+                  </label>
+                  <select id="rookie-driver" name="driver_id" class="select w-full sm:w-auto sm:min-w-64" aria-invalid={rookieFailed ? 'true' : undefined} aria-describedby="rookie-hint">
+                    <option value="">– Fahrer wählen –</option>
+                    {rookieOptions.map((c) => (
+                      <option value={c.driverId} selected={rookie?.driver_id === c.driverId}>
+                        {driverName(c.driverId)}
+                        {c.debut ? ' · Debüt' : ''} ({c.races} Rennen)
+                      </option>
+                    ))}
+                  </select>
+                  <p id="rookie-hint" class="field-hint">
+                    „Debüt“ = in keiner früheren Saison gefahren.
+                  </p>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                  {rookie ? 'Ändern' : 'Setzen'}
+                </button>
+              </form>
+              {rookie && (
+                <form method="POST" action={A.awardRookieRemove}>
+                  <input type="hidden" name="season_id" value={season.id} />
+                  <button type="submit" class="btn btn-danger">
+                    Entfernen
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+        </Section>
+
+        <Section
+          title="Fahrer des Tages je Runde"
+          id="dotd"
+          description="Driver of the Day für jede Runde mit veröffentlichtem Ergebnis (vorläufig, final, korrigiert). Erscheint auf der Rennseite, im Fahrerprofil und in der Hall of Fame."
+        >
+          <p class="mb-4 text-sm">
+            <strong>{dotdCount}</strong> von {withResults} gewerteten Runden haben einen Fahrer des Tages.
+          </p>
+          {!resultsWebhook && (
+            <p class="alert alert-warning mb-4 text-sm">
+              Kein Discord-Webhook für „results“ eingetragen – das Posten klappt erst nach dem Eintrag unter{' '}
+              <a class="underline" href="/admin/einstellungen">
+                Einstellungen
+              </a>
+              .
+            </p>
+          )}
+          {rounds.length === 0 ? (
+            <p class="alert">Für {seasonLabel(season, 'de')} sind noch keine Runden angelegt.</p>
+          ) : (
+            <ol class="grid gap-4">
+              {rounds.map((round) => {
+                const label = roundLabel(round, trackOf(round.track_id), 'de');
+                const current = dotdOf(round.id);
+                const candidates = candidatesOf(round.id);
+                const open = canHaveDotd(round);
+                const selectId = `dotd-driver-${round.id}`;
+                const failed = failedRound(round.id);
+                return (
+                  <li id={`runde-${round.number}`} class="round-card">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <h3 class="text-lg">
+                        <span class="font-semibold">{label}</span>
+                      </h3>
+                      <span class="flex flex-wrap items-center gap-2 text-sm text-muted">
+                        {formatDateTime(round.start_utc, 'de')}
+                        <RoundStatusBadge status={round.status} lang="de" />
+                      </span>
+                    </div>
+                    {!open ? (
+                      <p class="mt-2 text-sm text-muted">
+                        {round.status === 'cancelled' ? 'Abgesagt.' : 'Noch kein Ergebnis veröffentlicht.'}
+                      </p>
+                    ) : candidates.length === 0 ? (
+                      <p class="mt-2 text-sm text-muted">Im Rennergebnis steht noch niemand.</p>
+                    ) : (
+                      <>
+                        <p class="mt-2 text-sm">
+                          Aktuell:{' '}
+                          {current?.driver_id != null ? (
+                            <strong>
+                              {driverName(current.driver_id)}
+                              {teamName(current.team_id) && <span class="font-normal text-muted"> ({teamName(current.team_id)})</span>}
+                            </strong>
+                          ) : (
+                            <span class="text-muted">noch nicht gewählt</span>
+                          )}
+                          {' · '}
+                          <a class="underline" href={url('de', 'race', { season: season.slug, round: round.number })} target="_blank" rel="noopener">
+                            Rennseite
+                          </a>
+                        </p>
+                        <div class="mt-3 flex flex-wrap items-end gap-3">
+                          <form method="POST" action={A.awardDotdSet} class="dotd-form">
+                            <input type="hidden" name="round_id" value={round.id} />
+                            <div class="field min-w-0 flex-1">
+                              <label for={selectId} class="label">
+                                Fahrer des Tages
+                              </label>
+                              <select id={selectId} name="driver_id" class="select" aria-invalid={failed ? 'true' : undefined} required>
+                                <option value="">– Fahrer aus dem Rennen wählen –</option>
+                                {candidates.map((c) => (
+                                  <option value={c.driverId} selected={current?.driver_id === c.driverId}>
+                                    {candidateLabel(c)}
+                                  </option>
+                                ))}
+                              </select>
+                              {failed && outcome.error && (
+                                <p class="field-error">{outcome.error.fields.driver_id?.[0] ?? outcome.error.message}</p>
+                              )}
+                            </div>
+                            <label class="checkbox text-sm">
+                              <input type="checkbox" name="discord" disabled={!resultsWebhook} />
+                              <span>In Discord posten (#results)</span>
+                            </label>
+                            <button type="submit" class="btn btn-primary">
+                              {current ? 'Ändern' : 'Speichern'}
+                            </button>
+                          </form>
+                          {current && (
+                            <form method="POST" action={A.awardDotdRemove}>
+                              <input type="hidden" name="round_id" value={round.id} />
+                              <button type="submit" class="btn btn-danger" aria-label={`Fahrer des Tages ${label} entfernen`}>
+                                Entfernen
+                              </button>
+                            </form>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </Section>
+      </>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .award-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 1rem 1.5rem;
+  }
+  .award-facts dd {
+    margin-top: 0.25rem;
+  }
+  .round-card {
+    padding: 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface-2);
+    scroll-margin-top: 1rem;
+  }
+  .round-card:target {
+    border-color: var(--color-teal);
+  }
+  .dotd-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+    flex: 1 1 22rem;
+    min-width: 0;
+  }
+  .dotd-form .field {
+    flex: 1 1 16rem;
+  }
+</style>

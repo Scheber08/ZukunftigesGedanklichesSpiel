@@ -39,8 +39,20 @@ export function profileDrivers(league: League): DriverRow[] {
   return league.drivers.filter(
     (d) =>
       !d.anonymized &&
+      !isReservedDriverSlug(d.slug) &&
       (referenced.has(d.id) || league.driverResults(d.id).length > 0 || d.status === 'active' || d.status === 'reserve'),
   );
+}
+
+/**
+ * Slugs, die unter /fahrer/… bzw. /en/drivers/… feste Seiten belegen (Fahrer-Vergleich).
+ * Der Admin vergibt sie nicht; hier zusätzlich defensiv ausgefiltert, damit keine
+ * Profilseite die Vergleichsseite überdeckt.
+ */
+export const RESERVED_DRIVER_SLUGS: readonly string[] = ['vergleich', 'compare'];
+
+export function isReservedDriverSlug(slug: string): boolean {
+  return RESERVED_DRIVER_SLUGS.includes(slug.trim().toLowerCase());
 }
 
 /** Slug-Liste für getStaticPaths der Fahrerprofile. */

@@ -1,0 +1,320 @@
+---
+/**
+ * Fahrer-Vergleich / Head-to-Head (Plan Phase 2, §4.5): zwei beliebige Fahrer – auch aus
+ * verschiedenen Teams oder Saisons – über alle Saisons oder eine Saison. Statisch vorgerendert:
+ * Die öffentlichen Ergebnisse stehen kompakt als JSON im HTML, das gebündelte Skript
+ * (src/components/people/h2h-client.ts) rechnet den Vergleich und hält die Auswahl in der URL
+ * (?a=<slug>&b=<slug>&s=<saison>). Ohne JavaScript bleibt ein Hinweis mit Weg zu den Profilen.
+ */
+import ArrowLeftRight from '@lucide/astro/icons/arrow-left-right';
+import PeopleTabs from '~/components/people/PeopleTabs.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import ShareButton from '~/components/ui/ShareButton.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { compareOptionGroups, comparePayload } from '~/lib/people/compare';
+import { loadLeague } from '~/lib/server/league';
+import { safeJson } from '~/lib/util/html';
+import { breadcrumbJsonLd, seasonLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const payload = comparePayload(league, lang, t);
+const groups = compareOptionGroups(league);
+const current = league.currentSeason;
+const hasData = payload.drivers.length >= 2;
+const { a: defaultA, b: defaultB } = payload.defaults;
+
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('people.drivers.title'), href: url(lang, 'drivers') },
+  { label: t('people.compare.title'), href: url(lang, 'driverCompare') },
+];
+const site = Astro.site ?? new URL(Astro.url.origin);
+const jsonLd = breadcrumbJsonLd(site, crumbs.map((c) => ({ name: c.label, href: c.href })));
+const optionLabel = (o: (typeof groups.current)[number]) => (o.teamName ? `${o.driver.gamertag} (${o.teamName})` : o.driver.gamertag);
+---
+
+<BaseLayout
+  lang={lang}
+  title={t('people.compare.title')}
+  description={t('people.compare.metaDescription')}
+  alternates={alternates('driverCompare')}
+  jsonLd={jsonLd}
+>
+  <PageHeader lang={lang} title={t('people.compare.title')} eyebrow={t('people.drivers.title')} lead={t('people.compare.lead')} breadcrumbs={crumbs}>
+    <PeopleTabs lang={lang} current="compare" />
+  </PageHeader>
+
+  <div class="container-page h2h pb-16 pt-8 md:pt-12" data-h2h>
+    {
+      !hasData ? (
+        <EmptyState title={t('people.compare.empty')}>
+          <a href={url(lang, 'drivers')} class="btn btn-secondary mt-6">
+            {t('people.compare.toDrivers')}
+          </a>
+        </EmptyState>
+      ) : (
+        <>
+          <section class="card p-4 md:p-6" aria-labelledby="h2h-form-title">
+            <h2 id="h2h-form-title" class="sr-only">
+              {t('people.compare.formTitle')}
+            </h2>
+            <form method="get" action={url(lang, 'driverCompare')} class="h2h-form" data-h2h-form>
+              <div class="field h2h-field-a">
+                <label for="h2h-a" class="label">
+                  {t('people.compare.driverA')}
+                </label>
+                <select id="h2h-a" name="a" class="select">
+                  <option value="">{t('people.compare.choose')}</option>
+                  {groups.current.length > 0 && (
+                    <optgroup label={t('people.compare.groupCurrent', { season: current ? seasonLabel(current, lang) : '' })}>
+                      {groups.current.map((o) => (
+                        <option value={o.driver.slug} selected={o.driver.slug === defaultA}>
+                          {optionLabel(o)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {groups.earlier.length > 0 && (
+                    <optgroup label={t('people.compare.groupEarlier')}>
+                      {groups.earlier.map((o) => (
+                        <option value={o.driver.slug} selected={o.driver.slug === defaultA}>
+                          {optionLabel(o)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+              </div>
+
+              <button type="button" class="btn btn-ghost btn-icon h2h-swap" data-h2h-swap hidden aria-label={t('people.compare.swap')} title={t('people.compare.swap')}>
+                <ArrowLeftRight size={20} aria-hidden="true" />
+              </button>
+
+              <div class="field h2h-field-b">
+                <label for="h2h-b" class="label">
+                  {t('people.compare.driverB')}
+                </label>
+                <select id="h2h-b" name="b" class="select">
+                  <option value="">{t('people.compare.choose')}</option>
+                  {groups.current.length > 0 && (
+                    <optgroup label={t('people.compare.groupCurrent', { season: current ? seasonLabel(current, lang) : '' })}>
+                      {groups.current.map((o) => (
+                        <option value={o.driver.slug} selected={o.driver.slug === defaultB}>
+                          {optionLabel(o)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {groups.earlier.length > 0 && (
+                    <optgroup label={t('people.compare.groupEarlier')}>
+                      {groups.earlier.map((o) => (
+                        <option value={o.driver.slug} selected={o.driver.slug === defaultB}>
+                          {optionLabel(o)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+              </div>
+
+              <div class="field h2h-field-s">
+                <label for="h2h-s" class="label">
+                  {t('people.compare.season')}
+                </label>
+                <select id="h2h-s" name="s" class="select">
+                  <option value="">{t('people.compare.allSeasons')}</option>
+                  {payload.seasons.map((s) => (
+                    <option value={s.slug}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div class="h2h-actions">
+                <button type="submit" class="btn btn-primary">
+                  {t('people.compare.submit')}
+                </button>
+                <ShareButton lang={lang} class="min-h-11" />
+              </div>
+            </form>
+          </section>
+
+          <noscript>
+            <div class="alert alert-warning mt-6">
+              <p class="text-sm">{t('people.compare.noscript')}</p>
+              <p class="mt-3">
+                <a href={url(lang, 'drivers')} class="btn btn-secondary btn-sm">
+                  {t('people.compare.toDrivers')}
+                </a>
+              </p>
+            </div>
+          </noscript>
+
+          <p class="sr-only" role="status" aria-live="polite" data-h2h-status />
+          <div class="h2h-out mt-10" data-h2h-output />
+          <p class="mt-10 max-w-2xl text-xs text-muted">{t('people.compare.note')}</p>
+          <script type="application/json" id="h2h-data" set:html={safeJson(payload)} />
+        </>
+      )
+    }
+  </div>
+</BaseLayout>
+
+<script>
+  import { initCompare } from '~/components/people/h2h-client';
+
+  initCompare();
+</script>
+
+<style>
+  .h2h-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    align-items: end;
+  }
+  @media (min-width: 768px) {
+    .h2h-form {
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    }
+    .h2h-field-s {
+      grid-column: 1 / 2;
+    }
+    .h2h-actions {
+      grid-column: 3 / 4;
+    }
+  }
+  @media (min-width: 1024px) {
+    .h2h-form {
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) minmax(0, 0.8fr) auto;
+    }
+    .h2h-field-s,
+    .h2h-actions {
+      grid-column: auto;
+    }
+  }
+  .h2h-swap {
+    justify-self: center;
+  }
+  .h2h-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  /* Ergebnis (per Skript erzeugt, daher :global) */
+  .h2h-out :global(.h2h-sub) {
+    margin: 2.5rem 0 1rem;
+    font-size: 1.125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .h2h-out :global(.h2h-cards) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+  @media (min-width: 640px) {
+    .h2h-out :global(.h2h-cards) {
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      align-items: center;
+    }
+  }
+  .h2h-out :global(.h2h-vs) {
+    text-align: center;
+  }
+  .h2h-out :global(.h2h-card) {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1rem 1rem 1.25rem;
+    overflow: hidden;
+  }
+  .h2h-out :global(.h2h-stripe) {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: var(--team-color, var(--color-border));
+  }
+  .h2h-out :global(.h2h-name) {
+    margin-top: 0.25rem;
+    font-size: 1.25rem;
+    overflow-wrap: anywhere;
+  }
+  .h2h-out :global(.h2h-name a) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .h2h-out :global(.h2h-number) {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 2.25rem;
+    line-height: 1;
+    color: var(--color-muted);
+  }
+  .h2h-out :global(.h2h-duels) {
+    display: grid;
+    gap: 1.25rem;
+    padding: 1rem;
+  }
+  .h2h-out :global(.h2h-duel) {
+    display: grid;
+    gap: 0.25rem;
+  }
+  .h2h-out :global(.h2h-duel-values) {
+    display: grid;
+    grid-template-columns: 3rem 1fr 3rem;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .h2h-out :global(.h2h-v) {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--color-muted);
+  }
+  .h2h-out :global(.h2h-v.lead) {
+    color: var(--color-fg);
+  }
+  .h2h-out :global(.h2h-bar) {
+    display: flex;
+    height: 0.5rem;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--color-surface-2);
+  }
+  .h2h-out :global(.h2h-bar-a) {
+    background: var(--color-green);
+  }
+  .h2h-out :global(.h2h-bar-b) {
+    flex: 1;
+    background: var(--color-teal-deep);
+  }
+  .h2h-out :global(.h2h-win),
+  .h2h-out :global(.h2h-better) {
+    font-weight: 700;
+    color: var(--color-fg);
+    box-shadow: inset 0 -2px 0 var(--color-green);
+  }
+  .h2h-out :global(.h2h-noduel) {
+    text-align: center;
+    color: var(--color-muted);
+  }
+  .h2h-out :global(.h2h-stats) {
+    max-width: 40rem;
+  }
+</style>

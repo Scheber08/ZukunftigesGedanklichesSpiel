@@ -2,12 +2,16 @@
 /**
  * Teamkollegen-Duell (Plan §4.5): Qualifying, Rennen und Punkte Kopf an Kopf,
  * dazu Runde für Runde als Tabelle. Balken sind nur Deko, die Zahlen stehen immer daneben.
+ * DNF/DSQ/DNS stehen als Text in der Tabelle; ein gewerteter Fahrer schlägt einen
+ * ausgefallenen, sind beide ausgefallen, steht dort „Kein Duell“ (src/lib/people/duel.ts).
  */
 import DriverLink from '~/components/ui/DriverLink.astro';
 import { useT, type Lang } from '~/i18n';
 import type { DriverRow, TeamRow } from '~/lib/db/types';
+import type { DuelCell, SessionDuel } from '~/lib/domain/h2h';
 import type { Duel } from '~/lib/domain/stats';
 import type { League } from '~/lib/league/league';
+import { duelDetail, isNoDuel } from '~/lib/people/duel';
 import { roundLabel, teamStyle } from '~/lib/view';
 
 interface Props {
@@ -24,17 +28,29 @@ const t = useT(lang);
 const nameA = league.driverName(a.id, lang);
 const nameB = league.driverName(b.id, lang);
 
+// Runde für Runde mit Status (dieselben Runden wie das Duell)
+const duelRounds = new Set(duel.rounds.map((r) => r.roundId));
+const detail = duelDetail(
+  league.standingsResults().filter((r) => duelRounds.has(r.roundId)),
+  duel.teamId,
+  duel.driverA,
+  duel.driverB,
+  (roundId) => {
+    const round = league.round(roundId);
+    return round ? new Date(round.start_utc).getTime() : 0;
+  },
+);
 const rows = [
-  { key: 'qualifying', label: t('session.qualifying'), x: duel.qualiWinsA, y: duel.qualiWinsB },
-  { key: 'race', label: t('session.race'), x: duel.raceWinsA, y: duel.raceWinsB },
-  { key: 'points', label: t('common.points'), x: duel.pointsA, y: duel.pointsB },
+  { key: 'qualifying', label: t('session.qualifying'), x: detail.qualiWinsA, y: detail.qualiWinsB, none: detail.qualiNoDuel },
+  { key: 'race', label: t('session.race'), x: detail.raceWinsA, y: detail.raceWinsB, none: detail.raceNoDuel },
+  { key: 'points', label: t('common.points'), x: duel.pointsA, y: duel.pointsB, none: 0 },
 ];
 const share = (x: number, y: number) => (x + y === 0 ? 50 : Math.round((x / (x + y)) * 100));
-const pos = (n: number | null) => (n == null ? '–' : t('people.pos', { n }));
-const better = (mine: number | null, other: number | null) => mine != null && (other == null || mine < other);
-const orderedRounds = [...duel.rounds]
-  .map((r) => ({ ...r, round: league.round(r.roundId) }))
-  .sort((p, q) => (p.round?.number ?? 0) - (q.round?.number ?? 0));
+const cellText = (c: DuelCell | null) =>
+  c == null ? t('people.duel.notStarted') : c.position != null ? t('people.pos', { n: c.position }) : t(`status.result.${c.status}`);
+const out = (c: DuelCell | null) => c != null && c.position == null;
+const statusOf = (c: DuelCell | null) => (c ? t(`status.result.${c.status}`) : '–');
+const sessions = (r: (typeof detail.rounds)[number]): SessionDuel[] => [r.quali, r.race];
 ---
 
 <div class="duel card p-4 md:p-5" style={teamStyle(team)}>
@@ -46,7 +62,7 @@ const orderedRounds = [...duel.rounds]
   <p class="mt-1 text-xs text-muted">{t('people.duel.lead', { team: team.name })}</p>
 
   {
-    duel.rounds.length === 0 ? (
+    detail.rounds.length === 0 ? (
       <p class="mt-4 text-sm text-muted">{t('people.duel.none')}</p>
     ) : (
       <>
@@ -63,6 +79,7 @@ const orderedRounds = [...duel.rounds]
                 <span class:list={['v tabular text-right', r.y > r.x && 'lead']}>{r.y}</span>
                 <span class="sr-only">{t('people.duel.score', { a: nameA, x: r.x, b: nameB, y: r.y })}</span>
               </dd>
+              {r.none > 0 && <dd class="text-center text-xs text-muted">{t('people.duel.noDuelCount', { n: r.none })}</dd>}
             </div>
           ))}
         </dl>
@@ -91,17 +108,41 @@ const orderedRounds = [...duel.rounds]
                 </tr>
               </thead>
               <tbody>
-                {orderedRounds.map((r) => (
-                  <tr>
-                    <th scope="row" class="sticky-col font-normal">
-                      {r.round ? roundLabel(r.round, league.track(r.round.track_id), lang) : '–'}
-                    </th>
-                    <td class:list={['num', better(r.qualiA, r.qualiB) && 'win']}>{pos(r.qualiA)}</td>
-                    <td class:list={['num', better(r.qualiB, r.qualiA) && 'win']}>{pos(r.qualiB)}</td>
-                    <td class:list={['num', better(r.raceA, r.raceB) && 'win']}>{pos(r.raceA)}</td>
-                    <td class:list={['num', better(r.raceB, r.raceA) && 'win']}>{pos(r.raceB)}</td>
-                  </tr>
-                ))}
+                {detail.rounds.map((r) => {
+                  const round = league.round(r.roundId);
+                  return (
+                    <tr>
+                      <th scope="row" class="sticky-col font-normal">
+                        {round ? roundLabel(round, league.track(round.track_id), lang) : '–'}
+                      </th>
+                      {sessions(r).map((d) =>
+                        isNoDuel(d) ? (
+                          <td colspan="2" class="no-duel">
+                            <span class="font-semibold">{t('people.duel.noDuel')}</span>
+                            <span class="text-danger" aria-hidden="true">
+                              {' '}
+                              ({statusOf(d.a)} · {statusOf(d.b)})
+                            </span>
+                            <span class="sr-only">
+                              : {t('people.duel.bothOut', { a: `${nameA} ${statusOf(d.a)}`, b: `${nameB} ${statusOf(d.b)}` })}
+                            </span>
+                          </td>
+                        ) : (
+                          <>
+                            <td class:list={['num', d.winner === 'a' && 'win', out(d.a) && 'text-danger', d.a == null && 'muted']}>
+                              {cellText(d.a)}
+                              {d.winner === 'a' && <span class="sr-only"> ({t('people.duel.ahead')})</span>}
+                            </td>
+                            <td class:list={['num', d.winner === 'b' && 'win', out(d.b) && 'text-danger', d.b == null && 'muted']}>
+                              {cellText(d.b)}
+                              {d.winner === 'b' && <span class="sr-only"> ({t('people.duel.ahead')})</span>}
+                            </td>
+                          </>
+                        ),
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -160,6 +201,10 @@ const orderedRounds = [...duel.rounds]
     font-weight: 700;
     color: var(--color-fg);
     box-shadow: inset 0 -2px 0 var(--color-green);
+  }
+  .no-duel {
+    text-align: center;
+    color: var(--color-muted);
   }
   .summary {
     display: inline-flex;

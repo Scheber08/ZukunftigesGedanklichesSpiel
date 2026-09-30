@@ -1,12 +1,17 @@
 ---
-import { driverProfileSlugs } from '~/lib/people';
+import { driverProfileSlugs, isReservedDriverSlug } from '~/lib/people';
 import { loadLeague } from '~/lib/server/league';
 import DriverView from '~/views/DriverView.astro';
 
-/** Profilseiten für alle nicht pseudonymisierten Fahrer mit Ergebnis, Nummer oder Cockpit. */
+/**
+ * Profilseiten für alle nicht pseudonymisierten Fahrer mit Ergebnis, Nummer oder Cockpit.
+ * Reservierte Slugs („vergleich“/„compare“ = Fahrer-Vergleich) nie als Profil erzeugen.
+ */
 export async function getStaticPaths() {
   const league = await loadLeague();
-  return driverProfileSlugs(league).map((slug) => ({ params: { slug } }));
+  return driverProfileSlugs(league)
+    .filter((slug) => !isReservedDriverSlug(slug))
+    .map((slug) => ({ params: { slug } }));
 }
 
 const { slug } = Astro.params;

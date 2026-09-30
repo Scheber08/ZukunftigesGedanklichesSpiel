@@ -2,7 +2,8 @@
 /**
  * Hall of Fame (Plan §4.8): Champions pro Saison (Fahrer und Team) als große Karten,
  * dazu die ewigen Bestenlisten (Titel, Siege, Podien, Poles, schnellste Runden, Starts,
- * Punkte, Konstrukteurstitel). Leerer Zustand, solange keine Saison abgeschlossen ist.
+ * Punkte, Fahrer des Tages, Konstrukteurstitel). Leerer Zustand, solange keine Saison
+ * abgeschlossen ist. „Fahrer des Tages“ erscheint nur, wenn die Liga ihn vergibt.
  */
 import HofBoard from '~/components/people/HofBoard.astro';
 import HofChampionCard from '~/components/people/HofChampionCard.astro';
@@ -13,6 +14,7 @@ import { alternates, url, useT, type Lang } from '~/i18n';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import type { HallOfFameEntry } from '~/lib/league/league';
 import { constructorTitles } from '~/lib/people';
+import { dotdLeaderboard } from '~/lib/people/awards';
 import { loadLeague } from '~/lib/server/league';
 import { breadcrumbJsonLd } from '~/lib/view';
 
@@ -26,6 +28,7 @@ const hof = league.hallOfFame();
 const hasChampions = hof.champions.length > 0;
 
 const toEntries = (list: HallOfFameEntry[]) => list.map((e) => ({ id: e.driverId, value: e.value }));
+const dotd = dotdLeaderboard(league);
 const boards = [
   { key: 'titles', kind: 'driver', entries: toEntries(hof.titles) },
   { key: 'wins', kind: 'driver', entries: toEntries(hof.wins) },
@@ -34,6 +37,7 @@ const boards = [
   { key: 'fastestLaps', kind: 'driver', entries: toEntries(hof.fastestLaps) },
   { key: 'starts', kind: 'driver', entries: toEntries(hof.starts) },
   { key: 'points', kind: 'driver', entries: toEntries(hof.points) },
+  ...(dotd.length > 0 ? [{ key: 'dotd', kind: 'driver', entries: toEntries(dotd) } as const] : []),
   { key: 'constructors', kind: 'team', entries: constructorTitles(hof.champions).map((e) => ({ id: e.teamId, value: e.value })) },
 ] as const;
 
