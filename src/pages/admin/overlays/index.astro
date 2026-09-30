@@ -1,0 +1,235 @@
+---
+/**
+ * Stream-Overlays (Plan Phase 2): alle Overlay-URLs für OBS mit Parametern, Vorschau und
+ * Kopieren-Button, dazu ein URL-Baukasten und die empfohlenen OBS-Einstellungen.
+ * Nur lesen – Overlays zeigen ausschließlich öffentliche Daten. Redaktion und Admin.
+ */
+export const prerender = false;
+
+import Section from '~/components/admin/core/Section.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import { DEFAULT_N, N_MAX, N_MIN, OVERLAY_NAMES, OVERLAY_PARAMS, overlayPagePath, type OverlayName } from '~/components/overlay/params';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { hasRole } from '~/lib/server/auth';
+
+if (!hasRole(Astro.locals.staff, 'redakteur')) return Astro.rewrite('/admin?error=forbidden');
+
+const origin = Astro.url.origin;
+const abs = (path: string) => new URL(path, origin).href;
+
+const INFO: Record<OverlayName, { title: string; text: string; place: string }> = {
+  'naechstes-rennen': {
+    title: 'Nächstes Rennen',
+    text: 'Runde, Strecke, Termin (Liga-Zeit) und Countdown. Nach dem Start: „Jetzt live“.',
+    place: 'unten links',
+  },
+  aufstellung: {
+    title: 'Aufstellung',
+    text: 'Veröffentlichte Aufstellung der laufenden bzw. nächsten Runde nach Team, Ersatzfahrer mit „für …“. Bis 12 h nach dem Start bleibt die Runde aktuell.',
+    place: 'Bildmitte (ganzer Bildschirm)',
+  },
+  wertung: {
+    title: 'Wertung',
+    text: 'Top N der Fahrer- oder Konstrukteurswertung der aktuellen Saison (Stand nach der letzten gewerteten Runde).',
+    place: 'oben links (Turm)',
+  },
+  ergebnis: {
+    title: 'Ergebnis',
+    text: 'Top N des Hauptrennens der zuletzt gewerteten Runde mit Abstand, Pole (P), schnellster Runde (Stoppuhr) und Punkten; „vorläufig“ wird angezeigt.',
+    place: 'oben links (Turm)',
+  },
+  ticker: {
+    title: 'Laufband',
+    text: 'Nächstes Rennen, Fahrer- und Konstrukteurswertung (Top N) und letztes Podium als Laufschrift.',
+    place: 'unten, volle Breite',
+  },
+};
+
+const PARAM_TEXT: Record<'n' | 'art', string> = {
+  n: `n=${N_MIN}–${N_MAX} (Zeilen)`,
+  art: 'art=fahrer|teams',
+};
+
+const overlays = OVERLAY_NAMES.map((name) => {
+  const base = { lang: 'de' as const, n: DEFAULT_N[name], scale: 1, art: 'drivers' as const };
+  return {
+    name,
+    ...INFO[name],
+    params: ['lang=de|en', ...OVERLAY_PARAMS[name].map((p) => PARAM_TEXT[p]), 'scale=0.5–3'],
+    urlDe: abs(overlayPagePath(name, base)),
+    urlEn: abs(overlayPagePath(name, { ...base, lang: 'en' })),
+    extra: name === 'wertung' ? abs(overlayPagePath(name, { ...base, art: 'teams' })) : null,
+  };
+});
+---
+
+<AdminLayout title="Stream-Overlays" breadcrumbs={[{ label: 'Stream-Overlays' }]}>
+  <p class="mb-6 max-w-prose text-muted">
+    Overlays für OBS (oder Streamlabs) als <strong class="text-fg">Browser-Quelle</strong>. Hintergrund transparent, ausgelegt für
+    1920 × 1080. Die Daten aktualisieren sich alle 20 Sekunden selbst – nach dem Veröffentlichen eines Ergebnisses stehen sie nach
+    spätestens etwa einer halben Minute im Stream. Angezeigt werden nur öffentliche Daten.
+  </p>
+
+  <Section title="URL-Baukasten" id="baukasten" description="Overlay und Parameter wählen, dann die Adresse kopieren und in OBS als URL der Browser-Quelle einfügen.">
+    <form class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-overlay-builder data-origin={origin} novalidate>
+      <Field id="ov-name" label="Overlay">
+        <select id="ov-name" name="name" class="select">
+          {overlays.map((o) => <option value={o.name}>{o.title}</option>)}
+        </select>
+      </Field>
+      <Field id="ov-lang" label="Sprache">
+        <select id="ov-lang" name="lang" class="select">
+          <option value="de">Deutsch</option>
+          <option value="en">Englisch</option>
+        </select>
+      </Field>
+      <Field id="ov-art" label="Wertung (nur „Wertung“)">
+        <select id="ov-art" name="art" class="select">
+          <option value="fahrer">Fahrer</option>
+          <option value="teams">Konstrukteure</option>
+        </select>
+      </Field>
+      <Field id="ov-n" label="Anzahl Zeilen (n)" hint={`${N_MIN}–${N_MAX}; gilt für Wertung, Ergebnis und Laufband.`}>
+        <input id="ov-n" name="n" type="number" min={N_MIN} max={N_MAX} step="1" value="10" class="input" inputmode="numeric" aria-describedby="ov-n-hint" />
+      </Field>
+      <Field id="ov-scale" label="Skalierung" hint="1 = 1920 × 1080; 0,67 für 1280 × 720; 2 für 3840 × 2160.">
+        <select id="ov-scale" name="scale" class="select" aria-describedby="ov-scale-hint">
+          <option value="0.67">0,67 (1280 × 720)</option>
+          <option value="1" selected>1 (1920 × 1080)</option>
+          <option value="1.25">1,25</option>
+          <option value="1.5">1,5</option>
+          <option value="2">2 (3840 × 2160)</option>
+        </select>
+      </Field>
+    </form>
+    <div class="mt-5 grid gap-3">
+      <label for="ov-url" class="label">Adresse für OBS</label>
+      <div class="flex flex-wrap gap-2">
+        <input id="ov-url" type="text" readonly class="input min-w-0 flex-1 font-mono text-sm" value={overlays[0]!.urlDe} data-overlay-url />
+        <button type="button" class="btn btn-primary" data-copy-target="ov-url">Kopieren</button>
+        <a href={`${overlays[0]!.urlDe}&preview=1`} target="_blank" rel="noopener" class="btn btn-secondary" data-overlay-preview>
+          Vorschau <span class="sr-only">(öffnet in neuem Tab)</span>
+        </a>
+      </div>
+    </div>
+  </Section>
+
+  <Section title="Alle Overlays" id="liste" description="Standard-Adressen (Deutsch). Die Vorschau zeigt ein Schachbrett statt Transparenz – in OBS ohne „preview=1“ verwenden.">
+    <ul class="grid gap-4">
+      {
+        overlays.map((o) => (
+          <li class="rounded-lg border border-border p-4">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 class="text-lg uppercase">{o.title}</h3>
+              <span class="text-sm text-muted">Position: {o.place}</span>
+            </div>
+            <p class="mt-1 max-w-prose text-sm text-muted">{o.text}</p>
+            <p class="mt-2 text-sm">
+              <span class="text-muted">Parameter:</span> <code>{o.params.join(' · ')}</code>
+            </p>
+            {[
+              { id: `url-${o.name}-de`, label: 'Deutsch', href: o.urlDe },
+              { id: `url-${o.name}-en`, label: 'Englisch', href: o.urlEn },
+              ...(o.extra ? [{ id: `url-${o.name}-teams`, label: 'Konstrukteure', href: o.extra }] : []),
+            ].map((u) => (
+              <div class="mt-3">
+                <label for={u.id} class="label">
+                  {u.label}
+                </label>
+                <div class="flex flex-wrap gap-2">
+                  <input id={u.id} type="text" readonly class="input min-w-0 flex-1 font-mono text-sm" value={u.href} />
+                  <button type="button" class="btn btn-secondary" data-copy-target={u.id}>
+                    Kopieren
+                  </button>
+                  <a href={`${u.href}&preview=1`} target="_blank" rel="noopener" class="btn btn-ghost border border-border">
+                    Vorschau <span class="sr-only">{`${o.title} ${u.label} (öffnet in neuem Tab)`}</span>
+                  </a>
+                </div>
+              </div>
+            ))}
+          </li>
+        ))
+      }
+    </ul>
+  </Section>
+
+  <Section title="Empfohlene OBS-Einstellungen" id="obs">
+    <ol class="grid max-w-prose list-decimal gap-2 pl-5 text-sm">
+      <li><strong>Quelle hinzufügen → Browser</strong>, Namen vergeben (z. B. „Liga – Wertung“).</li>
+      <li><strong>URL</strong>: Adresse von oben einfügen (ohne <code>preview=1</code>).</li>
+      <li><strong>Breite 1920, Höhe 1080</strong> (bei anderer Auflösung Breite/Höhe anpassen und <code>scale</code> setzen).</li>
+      <li><strong>Seiten-FPS benutzerdefiniert: 30</strong> reicht (Countdown und Laufband laufen flüssig).</li>
+      <li><strong>Benutzerdefiniertes CSS</strong>: den OBS-Standard stehen lassen (transparenter Hintergrund).</li>
+      <li><strong>„Quelle herunterfahren, wenn nicht sichtbar“ aus</strong>, damit die Daten weiterlaufen; <strong>„Browser aktualisieren, wenn Szene aktiv wird“ an</strong>.</li>
+      <li>Die Quelle nicht verkleinern/zuschneiden, sondern mit <code>scale</code> skalieren – so bleibt die Schrift scharf.</li>
+      <li>Nach Design-Updates der Website in den Eigenschaften der Quelle „Cache der aktuellen Seite aktualisieren“ klicken.</li>
+    </ol>
+    <p class="mt-4 max-w-prose text-sm text-muted">
+      Ausführliche Anleitung: <code>docs/OVERLAYS.md</code> im Repository. Die JSON-Daten gibt es für eigene Widgets unter
+      <code>/api/overlay/&lt;name&gt;.json</code> (gleiche Parameter, 15 s gecacht).
+    </p>
+  </Section>
+
+  <p class="sr-only" role="status" aria-live="polite" data-copy-status></p>
+</AdminLayout>
+
+<script>
+  const status = document.querySelector<HTMLElement>('[data-copy-status]');
+
+  async function copy(input: HTMLInputElement, button: HTMLButtonElement): Promise<void> {
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(input.value);
+      ok = true;
+    } catch {
+      // Ohne Clipboard-API: Text markieren, Strg+C bleibt
+      input.focus();
+      input.select();
+    }
+    const label = button.dataset.label ?? button.textContent ?? 'Kopieren';
+    button.dataset.label = label;
+    button.textContent = ok ? 'Kopiert ✓' : 'Markiert – Strg+C';
+    if (status) status.textContent = ok ? 'Adresse kopiert' : 'Adresse markiert, bitte mit Strg+C kopieren';
+    window.setTimeout(() => {
+      button.textContent = label;
+    }, 2000);
+  }
+
+  document.addEventListener('click', (e) => {
+    const button = (e.target as HTMLElement | null)?.closest<HTMLButtonElement>('[data-copy-target]');
+    if (!button) return;
+    const input = document.getElementById(button.dataset.copyTarget ?? '');
+    if (input instanceof HTMLInputElement) void copy(input, button);
+  });
+
+  // URL-Baukasten
+  const form = document.querySelector<HTMLFormElement>('[data-overlay-builder]');
+  const output = document.querySelector<HTMLInputElement>('[data-overlay-url]');
+  const preview = document.querySelector<HTMLAnchorElement>('[data-overlay-preview]');
+  if (form && output && preview) {
+    const withN = new Set(['wertung', 'ergebnis', 'ticker']);
+    const update = () => {
+      const data = new FormData(form);
+      const name = String(data.get('name') ?? 'naechstes-rennen');
+      const q = new URLSearchParams({ lang: String(data.get('lang') ?? 'de') });
+      if (withN.has(name)) {
+        const n = Math.min(22, Math.max(1, Number.parseInt(String(data.get('n') ?? '10'), 10) || 10));
+        q.set('n', String(n));
+      }
+      if (name === 'wertung') q.set('art', String(data.get('art') ?? 'fahrer'));
+      const scale = String(data.get('scale') ?? '1');
+      if (scale !== '1') q.set('scale', scale);
+      const href = new URL(`/overlay/${name}?${q.toString()}`, form.dataset.origin ?? location.origin).href;
+      output.value = href;
+      preview.href = `${href}&preview=1`;
+      const art = form.querySelector<HTMLSelectElement>('[name="art"]');
+      const n = form.querySelector<HTMLInputElement>('[name="n"]');
+      if (art) art.disabled = name !== 'wertung';
+      if (n) n.disabled = !withN.has(name);
+    };
+    form.addEventListener('input', update);
+    form.addEventListener('change', update);
+    form.addEventListener('submit', (e) => e.preventDefault());
+    update();
+  }
+</script>

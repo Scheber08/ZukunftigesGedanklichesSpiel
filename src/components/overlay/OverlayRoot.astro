@@ -1,0 +1,428 @@
+---
+/**
+ * Inhalt eines OBS-Overlays: Startdaten + Beschriftungen als JSON-Datenblock, Wurzel-Element und
+ * das gebündelte Skript (./client.ts), das rendert und alle 20 s neue Daten holt.
+ * Styles global (.ov-*), weil das Skript die Elemente erzeugt.
+ */
+import { SITE } from '~/config/site';
+import { t } from '~/i18n';
+import { buildOverlayPayload, liveSnapshot, overlayParts } from '~/lib/server/live-data';
+import { safeJson } from '~/lib/util/html';
+import { overlayApiPath, POLL_MS, type OverlayName, type OverlayParams } from './params';
+import type { OverlayConfig, OverlayLabels, OverlayPayload } from './types';
+
+interface Props {
+  name: OverlayName;
+  params: OverlayParams;
+}
+const { name, params } = Astro.props;
+const lang = params.lang;
+
+let initial: OverlayPayload | null = null;
+try {
+  initial = buildOverlayPayload(name, await liveSnapshot(overlayParts(name)), params);
+} catch (err) {
+  // Ohne Startdaten holt das Skript sie beim ersten Abruf
+  console.error('Overlay-Startdaten nicht lesbar', err);
+}
+
+const labels: OverlayLabels = {
+  brand: SITE.name,
+  nextRace: t(lang, 'countdown.next'),
+  days: t(lang, 'countdown.days'),
+  hours: t(lang, 'countdown.hours'),
+  minutes: t(lang, 'countdown.minutes'),
+  seconds: t(lang, 'countdown.seconds'),
+  live: t(lang, 'countdown.now'),
+  noRace: t(lang, 'countdown.none'),
+  lineup: t(lang, 'overlay.lineup'),
+  lineupPending: t(lang, 'overlay.lineupPending'),
+  reserveShort: t(lang, 'common.reserveShort'),
+  replaces: t(lang, 'overlay.replaces'),
+  standingsDrivers: t(lang, 'overlay.standingsDrivers'),
+  standingsTeams: t(lang, 'overlay.standingsTeams'),
+  afterRound: t(lang, 'overlay.afterRound'),
+  noStandings: t(lang, 'overlay.noStandings'),
+  result: t(lang, 'overlay.result'),
+  noResult: t(lang, 'overlay.noResult'),
+  pointsShort: t(lang, 'common.pointsShort'),
+  pole: t(lang, 'legend.pole'),
+  fastestLap: t(lang, 'legend.fastestLap'),
+  tickerEmpty: t(lang, 'overlay.tickerEmpty'),
+  stale: t(lang, 'overlay.stale'),
+};
+const config: OverlayConfig = { name, endpoint: overlayApiPath(name, params), intervalMs: POLL_MS, lang, labels, initial };
+---
+
+<div id="overlay-root" class:list={['ov-root', `ov-${name}`, params.n > 12 && 'ov-dense']} data-overlay={name}></div>
+<script type="application/json" id="overlay-config" set:html={safeJson(config)} />
+
+<script>
+  import { startOverlay } from './client';
+
+  startOverlay();
+</script>
+
+<style is:global>
+  .ov-root {
+    position: fixed;
+    inset: 0;
+    font-family: var(--font-sans);
+    color: #fff;
+    text-shadow: 0 1px 3px rgb(0 0 0 / 0.55);
+    pointer-events: none;
+  }
+  .ov-panel {
+    position: absolute;
+    overflow: hidden;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    border-radius: 0.6rem;
+    background: rgb(5 5 5 / 0.84);
+    box-shadow: 0 0.6rem 2rem rgb(0 0 0 / 0.45);
+  }
+  /* Verlaufskante oben (Liga-Akzent) */
+  .ov-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 0.2rem;
+    background: var(--g-accent);
+  }
+  .ov-head {
+    padding: 0.9rem 1.2rem 0.7rem;
+    border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  }
+  .ov-eyebrow {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-teal);
+  }
+  .ov-title {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 1.9rem;
+    line-height: 1.05;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .ov-sub {
+    margin-top: 0.2rem;
+    font-size: 0.85rem;
+    color: #d4d4d8;
+  }
+  .ov-empty {
+    padding: 1rem 1.2rem 1.1rem;
+    color: #d4d4d8;
+  }
+  .ov-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.5rem;
+    padding: 0.05rem 0.45rem;
+    border: 1px solid rgb(245 185 74 / 0.6);
+    border-radius: 999px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-warning);
+    vertical-align: 0.2em;
+    text-shadow: none;
+  }
+  .ov-stale-dot {
+    position: absolute;
+    top: 0.55rem;
+    right: 0.55rem;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background: var(--color-warning);
+  }
+
+  /* ------------------------------------------------ Nächstes Rennen (unten links) */
+  .ov-naechstes-rennen .ov-panel {
+    left: 3rem;
+    bottom: 3rem;
+    width: 34rem;
+  }
+  .ov-countdown {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.8rem 1.2rem 1.1rem;
+  }
+  .ov-unit {
+    display: grid;
+    justify-items: center;
+    flex: 1 1 0;
+    padding: 0.45rem 0.25rem 0.35rem;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    border-radius: 0.4rem;
+    background: rgb(22 22 26 / 0.9);
+  }
+  .ov-unit-value {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 2.3rem;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .ov-unit-label {
+    margin-top: 0.15rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #a1a1aa;
+  }
+  .ov-live {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.9rem 1.2rem 1.1rem;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 1.6rem;
+    text-transform: uppercase;
+  }
+  .ov-live-dot {
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 999px;
+    background: var(--color-teal);
+    box-shadow: 0 0 0.8rem var(--color-teal);
+  }
+
+  /* ------------------------------------------------ Türme: Wertung und Ergebnis (links) */
+  .ov-wertung .ov-panel,
+  .ov-ergebnis .ov-panel {
+    left: 3rem;
+    top: 3rem;
+    width: 25rem;
+  }
+  .ov-ergebnis .ov-panel {
+    width: 30rem;
+  }
+  .ov-wertung .ov-title,
+  .ov-ergebnis .ov-title {
+    font-size: 1.45rem;
+  }
+  .ov-rows {
+    padding: 0.35rem 0;
+  }
+  .ov-row {
+    display: grid;
+    grid-template-columns: 2.4rem 0.2rem 2rem minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 0.55rem;
+    height: 2.15rem;
+    padding: 0 1.2rem 0 0.6rem;
+  }
+  .ov-dense .ov-row {
+    height: 1.75rem;
+    font-size: 0.9rem;
+  }
+  .ov-row:nth-child(odd) {
+    background: rgb(255 255 255 / 0.03);
+  }
+  .ov-pos {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.15rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .ov-stripe {
+    width: 0.2rem;
+    height: 1.2rem;
+    border-radius: 2px;
+    background: var(--team-color, #26262c);
+  }
+  .ov-num {
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: #a1a1aa;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .ov-name {
+    overflow: hidden;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ov-team-row {
+    grid-template-columns: 2.4rem 0.2rem minmax(0, 1fr) auto;
+  }
+  .ov-value {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.1rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .ov-detail {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: #a1a1aa;
+  }
+  .ov-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    margin-left: 0.4rem;
+    padding: 0 0.2rem;
+    border-radius: 0.25rem;
+    font-size: 0.65rem;
+    font-weight: 800;
+    vertical-align: 0.1em;
+    text-shadow: none;
+  }
+  .ov-mark-pole {
+    background: #fff;
+    color: #000;
+  }
+  .ov-mark-fl {
+    background: var(--g-accent);
+    color: #000;
+  }
+  .ov-mark-reserve {
+    border: 1px solid rgb(255 255 255 / 0.4);
+    color: #d4d4d8;
+  }
+  .ov-mark svg {
+    width: 0.8rem;
+    height: 0.8rem;
+  }
+
+  /* ------------------------------------------------ Aufstellung (Mitte) */
+  .ov-aufstellung .ov-panel {
+    left: 50%;
+    top: 50%;
+    width: 80rem;
+    transform: translate(-50%, -50%);
+  }
+  .ov-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 1.2rem;
+    padding: 0.9rem 1.2rem 1.2rem;
+  }
+  .ov-team {
+    display: grid;
+    grid-template-columns: 0.25rem minmax(0, 1fr);
+    column-gap: 0.7rem;
+    padding: 0.45rem 0.7rem 0.5rem 0.5rem;
+    border-radius: 0.4rem;
+    background: rgb(22 22 26 / 0.9);
+  }
+  .ov-team .ov-stripe {
+    grid-row: span 3;
+    height: 100%;
+  }
+  .ov-team-name {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #a1a1aa;
+  }
+  .ov-driver {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    min-width: 0;
+    font-size: 1.05rem;
+  }
+  .ov-driver .ov-num {
+    min-width: 1.8rem;
+  }
+  .ov-replaces {
+    overflow: hidden;
+    font-size: 0.75rem;
+    color: #a1a1aa;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ------------------------------------------------ Laufband (unten, volle Breite) */
+  .ov-ticker .ov-panel {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    height: 3rem;
+    border-radius: 0;
+    border-width: 1px 0 0;
+  }
+  .ov-ticker .ov-panel::before {
+    height: 0.15rem;
+  }
+  .ov-ticker-label {
+    display: flex;
+    flex: none;
+    align-items: center;
+    padding: 0 1.2rem;
+    background: var(--g-accent);
+    color: #000;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 1.1rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: none;
+  }
+  .ov-ticker-viewport {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+  }
+  .ov-ticker-track {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    height: 100%;
+    align-items: center;
+    white-space: nowrap;
+    animation: ov-marquee var(--ov-duration, 40s) linear infinite;
+    will-change: transform;
+  }
+  .ov-ticker-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 1.2rem;
+    padding-right: 1.2rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .ov-ticker-sep {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50% 0 50% 50%;
+    transform: rotate(-45deg);
+    background: var(--g-accent);
+  }
+  @keyframes ov-marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ov-ticker-track {
+      animation: none;
+    }
+  }
+</style>

@@ -1,0 +1,61 @@
+---
+/**
+ * Layout der OBS-Overlays (Browser-Quelle, Plan Phase 2): transparenter Hintergrund, ausgelegt
+ * für 1920×1080, ohne Header, Footer, Cookie-Banner und Analytics, nicht indexiert.
+ * Alle Maße in rem; `scale` vergrößert bzw. verkleinert das ganze Overlay (Wurzel-Schriftgröße).
+ * `preview` zeigt im normalen Browser ein Schachbrett statt Transparenz (Vorschau im Admin).
+ */
+import { Font } from 'astro:assets';
+import '~/styles/global.css';
+import { SITE } from '~/config/site';
+import type { Lang } from '~/i18n';
+
+interface Props {
+  lang: Lang;
+  title: string;
+  scale?: number;
+  preview?: boolean;
+}
+const { lang, title, scale = 1, preview = false } = Astro.props;
+---
+
+<!doctype html>
+<html lang={lang} dir="ltr" class:list={['overlay-html', preview && 'overlay-preview']} style={`--overlay-scale: ${scale}`}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>{title} · {SITE.name}</title>
+    <Font cssVariable="--font-titillium" preload={[{ weight: 700, subset: 'latin' }, { weight: 900, subset: 'latin' }]} />
+    <Font cssVariable="--font-inter" preload={[{ subset: 'latin' }]} />
+  </head>
+  <body class="overlay-body">
+    <slot />
+  </body>
+</html>
+
+<style is:global>
+  /* Transparenz für OBS: global.css setzt den Seitenhintergrund und „color-scheme: dark“
+     (der dunkle Standard-Hintergrund würde die Transparenz verdecken). */
+  html.overlay-html {
+    color-scheme: normal;
+    background: transparent !important;
+    /* 1rem = 20 px bei 1920×1080 → 96 × 54 rem */
+    font-size: calc(20px * var(--overlay-scale, 1));
+    scroll-padding-top: 0;
+  }
+  html.overlay-html body.overlay-body {
+    min-height: 0;
+    margin: 0;
+    overflow: hidden;
+    background: transparent !important;
+    color: #fff;
+    font-size: 1rem;
+    line-height: 1.35;
+  }
+  html.overlay-preview {
+    background:
+      repeating-conic-gradient(#1c1c22 0% 25%, #2a2a31 0% 50%) 0 0 / 40px 40px !important;
+  }
+</style>

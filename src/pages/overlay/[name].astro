@@ -1,0 +1,33 @@
+---
+/**
+ * OBS-Overlays als Browser-Quelle (Plan Phase 2): /overlay/naechstes-rennen, /overlay/aufstellung,
+ * /overlay/wertung, /overlay/ergebnis, /overlay/ticker – Parameter ?lang=de|en&n=10&scale=1
+ * (Wertung zusätzlich ?art=fahrer|teams). Die Seite bringt die Daten beim Laden mit; das Skript
+ * fragt danach alle 20 s /api/overlay/<name>.json ab und zeichnet nur bei Änderungen neu.
+ * Anleitung: docs/OVERLAYS.md, URLs im Admin unter /admin/overlays.
+ */
+export const prerender = false;
+
+import OverlayRoot from '~/components/overlay/OverlayRoot.astro';
+import { isOverlayName, parseOverlayParams } from '~/components/overlay/params';
+import OverlayLayout from '~/layouts/OverlayLayout.astro';
+import { t } from '~/i18n';
+
+const name = Astro.params.name;
+if (!isOverlayName(name)) {
+  return new Response('Overlay nicht gefunden', {
+    status: 404,
+    headers: { 'content-type': 'text/plain; charset=utf-8', 'x-robots-tag': 'noindex, nofollow' },
+  });
+}
+const params = parseOverlayParams(name, Astro.url.searchParams);
+const preview = Astro.url.searchParams.get('preview') === '1';
+
+Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+// Die Seite enthält Startdaten; aktuell hält sie das Skript. Kurz cachebar wie die API.
+Astro.response.headers.set('Cache-Control', 'public, max-age=15, s-maxage=15');
+---
+
+<OverlayLayout lang={params.lang} title={t(params.lang, 'overlay.pageTitle')} scale={params.scale} preview={preview}>
+  <OverlayRoot name={name} params={params} />
+</OverlayLayout>

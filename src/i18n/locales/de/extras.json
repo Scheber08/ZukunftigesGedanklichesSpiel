@@ -35,5 +35,21 @@
   "tracks.winners.winner": "Sieger",
   "tracks.rankings.title": "Ranglisten",
   "tracks.rankings.wins": "Meiste Siege auf {track}",
-  "tracks.rankings.poles": "Meiste Pole-Positions auf {track}"
+  "tracks.rankings.poles": "Meiste Pole-Positions auf {track}",
+  "overlay.pageTitle": "Stream-Overlay",
+  "overlay.lineup": "Aufstellung",
+  "overlay.lineupPending": "Die Aufstellung wird noch veröffentlicht.",
+  "overlay.replaces": "für {name}",
+  "overlay.standingsDrivers": "Fahrerwertung",
+  "overlay.standingsTeams": "Konstrukteurswertung",
+  "overlay.afterRound": "nach R{n}",
+  "overlay.noStandings": "Noch keine gewertete Runde.",
+  "overlay.result": "Ergebnis",
+  "overlay.noResult": "Noch kein Ergebnis veröffentlicht.",
+  "overlay.stale": "Keine Verbindung – letzter Stand",
+  "overlay.tickerEmpty": "Alle Termine, Ergebnisse und Wertungen auf unserer Website.",
+  "overlay.ticker.next": "Nächstes Rennen: {round} – {date}",
+  "overlay.ticker.drivers": "Fahrerwertung nach R{round}: {list}",
+  "overlay.ticker.teams": "Konstrukteure: {list}",
+  "overlay.ticker.result": "Ergebnis {round} ({status}): {list}"
 }

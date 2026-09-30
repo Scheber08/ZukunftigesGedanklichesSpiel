@@ -35,5 +35,21 @@
   "tracks.winners.winner": "Winner",
   "tracks.rankings.title": "Rankings",
   "tracks.rankings.wins": "Most wins at {track}",
-  "tracks.rankings.poles": "Most pole positions at {track}"
+  "tracks.rankings.poles": "Most pole positions at {track}",
+  "overlay.pageTitle": "Stream overlay",
+  "overlay.lineup": "Line-up",
+  "overlay.lineupPending": "The line-up has not been published yet.",
+  "overlay.replaces": "for {name}",
+  "overlay.standingsDrivers": "Drivers' standings",
+  "overlay.standingsTeams": "Constructors' standings",
+  "overlay.afterRound": "after R{n}",
+  "overlay.noStandings": "No classified round yet.",
+  "overlay.result": "Result",
+  "overlay.noResult": "No result published yet.",
+  "overlay.stale": "Offline – last known data",
+  "overlay.tickerEmpty": "All dates, results and standings on our website.",
+  "overlay.ticker.next": "Next race: {round} – {date}",
+  "overlay.ticker.drivers": "Drivers' standings after R{round}: {list}",
+  "overlay.ticker.teams": "Constructors: {list}",
+  "overlay.ticker.result": "Result {round} ({status}): {list}"
 }
