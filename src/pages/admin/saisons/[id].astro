@@ -73,7 +73,8 @@ const values = {
   reserve_points_for_constructors: edit.bool('reserve_points_for_constructors', season.reserve_points_for_constructors),
   protest_window_hours: edit.str('protest_window_hours', season.protest_window_hours),
   two_steward_rule: edit.bool('two_steward_rule', season.two_steward_rule),
-  penalty_points_enabled: edit.bool('penalty_points_enabled', season.penalty_points_enabled),
+  // nur Anzeige – der Schalter wird im Abschnitt „Strafpunkte“ gespeichert
+  penalty_points_enabled: season.penalty_points_enabled,
   rules_version_id: edit.str('rules_version_id', season.rules_version_id ?? ''),
   starts_on: edit.str('starts_on', season.starts_on ?? ''),
   ends_on: edit.str('ends_on', season.ends_on ?? ''),
@@ -171,7 +172,8 @@ const stateIcon = { done: '✓', open: '○', manual: '•' } as const;
         {
           !ppStored && (
             <p class="text-sm text-muted">
-              Noch keine eigenen Werte gespeichert – vorausgefüllt sind die Standardwerte (Verwarnung ab 8, Sperre ab 12 Punkten, kein Verfall).
+              Noch keine eigenen Werte gespeichert – vorausgefüllt sind die Standardwerte (Verwarnung ab {ppConfig.warningThreshold}, Sperre ab{' '}
+              {ppConfig.banThreshold} Punkten, kein Verfall).
             </p>
           )
         }

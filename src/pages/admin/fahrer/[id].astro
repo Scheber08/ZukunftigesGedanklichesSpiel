@@ -93,7 +93,7 @@ const teamOf = (id: number) => teams.find((t) => t.id === id);
     outcome={outcome}
     warnings={[
       ...(driver.anonymized ? ['Dieser Fahrer wurde auf Wunsch pseudonymisiert. Ergebnisse bleiben für die Wertung erhalten, persönliche Daten sind gelöscht.'] : []),
-      ...(!driver.anonymized && isReservedSlug('driver', driver.slug) ? [`${reservedSlugMessage('driver', driver.slug)} Die Profilseite ist unter diesem Slug nicht erreichbar.`] : []),
+      ...(!driver.anonymized && isReservedSlug('driver', driver.slug) ? [`${reservedSlugMessage('driver', driver.slug)} Die Profilseite kann unter diesem Slug von einer festen Unterseite überdeckt werden.`] : []),
     ]}
   />
 

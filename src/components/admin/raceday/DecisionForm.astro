@@ -66,8 +66,10 @@ const sessionId = v.sessionId ?? race?.id ?? null;
 
 // Strafpunkte: Hinweis für die Werte im Formular (nach einem Fehler oder beim Bearbeiten eines Entwurfs)
 const ppNote =
-  penalty && v.driverId != null && verdict !== 'no_action' ? penaltyPointsNote(penalty.active[String(v.driverId)] ?? 0, v.penaltyPoints, penalty.config) : null;
-const ppData = penalty ? JSON.stringify({ config: penalty.config, active: penalty.active }) : undefined;
+  penalty && v.driverId != null && verdict !== 'no_action'
+    ? penaltyPointsNote(penalty.active[String(v.driverId)] ?? 0, v.penaltyPoints, penalty.config, penalty.roundExpired)
+    : null;
+const ppData = penalty ? JSON.stringify({ config: penalty.config, active: penalty.active, roundExpired: penalty.roundExpired }) : undefined;
 const ppStatus = { ok: 'unauffällig', warning: 'Verwarnschwelle erreicht', ban: 'Sperrschwelle erreicht' } as const;
 const ppAlert = { info: 'alert pp-info', warning: 'alert alert-warning pp-strong', ban: 'alert alert-danger pp-strong' } as const;
 ---
@@ -274,7 +276,7 @@ const ppAlert = { info: 'alert pp-info', warning: 'alert alert-warning pp-strong
 
     // Strafpunkte: Warnung live, sobald Fahrer, Art oder Punkte sich ändern
     const pp = form.querySelector<HTMLElement>('[data-pp]');
-    let ppData: { config: ResolvedPenaltyPointsConfig; active: Record<string, number> } | null = null;
+    let ppData: { config: ResolvedPenaltyPointsConfig; active: Record<string, number>; roundExpired?: boolean } | null = null;
     try {
       ppData = pp?.dataset.pp ? JSON.parse(pp.dataset.pp) : null;
     } catch {
@@ -287,7 +289,7 @@ const ppAlert = { info: 'alert pp-info', warning: 'alert alert-warning pp-strong
       if (!ppData || !ppLive) return;
       const raw = ppPoints && !ppPoints.disabled ? ppPoints.value.trim() : '';
       const points = raw === '' || !Number.isFinite(Number(raw)) ? 0 : Number(raw);
-      const note = driver?.value ? penaltyPointsNote(ppData.active[driver.value] ?? 0, points, ppData.config) : null;
+      const note = driver?.value ? penaltyPointsNote(ppData.active[driver.value] ?? 0, points, ppData.config, ppData.roundExpired === true) : null;
       // Nur bei Änderung neu schreiben, sonst liest der Screenreader denselben Text erneut vor
       if ((note?.text ?? '') === (ppLive.textContent ?? '').trim()) return;
       ppLive.replaceChildren();

@@ -82,4 +82,14 @@ describe('Hinweis unter dem Strafpunkte-Feld', () => {
     expect(penaltyPointsNote(9, 1, cfg)?.level).toBe('ban');
     expect(penaltyPointsNote(9, 0, cfg)).toBeNull();
   });
+
+  it('späte Entscheidung mit schon verfallenen Punkten: nur Hinweis, keine Schwellen-Warnung', () => {
+    const withExpiry = resolvePenaltyPointsConfig({ warning_threshold: 6, ban_threshold: 10, expiry_rounds: 1 });
+    const note = penaltyPointsNote(9, 5, withExpiry, true);
+    expect(note?.level).toBe('info');
+    expect(note?.text).toMatch(/bereits verfallen \(Verfall nach 1 Runde,/);
+    expect(penaltyPointsNote(9, 0, withExpiry, true)).toBeNull();
+    expect(penaltyPointsNote(9, null, withExpiry, true)).toBeNull();
+    expect(penaltyPointsNote(9, 5, withExpiry, false)?.level).toBe('ban');
+  });
 });

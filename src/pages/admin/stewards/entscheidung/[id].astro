@@ -75,7 +75,7 @@ const session = ctx?.sessions.find((s) => s.id === decision?.session_id);
 const flash = flashText(Astro.url.searchParams);
 // Strafpunkte (Plan Phase 2): Konten der Saison, Beteiligte = betroffener Fahrer + Fahrer des Vorfalls
 const pp = ctx ? await loadStewardPenaltyPoints(store, ctx.season) : null;
-const ppForm = ctx && decision ? formPenalty(pp, ctx.season, [decision.driver_id, ...(incident?.involved_driver_ids ?? [])], driverLabel) : null;
+const ppForm = ctx && decision ? formPenalty(pp, ctx.season, [decision.driver_id, ...(incident?.involved_driver_ids ?? [])], driverLabel, decision.round_id) : null;
 
 let values: DecisionFormValues = decision
   ? {

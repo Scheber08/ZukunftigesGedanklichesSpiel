@@ -265,7 +265,9 @@ const seasonSave = defineAction({
         reserve_points_for_constructors: input.reserve_points_for_constructors,
         protest_window_hours: input.protest_window_hours,
         two_steward_rule: input.two_steward_rule,
-        penalty_points_enabled: input.penalty_points_enabled,
+        // Bestehende Saison: Schalter nur über den Abschnitt „Strafpunkte“ (admin.penaltyPointsSave),
+        // damit ein veraltetes Stammdaten-Formular ihn nicht zurücksetzt. Beim Anlegen per Häkchen.
+        penalty_points_enabled: before ? before.penalty_points_enabled : input.penalty_points_enabled,
         rules_version_id: input.rules_version_id ?? null,
         starts_on: input.starts_on || null,
         ends_on: input.ends_on || null,

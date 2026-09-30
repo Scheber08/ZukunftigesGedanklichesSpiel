@@ -82,7 +82,7 @@ for (const d of decisions) voters.set(d.id, await voterNames(store, d.decided_by
 const roundFinal = ctx?.round.status === 'final' || ctx?.round.status === 'corrected';
 // Strafpunkte (Plan Phase 2): Konten der Saison, Beteiligte = Fahrer des Vorfalls
 const pp = ctx ? await loadStewardPenaltyPoints(store, ctx.season) : null;
-const ppForm = ctx && incident ? formPenalty(pp, ctx.season, incident.involved_driver_ids, driverLabel) : null;
+const ppForm = ctx && incident ? formPenalty(pp, ctx.season, incident.involved_driver_ids, driverLabel, ctx.round.id) : null;
 const flash = flashText(Astro.url.searchParams);
 
 // Formularwerte nach einem Fehler wiederherstellen

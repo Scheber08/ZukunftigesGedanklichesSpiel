@@ -63,8 +63,8 @@ export function isReservedSlug(kind: SlugKind, slug: string | null | undefined):
 /** Fehlermeldung für einen selbst eingetragenen, reservierten Slug. */
 export function reservedSlugMessage(kind: SlugKind, slug: string): string {
   const [de, en] = PROFILE_BASES[kind];
-  const example = kind === 'driver' ? ` wie ${ROUTES.driverCompare.de}` : '';
-  return `Der Slug „${slug}“ ist reserviert: Unter ${de}/… und ${en}/… liegen feste Unterseiten${example}. Bitte einen anderen wählen, z. B. „${slug}-2“.`;
+  const example = kind === 'driver' ? ` (z. B. ${ROUTES.driverCompare.de})` : '';
+  return `Der Slug „${slug}“ ist für feste Unterseiten unter ${de}/… und ${en}/… reserviert${example}. Bitte einen anderen wählen, z. B. „${slug}-2“.`;
 }
 
 /**

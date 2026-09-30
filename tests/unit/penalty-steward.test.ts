@@ -55,6 +55,24 @@ describe('Steward-Werkzeug: Strafpunkte-Konten', () => {
     expect(draftWarning(null, { status: 'draft', driver_id: 13, penalty_points: 12 })).toBeNull();
   });
 
+  it('späte Entscheidung: keine Schwellen-Warnung, wenn die Punkte der Runde schon verfallen sind', async () => {
+    // Verfall nach 1 Runde; gewertet sind R1–R4 der Saison 2
+    await store.update('seasons', { id: 2 }, { penalty_points_config: { warning_threshold: 6, ban_threshold: 10, expiry_rounds: 1 } });
+    const s2 = await season(2);
+    const rounds = (await store.select('rounds', { eq: { season_id: 2 } })).sort((a, b) => a.number - b.number);
+    const r3 = rounds.find((r) => r.number === 3)!;
+    const r4 = rounds.find((r) => r.number === 4)!;
+    const pp = (await loadStewardPenaltyPoints(store, s2))!;
+    expect(pp.expiredInRound(r3.id)).toBe(true);
+    expect(pp.expiredInRound(r4.id)).toBe(false);
+    expect(pp.expiredInRound(999_999)).toBe(false);
+    expect(draftWarning(pp, { status: 'draft', driver_id: 13, penalty_points: 12, round_id: r3.id })).toBeNull();
+    expect(draftWarning(pp, { status: 'draft', driver_id: 13, penalty_points: 12, round_id: r4.id })).toMatchObject({ level: 'ban' });
+    expect(formPenalty(pp, s2, [13], String, r3.id)!.roundExpired).toBe(true);
+    expect(formPenalty(pp, s2, [13], String, r4.id)!.roundExpired).toBe(false);
+    expect(formPenalty(pp, s2, [13], String)!.roundExpired).toBe(false);
+  });
+
   it('Zurücknahme senkt das Konto', async () => {
     await store.update('decisions', { public_ref: 'S2-R03-01' }, { status: 'revoked' });
     const pp = (await loadStewardPenaltyPoints(store, await season(2)))!;

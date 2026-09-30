@@ -51,15 +51,17 @@ const penaltyPointsSave = defineAction({
       if (!season) throw new ActionError({ code: 'NOT_FOUND', message: 'Saison nicht gefunden.' });
       if (isSeasonFrozen(season)) throw new ActionError({ code: 'CONFLICT', message: FROZEN_MESSAGE });
 
-      if (input.expiry_mode === 'rounds' && input.expiry_rounds == null) {
-        throw fieldError({ expiry_rounds: 'Verfall: bitte die Anzahl Runden eintragen (oder „nie“ wählen).' });
-      }
       const checked = validatePenaltyPointsConfig({
         warning_threshold: input.warning_threshold,
         ban_threshold: input.ban_threshold,
         expiry_rounds: input.expiry_mode === 'rounds' ? input.expiry_rounds : null,
       });
-      if (!checked.ok) throw fieldError(checked.errors as Record<string, string>);
+      // Alle Fehler auf einmal melden (auch „Verfall nach … Runden“ ohne Zahl)
+      const errors: Record<string, string> = checked.ok ? {} : { ...checked.errors };
+      if (input.expiry_mode === 'rounds' && input.expiry_rounds == null) {
+        errors.expiry_rounds = 'Verfall: bitte die Anzahl Runden eintragen (oder „nie“ wählen).';
+      }
+      if (!checked.ok || Object.keys(errors).length > 0) throw fieldError(errors);
 
       const before = { penalty_points_enabled: season.penalty_points_enabled, penalty_points_config: season.penalty_points_config ?? {} };
       const after = { penalty_points_enabled: input.penalty_points_enabled, penalty_points_config: checked.config };

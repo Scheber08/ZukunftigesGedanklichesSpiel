@@ -9,6 +9,7 @@ import {
   MAX_POINTS_PER_DECISION,
   penaltyPointsAccounts,
   penaltyPointsImpact,
+  pointsExpiredOnArrival,
   resolvePenaltyPointsConfig,
   type PenaltyPointsAccount,
   type PenaltyPointsStatus,
@@ -177,12 +178,26 @@ export function penaltyPointsWarning(
   return null;
 }
 
-/** Hinweis unter dem Strafpunkte-Feld: Warnung bei Schwelle, sonst der neue Kontostand. */
+/** Hinweis, wenn die Punkte einer späten Entscheidung schon beim Eintragen verfallen sind. */
+export function expiredOnArrivalText(config: Pick<ResolvedPenaltyPointsConfig, 'expiryRounds'>): string {
+  const n = config.expiryRounds ?? 0;
+  return `Die Punkte dieser Runde sind bereits verfallen (Verfall nach ${n === 1 ? '1 Runde' : `${n} Runden`}, die Verfallsrunde ist gewertet) – sie erscheinen im Konto, zählen aber nicht mehr.`;
+}
+
+/**
+ * Hinweis unter dem Strafpunkte-Feld: Warnung bei Schwelle, sonst der neue Kontostand.
+ * `expiredOnArrival`: Die Runde der Entscheidung liegt schon hinter dem Verfall – dann gibt es
+ * keine Schwellen-Warnung, nur den Hinweis, dass die Punkte nicht mehr zählen.
+ */
 export function penaltyPointsNote(
   activeBefore: number,
   newPoints: number | null | undefined,
   config: ResolvedPenaltyPointsConfig,
+  expiredOnArrival = false,
 ): { level: 'info' | 'warning' | 'ban'; text: string } | null {
+  if (expiredOnArrival) {
+    return newPoints != null && Number.isFinite(newPoints) && newPoints > 0 ? { level: 'info', text: expiredOnArrivalText(config) } : null;
+  }
   const warning = penaltyPointsWarning(activeBefore, newPoints, config);
   if (warning) return warning;
   const impact = penaltyPointsImpact(activeBefore, newPoints, config);
@@ -211,6 +226,8 @@ export interface DecisionFormPenalty {
   /** Konten der Beteiligten */
   involved: PenaltyAccountRow[];
   seasonName: string;
+  /** Punkte aus der Runde dieser Entscheidung sind schon verfallen (späte Entscheidung) */
+  roundExpired: boolean;
 }
 
 // ---------------------------------------------------------------------------- Strafpunkte im Steward-Werkzeug
@@ -227,6 +244,8 @@ export interface StewardPenaltyPoints {
   /** Aktive Punkte je Fahrer-ID (0, wenn nicht vorhanden) */
   activeOf(driverId: Id): number;
   accountOf(driverId: Id): PenaltyPointsAccount | undefined;
+  /** Sind Punkte aus dieser Runde schon beim Eintragen verfallen? (unbekannte Runde: nein) */
+  expiredInRound(roundId: Id): boolean;
 }
 
 /** Konten der Saison – null, wenn das Strafpunkte-System dort nicht aktiv ist. */
@@ -236,11 +255,16 @@ export async function loadStewardPenaltyPoints(store: Store, season: SeasonRow):
   const decisions = rounds.length > 0 ? await store.select('decisions', { in: { round_id: rounds.map((r) => r.id) } }) : [];
   const accounts = penaltyPointsAccounts({ config: season.penalty_points_config, rounds, decisions });
   const byDriver = new Map(accounts.map((a) => [a.driverId, a]));
+  const config = resolvePenaltyPointsConfig(season.penalty_points_config);
   return {
-    config: resolvePenaltyPointsConfig(season.penalty_points_config),
+    config,
     accounts,
     activeOf: (driverId) => byDriver.get(driverId)?.active ?? 0,
     accountOf: (driverId) => byDriver.get(driverId),
+    expiredInRound: (roundId) => {
+      const round = rounds.find((r) => r.id === roundId);
+      return round != null && pointsExpiredOnArrival(round.number, rounds, config);
+    },
   };
 }
 
@@ -271,12 +295,16 @@ export function involvedAccounts(pp: StewardPenaltyPoints, driverIds: readonly I
   });
 }
 
-/** Daten fürs Entscheidungsformular: Schwellen, aktive Punkte aller Fahrer, Konten der Beteiligten. */
+/**
+ * Daten fürs Entscheidungsformular: Schwellen, aktive Punkte aller Fahrer, Konten der Beteiligten
+ * und ob Punkte aus der Runde der Entscheidung (`roundId`) schon verfallen sind.
+ */
 export function formPenalty(
   pp: StewardPenaltyPoints | null,
   season: Pick<SeasonRow, 'name'>,
   involvedIds: readonly Id[],
   label: (id: Id) => string,
+  roundId?: Id | null,
 ): DecisionFormPenalty | null {
   if (!pp) return null;
   return {
@@ -284,14 +312,20 @@ export function formPenalty(
     active: Object.fromEntries(pp.accounts.filter((a) => a.active > 0).map((a) => [String(a.driverId), a.active])),
     involved: involvedAccounts(pp, involvedIds, label),
     seasonName: season.name,
+    roundExpired: roundId != null && pp.expiredInRound(roundId),
   };
 }
 
 /**
  * Warnung für einen Entwurf: Welche Schwelle erreicht er beim Veröffentlichen?
- * Veröffentlichte Entscheidungen stecken schon im Konto – dort keine Warnung.
+ * Veröffentlichte Entscheidungen stecken schon im Konto – dort keine Warnung. Ebenso keine
+ * Warnung, wenn die Punkte der Runde schon verfallen sind (späte Entscheidung).
  */
-export function draftWarning(pp: StewardPenaltyPoints | null, d: Pick<DecisionRow, 'status' | 'driver_id' | 'penalty_points'>): PenaltyPointsWarning | null {
+export function draftWarning(
+  pp: StewardPenaltyPoints | null,
+  d: Pick<DecisionRow, 'status' | 'driver_id' | 'penalty_points'> & Partial<Pick<DecisionRow, 'round_id'>>,
+): PenaltyPointsWarning | null {
   if (!pp || d.status !== 'draft') return null;
+  if (d.round_id != null && pp.expiredInRound(d.round_id)) return null;
   return penaltyPointsWarning(pp.activeOf(d.driver_id), d.penalty_points, pp.config);
 }

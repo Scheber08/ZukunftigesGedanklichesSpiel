@@ -5,6 +5,7 @@
 import Field from '~/components/admin/ui/Field.astro';
 import { fieldAria } from '~/lib/admin/league/page';
 import type { PointsSchemeRow, RulesVersionRow, SeasonStatus } from '~/lib/db/types';
+import { resolvePenaltyPointsConfig } from '~/lib/domain/penalty-points';
 
 interface Values {
   number: string;
@@ -32,11 +33,14 @@ interface Props {
   withStatus?: boolean;
   /**
    * Strafpunkte-Schalter: „checkbox“ beim Anlegen; „hidden“ beim Bearbeiten – dort gibt es einen
-   * eigenen Abschnitt mit Schalter und Konfiguration, das Stammdaten-Formular schickt nur den Stand mit.
+   * eigenen Abschnitt mit Schalter und Konfiguration; hier steht nur der Stand (seasonSave lässt den
+   * Schalter bestehender Saisons unverändert).
    */
   penaltyPoints?: 'checkbox' | 'hidden';
 }
 const { prefix, values: v, err, schemes, rulesVersions, withStatus = true, penaltyPoints = 'checkbox' } = Astro.props;
+/** Standardwerte des Strafpunkte-Systems (leere Konfiguration) */
+const ppDefaults = resolvePenaltyPointsConfig(null);
 const fid = (n: string) => `${prefix}-${n}`;
 const aria = (n: string, hint = false) => fieldAria(fid(n), hint, err(n));
 const RULES_STATUS: Record<string, string> = { draft: 'Entwurf', published: 'veröffentlicht', archived: 'archiviert' };
@@ -138,14 +142,13 @@ const RULES_STATUS: Record<string, string> = { draft: 'Entwurf', published: 'ver
           <span>Strafpunkte-System aktiv</span>
         </label>
         <p class="field-hint" id={`${fid('pp')}-hint`}>
-          Schwellen und Verfall stellst du danach in der Saison im Abschnitt „Strafpunkte“ ein (Standard: Verwarnung ab 8, Sperre ab 12
-          Punkten, kein Verfall).
+          Schwellen und Verfall stellst du danach in der Saison im Abschnitt „Strafpunkte“ ein (Standard: Verwarnung ab {ppDefaults.warningThreshold},
+          Sperre ab {ppDefaults.banThreshold} Punkten, kein Verfall).
         </p>
       </>
     ) : (
       <>
-        {/* Schalter und Konfiguration stehen im eigenen Abschnitt „Strafpunkte“ – hier nur den Stand mitschicken */}
-        {v.penalty_points_enabled && <input type="hidden" name="penalty_points_enabled" value="true" />}
+        {/* Schalter und Konfiguration stehen im eigenen Abschnitt „Strafpunkte“ – hier nur der Stand */}
         <p class="text-sm text-muted">
           Strafpunkte-System: <strong class="text-fg">{v.penalty_points_enabled ? 'aktiv' : 'aus'}</strong> – einstellen im Abschnitt{' '}
           <a href="#strafpunkte" class="underline hover:text-teal">

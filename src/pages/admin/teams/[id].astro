@@ -39,7 +39,7 @@ const f = formValues(outcome, actions.admin.teamSave);
     <a class="btn btn-ghost" href={`/admin/audit?entitaet=teams&id=${team.id}`}>Verlauf</a>
     <a class="btn btn-ghost" href={url('de', 'team', { slug: team.slug })}>Teamseite</a>
   </div>
-  <Notice outcome={outcome} warnings={isReservedSlug('team', team.slug) ? [`${reservedSlugMessage('team', team.slug)} Die Teamseite ist unter diesem Slug nicht erreichbar.`] : []} />
+  <Notice outcome={outcome} warnings={isReservedSlug('team', team.slug) ? [`${reservedSlugMessage('team', team.slug)} Die Teamseite kann unter diesem Slug von einer festen Unterseite überdeckt werden.`] : []} />
 
   <Section title="Team bearbeiten" id="bearbeiten">
     <form method="POST" action={actions.admin.teamSave} class="grid gap-4">

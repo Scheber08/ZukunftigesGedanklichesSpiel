@@ -9,6 +9,7 @@ import {
   penaltyPointsAccounts,
   penaltyPointsImpact,
   penaltyPointsStatus,
+  pointsExpiredOnArrival,
   resolvePenaltyPointsConfig,
   validatePenaltyPointsConfig,
   type PenaltyDecision,
@@ -164,6 +165,22 @@ describe('Verfall', () => {
     // Stand nach einer bestimmten Runde erzwingen
     acc = penaltyPointsAccount({ config: cfg, rounds: season(8, 4), decisions, completedThrough: 2 }, 1);
     expect(acc).toMatchObject({ active: 9, expired: 0, status: 'warning' });
+  });
+
+  it('späte Entscheidung: Punkte sind schon beim Eintragen verfallen', () => {
+    const rounds = season(8, 6);
+    // Verfall nach 1 Runde: R5-Punkte verfallen nach R6 – R6 ist gewertet
+    expect(pointsExpiredOnArrival(5, rounds, { expiryRounds: 1 })).toBe(true);
+    expect(pointsExpiredOnArrival(6, rounds, { expiryRounds: 1 })).toBe(false);
+    expect(pointsExpiredOnArrival(5, rounds, { expiryRounds: 2 })).toBe(false);
+    expect(pointsExpiredOnArrival(5, rounds, { expiryRounds: null })).toBe(false);
+    // Stand vor R6 erzwingen
+    expect(pointsExpiredOnArrival(5, rounds, { expiryRounds: 1 }, 5)).toBe(false);
+    // abgesagte Runde zählt nicht: Verfall nach R7, noch nicht gewertet
+    expect(pointsExpiredOnArrival(5, season(8, 6, [6]), { expiryRounds: 1 })).toBe(false);
+    // im Konto erscheint der Eintrag als verfallen und zählt nicht
+    const acc = penaltyPointsAccount({ config: { ...CFG, expiry_rounds: 1 }, rounds, decisions: [dec(1, 5, 7)] }, 1);
+    expect(acc).toMatchObject({ active: 0, expired: 7, status: 'ok' });
   });
 
   it('ohne Verfall gelten Punkte bis Saisonende', () => {

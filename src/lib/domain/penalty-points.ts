@@ -181,6 +181,21 @@ export function expiryRoundFor(roundNumber: number, rounds: readonly PenaltyRoun
   return after[expiryRounds - 1] ?? null;
 }
 
+/**
+ * Sind Punkte aus Runde `roundNumber` schon beim Eintragen verfallen? Das passiert bei späten
+ * Entscheidungen, wenn die Verfallsrunde bereits gewertet ist (z. B. Verfall nach 1 Runde,
+ * Urteil zu R5 erst nach dem Ergebnis von R6). Solche Punkte zählen nie zum aktiven Konto.
+ */
+export function pointsExpiredOnArrival(
+  roundNumber: number,
+  rounds: readonly PenaltyRound[],
+  config: Pick<ResolvedPenaltyPointsConfig, 'expiryRounds'>,
+  completedThrough: number = completedThroughRound(rounds),
+): boolean {
+  const expiresAfter = expiryRoundFor(roundNumber, rounds, config.expiryRounds);
+  return expiresAfter != null && completedThrough >= expiresAfter;
+}
+
 function emptyAccount(driverId: Id, config: ResolvedPenaltyPointsConfig): PenaltyPointsAccount {
   return {
     driverId,
