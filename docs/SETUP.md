@@ -13,12 +13,12 @@ Schritte Werte aus früheren brauchen.
 1. [Vorbereitung: Name, Konten, Passwortmanager, 2FA](#1-vorbereitung)
 2. [GitHub](#2-github)
 3. [Supabase (Datenbank, Login, Dateien)](#3-supabase)
-4. [Discord (Server, Rollen, Bot, Webhooks, Login)](#4-discord)
+4. [Discord (Server, Rollen, Bot, Webhooks, Login, Slash-Befehle)](#4-discord)
 5. [Domain und Cloudflare (Worker, DNS, Turnstile, E-Mail, R2)](#5-domain-und-cloudflare)
 6. [GitHub-Secrets und -Variablen](#6-github-secrets-und--variablen)
 7. [Worker-Secrets](#7-worker-secrets)
 8. [Erster Deploy und erster Login](#8-erster-deploy-und-erster-login)
-9. [Einstellungen im Admin-Bereich](#9-einstellungen-im-admin-bereich)
+9. [Einstellungen im Admin-Bereich](#9-einstellungen-im-admin-bereich) (inkl. Telemetrie-Import)
 10. [Google Analytics mit Datenschutz-Einstellungen](#10-google-analytics)
 11. [Backups einrichten](#11-backups-einrichten)
 12. [2FA für alle Konten](#12-2fa-für-alle-konten)
@@ -105,7 +105,10 @@ Passwortmanager. Details je Dienst: [Abschnitt 12](#12-2fa-für-alle-konten).
    3. `supabase/migrations/20260929120200_maintenance.sql` – Löschfristen, Storage-Bucket
    4. `supabase/migrations/20260930090000_redirects_maps_views.sql` – Weiterleitungen nach
       Umbenennungen, Felder für Streckenkarten, öffentliche Fahrer-Sicht `drivers_public`
-   5. alle weiteren Dateien in `supabase/migrations/`, falls vorhanden, ebenfalls nach Namen sortiert
+   5. `supabase/migrations/20260930150000_public_views_hardening.sql` – öffentliche Sichten für
+      Urteile und Vorfälle, Härtung
+   6. `supabase/migrations/20261001090000_phase2_prep.sql` – u. a. Strafpunkte-Konfiguration je Saison
+   7. alle weiteren Dateien in `supabase/migrations/`, falls vorhanden, ebenfalls nach Namen sortiert
 
    Später hinzukommende Migrationen genauso einspielen – **vor** dem Deploy des Codes, der sie braucht
    (sonst fehlen dem Build Spalten oder Views).
@@ -179,8 +182,10 @@ Channels für die automatischen Meldungen der Website (Plan §8.1) – Namen sin
 | `#urteile` | alle | veröffentlichte Steward-Entscheidungen |
 | `#news` (optional) | alle | neue News |
 | `#kontakt` (optional) | nur Admins | Kontaktformular |
+| `#grafiken` (optional) | nach Wahl | Social-Grafiken, die die Redaktion aus dem Admin schickt |
 
-Rollen anlegen: **Admin**, **Steward**, **Redaktion** (Server-Einstellungen → Rollen).
+Rollen anlegen: **Admin**, **Steward**, **Redaktion** (Server-Einstellungen → Rollen). Optional
+zusätzlich Rollen, die sich Mitglieder über den Bot selbst geben dürfen (z. B. „Renntag-Ping“, siehe 4.7).
 In den Server-Einstellungen → Moderation die **2FA-Pflicht für Moderation** einschalten.
 
 ### 4.2 IDs kopieren
@@ -198,8 +203,11 @@ In den Server-Einstellungen → Moderation die **2FA-Pflicht für Moderation** e
    - *Public Bot* ausschalten.
    - **Server Members Intent** einschalten (nötig, um die Rollen eines Mitglieds zu lesen).
 4. Bot auf den Server holen: **OAuth2 → URL Generator** → Scope `bot`, **keine** Bot-Permissions
-   ankreuzen → erzeugte URL öffnen → Liga-Server auswählen. Der Bot braucht keine Rechte; er liest
-   nur beim Staff-Login, welche Rollen jemand hat.
+   ankreuzen → erzeugte URL öffnen → Liga-Server auswählen. Für den Staff-Login braucht der Bot keine
+   Rechte; er liest nur, welche Rollen jemand hat. Soll er auch Slash-Befehle beantworten und
+   Selbstrollen vergeben, kommen Scope `applications.commands` und „Rollen verwalten“ dazu (4.7).
+5. Unter **General Information** zusätzlich *Application ID* und *Public Key* notieren
+   (`DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`) – nur nötig für den Bot in 4.7.
 
 ### 4.4 Discord-Login über Supabase
 
@@ -218,6 +226,31 @@ den Channel posten.
 
 Für die Statistik, woher neue Mitglieder kommen (Plan §8.1): je eine **dauerhafte** Einladung
 („Läuft nie ab“, „unbegrenzte Nutzung“) für *Website*, *Instagram*, *TikTok*, *YouTube* anlegen und notieren.
+
+### 4.7 Discord-Bot mit Slash-Befehlen (optional)
+
+Der Bot beantwortet `/naechstes-rennen`, `/wertung`, `/fahrer` und `/rolle` – ohne eigenen Server, über
+den Endpunkt `https://<domain>/api/discord/interactions` der Website. Er nutzt dieselbe Application wie
+der Login. Kurzfassung, Details in [DISCORD-BOT.md](DISCORD-BOT.md):
+
+1. `DISCORD_PUBLIC_KEY` und `DISCORD_APPLICATION_ID` (4.3, Schritt 5) als GitHub-Variablen setzen
+   ([Schritt 6](#6-github-secrets-und--variablen)) und deployen. Ohne Public Key ist der Bot aus
+   (der Endpunkt antwortet mit 404).
+2. Bot mit den Scopes `bot` und `applications.commands` und der Berechtigung **Rollen verwalten** auf
+   den Server holen (OAuth2 → URL Generator). Die Bot-Rolle in der Rollenliste **über** alle
+   Selbstrollen ziehen, aber unter Admin/Steward/Redaktion lassen.
+3. Nach dem ersten Deploy: Developer Portal → General Information → **Interactions Endpoint URL** =
+   `https://<domain>/api/discord/interactions` (die Adresse steht auch im Admin unter *Einstellungen →
+   Discord-Bot*). Discord prüft sie beim Speichern.
+4. Befehle einmalig registrieren (auf einem Rechner mit dem Repository):
+
+   ```bash
+   DISCORD_APPLICATION_ID=… DISCORD_BOT_TOKEN=… npm run discord:register
+   ```
+
+   Unter Windows (PowerShell): `$env:DISCORD_APPLICATION_ID='…'; $env:DISCORD_BOT_TOKEN='…'; npm run discord:register`.
+   Global registrierte Befehle erscheinen nach bis zu einer Stunde.
+5. Selbstrollen im Admin unter *Einstellungen → Discord-Bot* freigeben ([Schritt 9](#9-einstellungen-im-admin-bereich)).
 
 ---
 
@@ -312,11 +345,18 @@ Repository → Settings → **Secrets and variables → Actions**.
 | `PUBLIC_SITE_URL` | `https://liga.de` | Basis-URL ohne `/` am Ende |
 | `PUBLIC_TURNSTILE_SITE_KEY` | `0x4AAAA…` | Turnstile-Site-Key (5.4) |
 | `DISCORD_GUILD_ID` | `123456789012345678` | Server-ID (4.2) |
+| `DISCORD_PUBLIC_KEY` | `a1b2c3…` (64 Hex-Zeichen) | nur für den Bot (4.7): Public Key der Application; leer = Bot aus |
+| `DISCORD_APPLICATION_ID` | `123456789012345678` | nur für den Bot (4.7): Application ID |
 | `SITE_NOINDEX` | `true` | `true` während der geschlossenen Beta, zum Launch auf `false` |
 | `RACEDAY_WEEKDAY` | `4` | Renntags-Freeze: ISO-Wochentag(e), 1 = Montag … 7 = Sonntag, mehrere mit Komma (`4,7`) |
 | `FREEZE_DATES` | `2026-12-19,2026-12-20` | zusätzliche Freeze-Tage (z. B. Sonderrennen), optional |
 
 > `GITHUB_REPOSITORY` muss nicht gesetzt werden – GitHub Actions kennt es automatisch.
+>
+> `DISCORD_GUILD_ID`, `DISCORD_PUBLIC_KEY` und `DISCORD_APPLICATION_ID` sind öffentlich und werden
+> **beim Build** in den Worker eingebettet – der Deploy-Workflow (`.github/workflows/deploy.yml`, Job
+> „Build & Deploy“, Abschnitt `env`) muss sie an den Build weitergeben. Eine Änderung wirkt erst nach
+> dem nächsten Deploy.
 
 ---
 
@@ -387,16 +427,35 @@ Wird ein Secret geändert, gilt es sofort für neue Anfragen; ein neuer Deploy i
 Admin → **Einstellungen** (Details im [Admin-Handbuch](ADMIN-HANDBUCH.md#einstellungen)):
 
 - Discord-Einladung für die Website (4.6) – erscheint auf der Startseite und in der Discord-Karte
-- Webhook-URLs je Channel (4.5)
+- Webhook-URLs je Channel (4.5), optional auch „Social-Grafiken“ (`#grafiken`); mit „Verbindung testen“ prüfen
 - Einladungen je Quelle (4.6)
 - Social-Links (Instagram, TikTok, YouTube)
 - Twitch-Kanal – **leer lassen**, bis gestreamt wird (dann ist die Live-Anzeige unsichtbar)
 - GA-Mess-ID – erst nach [Schritt 10](#10-google-analytics)
 - Rollen-Zuordnung Discord → Admin/Steward/Redaktion
+- Discord-Bot (nur mit 4.7): Status prüfen, Selbstrollen eintragen
 - Anmeldestatus (offen / Warteliste / geschlossen, freie Cockpits und Reserveplätze)
 
-Danach: Saison anlegen, Punkteschema wählen, Kalender eintragen, Teams und Fahrer pflegen
-(siehe Admin-Handbuch).
+Den **Claim der Startseite** pflegen Redaktion und Admins unter *Seiten-Inhalte → Texte* (nicht in den
+Einstellungen).
+
+Danach: Saison anlegen, Punkteschema wählen, bei Bedarf das **Strafpunkte-System** der Saison
+festlegen (vor dem ersten Rennen), Kalender eintragen, Teams und Fahrer pflegen (siehe Admin-Handbuch).
+
+### 9.1 Telemetrie-Import (optional)
+
+Ergebnisse lassen sich statt von Hand aus der UDP-Telemetrie des Spiels übernehmen
+([TELEMETRIE.md](TELEMETRIE.md)):
+
+1. Admin → Runden → eine Runde → **Import** → „Telemetrie (UDP)“ → **Token erzeugen**. Das Import-Token
+   wird nur einmal angezeigt → sofort in den Passwortmanager. Es gilt für die ganze Liga.
+2. Auf dem PC, der in der Lobby mitläuft: Node.js 22 oder neuer, das Repository klonen, dann
+   `npm run telemetry -- --url https://<domain>` mit dem Token in der Umgebungsvariablen
+   `LIGA_IMPORT_TOKEN` (den fertigen Befehl zeigt die Import-Seite). Windows fragt beim ersten Start nach
+   der Firewall-Freigabe für UDP.
+3. Die Spiel-IDs der Strecken sind vorbelegt (Admin → Kalender → Strecken, Feld „Spiel-ID (UDP)“).
+4. Vor dem ersten echten Einsatz den **Feldtest** machen
+   ([TELEMETRIE.md → Feldtest-Checkliste](TELEMETRIE.md#feldtest-checkliste-vor-dem-ersten-echten-einsatz)).
 
 ---
 
@@ -482,7 +541,7 @@ Plan §9.2. Keine Rechtsberatung – vor dem Launch fachkundig prüfen lassen. D
 | **Cloudflare** | Hosting, CDN, Turnstile, E-Mail-Weiterleitung, R2 | Das Cloudflare-DPA ist Bestandteil der Nutzungsbedingungen (Self-Serve Subscription Agreement). PDF unter cloudflare.com → Trust Hub → „Customer DPA“ herunterladen und ablegen |
 | **Google Analytics** | Nutzungsstatistik (nur nach Einwilligung) | GA → Verwaltung → Kontoeinstellungen → *Zusatz zur Datenverarbeitung* akzeptieren ([Schritt 10](#10-google-analytics)) |
 | **GitHub** | Quellcode, Backups verschlüsselt (keine Besucherdaten) | GitHub DPA gilt über die Nutzungsbedingungen; kein extra Schritt |
-| **Discord** | Webhook-Nachrichten, Staff-Login | Discord handelt als eigener Verantwortlicher; in der Datenschutzerklärung nennen (US-Anbieter, DPF) – keine personenbezogenen Daten über das Nötige hinaus in Webhooks (ist so umgesetzt) |
+| **Discord** | Webhook-Nachrichten, Staff-Login, Bot-Befehle | Discord handelt als eigener Verantwortlicher; in der Datenschutzerklärung nennen (US-Anbieter, DPF) – keine personenbezogenen Daten über das Nötige hinaus in Webhooks (ist so umgesetzt) |
 
 Außerdem: Verzeichnis von Verarbeitungstätigkeiten (kurze Tabelle genügt) und die Datenschutzerklärung
 (`src/content/legal/de/datenschutz.md`) auf diese Anbieter abstimmen.
@@ -505,6 +564,7 @@ Außerdem: Verzeichnis von Verarbeitungstätigkeiten (kurze Tabelle genügt) und
 **Liga-Daten**
 
 - [ ] Saison angelegt (Punkteschema, Protestfrist, Reservepunkte, Regelwerk-Version), Status „aktiv“
+- [ ] Strafpunkte-System der Saison bewusst an- oder ausgeschaltet (Schwellen, Verfall)
 - [ ] Kalender mit allen Runden, Uhrzeiten in Berliner Zeit geprüft
 - [ ] Teams der Saison, Farben geprüft; Anmeldestatus gesetzt
 
@@ -522,6 +582,8 @@ Außerdem: Verzeichnis von Verarbeitungstätigkeiten (kurze Tabelle genügt) und
 - [ ] Cookie-Banner: ohne Zustimmung keine Google-Requests
 - [ ] `RACEDAY_WEEKDAY` gesetzt
 - [ ] Lighthouse-Werte der CI im grünen Bereich
+- [ ] (falls genutzt) Discord-Bot: Interactions Endpoint gespeichert, Befehle registriert, `/naechstes-rennen` antwortet
+- [ ] (falls genutzt) Telemetrie: Import-Token im Passwortmanager, Feldtest erledigt
 - [ ] **`SITE_NOINDEX` auf `false`** stellen (erst zum öffentlichen Launch!) und einmal deployen
 - [ ] Sitemap in der Google Search Console einreichen (optional)
 
@@ -579,6 +641,7 @@ Demo-Liga in der lokalen Datenbank: `npm run db:seed:demo`, dann in `supabase/co
 | `SUPABASE_URL` | öffentlich (Build) | GitHub-Secret | `.env` |
 | `SUPABASE_ANON_KEY` | öffentlich (Build) | GitHub-Secret | `.env` |
 | `DISCORD_GUILD_ID` | öffentlich (Build) | GitHub-Variable | `.env` |
+| `DISCORD_PUBLIC_KEY`, `DISCORD_APPLICATION_ID` | öffentlich (Build) | GitHub-Variable (nur für den Bot) | `.env` |
 | `SITE_NOINDEX` | öffentlich (Build) | GitHub-Variable | `.env` |
 | `DEMO_MODE` | öffentlich (Build) | im Workflow fest `false` | `.env` (`true`) |
 | `GITHUB_REPOSITORY` | öffentlich (Build) | automatisch in GitHub Actions | `.env` (nur zum Testen des Rebuilds) |
@@ -591,3 +654,10 @@ Demo-Liga in der lokalen Datenbank: `npm run db:seed:demo`, dann in `supabase/co
 
 Das maßgebliche Schema steht in `astro.config.mjs` (`env.schema`). Ein Unit-Test
 (`tests/unit/infra-config.test.ts`) prüft, dass `.env.example` und `.dev.vars.example` dazu passen.
+
+Nicht für die Website, sondern für Programme auf einem eigenen Rechner:
+
+| Variable | Wofür | Hinweis |
+|---|---|---|
+| `LIGA_IMPORT_TOKEN`, `LIGA_SITE_URL` | Telemetrie-Companion (`npm run telemetry`) | Token aus 9.1, **geheim**; nur in der Shell setzen |
+| `DISCORD_APPLICATION_ID`, `DISCORD_BOT_TOKEN` | Befehle registrieren (`npm run discord:register`) | nur für den Aufruf setzen, nicht speichern |

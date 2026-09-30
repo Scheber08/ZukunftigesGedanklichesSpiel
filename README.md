@@ -5,10 +5,21 @@ Wertungen, Fahrer- und Teamprofile, Stewards-Register, News, Hall of Fame, Anmel
 Admin-Bereich mit Discord-Login, in dem das Orga-Team alles pflegt (Grid-Builder, Ergebnis-Eingabe,
 Steward-Werkzeug, News in Deutsch und Englisch).
 
+Dazu (Phase 2/3 des Plans):
+
+- **Öffentlich:** Streckenseiten mit Rekorden (`/strecken`), Fahrer-Vergleich (`/fahrer/vergleich`),
+  Fahrer des Tages und Rookie of the Year, Strafpunkte-Konten (wenn in der Saison aktiv).
+- **Admin:** Telemetrie- und CSV-Import der Ergebnisse, Social-Grafiken (PNG, optional direkt nach
+  Discord), Auszeichnungen, Strafpunkte-System je Saison.
+- **Stream und Discord:** OBS-Overlays (`/overlay/*`) und ein serverloser Discord-Bot mit
+  Slash-Befehlen (`/naechstes-rennen`, `/wertung`, `/fahrer`, `/rolle`).
+
 > `[LIGANAME]` ist ein Platzhalter, bis der Name feststeht (kein „F1“ im Namen, siehe
 > [Plan §9.1](docs/PLAN.md)). Er steht zentral in `src/config/site.ts`.
 
-**Stand:** Phase 1 (MVP) in Arbeit · Stack: Astro 7 · Svelte 5 · Tailwind CSS 4 · Supabase · Cloudflare Workers
+**Stand:** Phase 1 (MVP) und Funktionen aus Phase 2/3 umgesetzt; der Telemetrie-Import braucht vor dem
+ersten Einsatz noch einen Feldtest ([TELEMETRIE.md](docs/TELEMETRIE.md#feldtest-checkliste-vor-dem-ersten-echten-einsatz)) ·
+Stack: Astro 7 · Svelte 5 · Tailwind CSS 4 · Supabase · Cloudflare Workers
 
 ---
 
@@ -57,6 +68,8 @@ Mit echter Datenbank arbeiten: `.env.example` nach `.env` kopieren und ausfülle
 | `npm run db:seed:generate` | `supabase/seed.sql` aus `src/lib/seed/base.ts` neu erzeugen |
 | `npm run db:seed:demo` | zusätzlich `supabase/demo.sql` (Demo-Liga für eine Test-Datenbank) |
 | `npm run db:seed:check` | prüft, ob `seed.sql` aktuell ist (läuft in der CI) |
+| `npm run telemetry -- …` | Telemetrie-Companion für den Lobby-PC (`tools/telemetry/companion.mjs`): lauscht auf die UDP-Telemetrie von F1 25 und lädt Endergebnisse als Entwurf hoch. Ohne Spiel testen: `npm run telemetry -- --sample beispiel.ndjson` erzeugt einen Mitschnitt, `npm run telemetry -- --replay beispiel.ndjson --dry-run` spielt ihn ab. Hilfe: `npm run telemetry -- --help`. Anleitung: [docs/TELEMETRIE.md](docs/TELEMETRIE.md) |
+| `npm run discord:register` | Slash-Befehle des Discord-Bots registrieren (braucht `DISCORD_APPLICATION_ID` und `DISCORD_BOT_TOKEN` in der Umgebung; `-- --guild <id>` nur für einen Server, `-- --dry-run` nur anzeigen). Anleitung: [docs/DISCORD-BOT.md](docs/DISCORD-BOT.md) |
 | `npm run deploy` | Build + `wrangler deploy` von Hand (normalerweise macht das GitHub Actions) |
 
 ## Projektstruktur
@@ -67,19 +80,25 @@ src/
   views/          Seiten-Implementierungen (bekommen die Sprache als Prop)
   components/     UI-Bausteine (ui/, sport/, layout/, admin/ …)
   layouts/        BaseLayout (öffentlich), AdminLayout
-  lib/domain/     reine Fachlogik: Punkte, Wertung, Statistik, Grid-Prüfung, ICS, Zeitzonen
+  lib/domain/     reine Fachlogik: Punkte, Wertung, Statistik, Grid-Prüfung, ICS, Zeitzonen, Strafpunkte
   lib/league/     League-Klasse: alle öffentlichen Daten + berechnete Sichten
-  lib/server/     nur Server: Env, Datenbank, Auth, Discord, Spam-Schutz, Rebuild, Cron
+  lib/server/     nur Server: Env, Datenbank, Auth, Discord, Spam-Schutz, Rebuild, Cron, Live-Daten
+  lib/import/     Telemetrie-/CSV-Import: Prüfung, Zuordnung, Import-Stapel, Token
+  lib/graphics/   Social-Grafiken (Motive, Formate, Zeichnen im Browser)
+  lib/discord-bot/ Discord-Bot: Signaturprüfung, Befehle, Antworten
+  lib/tracks/     Streckenseiten und Rekorde
   lib/seed/       Basisdaten (Teams, Strecken, Regelwerk, FAQ) und Demo-Daten
   i18n/           Routen mit übersetzten Slugs und Wörterbücher (de/en)
   actions/        Astro Actions für Formulare und Admin
+tools/telemetry/  Companion-Programm für den Telemetrie-Import (npm run telemetry)
+scripts/          Seed-Erzeugung, Registrierung der Discord-Befehle, Marken-Assets
 supabase/
   migrations/     Datenbankschema, Row Level Security, Wartungsfunktionen
   seed.sql        Basisdaten (erzeugt), demo.sql (Demo-Liga, erzeugt), config.toml (Supabase CLI)
 tests/
   unit/           Vitest      e2e/  Playwright + axe      mocks/  Test-Ersatz für astro:env
 .github/          CI, Deploy, Backup, Dependabot
-docs/             Plan, Architektur, Setup, Handbuch, Runbook, Betrieb
+docs/             Plan, Architektur, Setup, Handbuch, Runbook, Betrieb, Telemetrie, Overlays, Discord-Bot
 ```
 
 ## Dokumentation
@@ -90,13 +109,17 @@ docs/             Plan, Architektur, Setup, Handbuch, Runbook, Betrieb
 | [docs/SETUP.md](docs/SETUP.md) | Liga-Leitung, Technik | Phase 0 Schritt für Schritt: Konten, Supabase, Discord, Cloudflare, GitHub, Launch-Checkliste |
 | [docs/ADMIN-HANDBUCH.md](docs/ADMIN-HANDBUCH.md) | Admins, Stewards, Redaktion | Alle Admin-Module aus Nutzersicht |
 | [docs/RENNTAG-RUNBOOK.md](docs/RENNTAG-RUNBOOK.md) | Admins, Stewards, Host | Ablauf eines Renntags mit Klickwegen und Notfallplan |
-| [docs/BETRIEB.md](docs/BETRIEB.md) | Technik | Backups, Wiederherstellung, Monitoring, Rebuild, Freeze, Saisonwechsel |
+| [docs/BETRIEB.md](docs/BETRIEB.md) | Technik | Backups, Wiederherstellung, Monitoring, Rebuild, Freeze, Saisonwechsel, Betrieb von Import, Bot und Overlays |
+| [docs/TELEMETRIE.md](docs/TELEMETRIE.md) | Admins, Host, Technik | Telemetrie- und CSV-Import: Companion-Programm, Spiel-Einstellungen, Zuordnung, CSV-Format, Feldtest |
+| [docs/OVERLAYS.md](docs/OVERLAYS.md) | Stream-Team | OBS-Overlays: Adressen, Parameter, Einrichtung in OBS |
+| [docs/DISCORD-BOT.md](docs/DISCORD-BOT.md) | Technik | Discord-Bot: Einrichtung, Selbstrollen, Registrierung der Befehle |
 | [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) | Entwickler | Konventionen, Design-Klassen, Sicherheitsregeln |
 
 ## So kommt eine Änderung live
 
 - **Inhalte** (Ergebnis, News, Urteil, Kalender, Aufstellung) werden im Admin-Bereich veröffentlicht.
   Die Website baut sich danach automatisch neu – nach **etwa 1–3 Minuten** ist alles online.
+  Stream-Overlays und Discord-Bot lesen direkt aus der Datenbank und brauchen keinen Rebuild.
 - **Code** wird über GitHub ausgerollt: Pull Request → automatische Prüfungen und eine
   Demo-Vorschau → Merge in `main` → Deploy. Am Renntag sind Code-Deploys gesperrt
   (Renntags-Freeze), Inhalte gehen weiterhin raus. Details: [docs/BETRIEB.md](docs/BETRIEB.md).

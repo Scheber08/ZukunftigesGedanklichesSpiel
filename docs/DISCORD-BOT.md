@@ -38,6 +38,8 @@ Die Application gibt es meist schon für den Staff-Login (Rollenprüfung per Bot
 | `DISCORD_BOT_TOKEN` | Bot → Token | **geheim** (`npx wrangler secret put DISCORD_BOT_TOKEN`) |
 | `DISCORD_GUILD_ID` | Rechtsklick auf den Server → „Server-ID kopieren“ (Entwicklermodus) | öffentlich |
 
+Die öffentlichen Werte kommen als **GitHub-Variablen** (Settings → Secrets and variables → Actions →
+Variables) in den Build; `deploy.yml` reicht sie an `astro build` weiter, wo sie eingebettet werden.
 Ohne `DISCORD_PUBLIC_KEY` antwortet der Endpunkt mit 404 – der Bot ist dann aus. Nach dem Setzen
 einmal deployen.
 

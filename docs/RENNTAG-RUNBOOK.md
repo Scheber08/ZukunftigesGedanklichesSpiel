@@ -14,15 +14,18 @@ die Fristen sind pro Saison einstellbar (Plan §11.1).
 
 | Wann | Wer | Was | Wo im Admin |
 |---|---|---|---|
+| Race-Week (optional) | Redaktion | Race-Week-Grafik posten | Grafiken (Admins auch: Runden → *Runde* → Social-Grafiken) |
 | bis **T − 24 h** | Admin | Abmeldungen aus Discord ins Grid übernehmen, Ersatzfahrer setzen, **Aufstellung veröffentlichen** | Runden → *Runde* → Grid-Builder |
-| **T − 15 min** | Host | Lobby öffnen (Einstellungen laut `/liga/lobby`) | – (Spiel) |
-| **Rennende + ≤ 2 h** | Admin | Ergebnis eintragen → **vorläufig veröffentlichen**, die Protestfrist startet | Runden → *Runde* → Ergebnis-Eingabe |
+| **T − 15 min** | Host | Lobby öffnen (Einstellungen laut `/liga/lobby`), optional Telemetrie-Companion starten | – (Spiel, Lobby-PC) |
+| **Rennende + ≤ 2 h** | Admin | Ergebnis eintragen oder **Import übernehmen** → **vorläufig veröffentlichen**, die Protestfrist startet | Runden → *Runde* → Import bzw. Ergebnis-Eingabe |
+| nach „vorläufig“ (optional) | Admin, Redaktion | Fahrer des Tages eintragen, Ergebnis-Grafiken posten | Auszeichnungen · Grafiken |
 | **+ 48 h** (Protestfrist) | Fahrer | Vorfälle melden (danach ist das Formular zu) | öffentlich: `/stewards/melden` |
-| **≤ 72 h nach Fristende** | Stewards | entscheiden und veröffentlichen, Strafen fließen ins Ergebnis | Stewards |
+| **≤ 72 h nach Fristende** | Stewards | entscheiden und veröffentlichen (ggf. mit Strafpunkten), Strafen fließen ins Ergebnis | Stewards |
 | **danach** | Admin | Ergebnis **final** setzen → Snapshot und Discord-Post | Runden → *Runde* → Ergebnis-Eingabe |
 
-Die Übersichtsseite jeder Runde (Admin → *Runden (Grid & Ergebnisse)* → Runde anklicken) zeigt genau
-diese Schritte als Checkliste mit Status und Direktlinks.
+Die Übersichtsseite jeder Runde (Admin → *Runden (Grid & Ergebnisse)* → Runde anklicken) zeigt die
+Pflichtschritte als Checkliste mit Status und Direktlinks, darunter Links zum Import und zu passenden
+Social-Grafiken.
 
 **Renntags-Freeze:** Am Renntag werden keine Code-Änderungen ausgerollt (Plan §7.6). Inhalte –
 Aufstellung, Ergebnis, Urteile, News – gehen ganz normal raus. Wer programmiert, merged am Renntag nicht
@@ -45,8 +48,14 @@ nach `main`; ein Push würde vom Deploy-Workflow abgelehnt.
 6. **„Veröffentlichen“** (Häkchen „Discord-Post“ an) → `#aufstellung` bekommt die Liste.
 7. Nach 1–3 Minuten auf der Rennseite (`/rennen/<saison>/<runde>` → Tab „Aufstellung“) kontrollieren.
 8. Aufstellung zusätzlich im Discord **anpinnen** (Fallback).
+9. Optional: Race-Week- oder Aufstellungs-Grafik – Admin → **Grafiken** (Redaktion und Admins) Motiv
+   „Race-Week“ bzw. „Startaufstellung“ und die Runde wählen, oder als Admin in der Runden-Übersicht unter
+   „Social-Grafiken“ auf „Race-Week“/„Aufstellung“ → „PNG herunterladen“ bzw. „An Discord senden“.
+   Alt-Text beim Posten mitnehmen.
 
 Kurzfristige Absage nach der Veröffentlichung: im Grid-Builder anpassen und erneut veröffentlichen.
+Wird mit Telemetrie-Import gearbeitet, muss die Aufstellung vor dem Übernehmen stimmen – zugeordnet wird
+über die Startnummern der Aufstellung.
 
 ## T − 15 min: Lobby
 
@@ -56,6 +65,12 @@ Kurzfristige Absage nach der Veröffentlichung: im Grid-Builder anpassen und ern
 2. Einladungen verschicken; wer nicht in der Aufstellung steht, kommt nicht in die Lobby.
 3. Lobby-Infos im Discord anpinnen (Fallback, falls die Website nicht erreichbar ist).
 4. Optional: Rennen aufzeichnen/streamen (Twitch-VODs später nach YouTube exportieren, Twitch löscht sie).
+   Overlays für OBS (Nächstes Rennen, Aufstellung, Wertung, Ergebnis, Laufband) stehen im Admin unter
+   **Stream-Overlays** ([OVERLAYS.md](OVERLAYS.md)).
+5. Optional: **Telemetrie-Companion** auf dem Lobby-PC starten – den Befehl gibt es im Admin unter
+   Runden → *Runde* → **Import** → „Telemetrie (UDP)“ zum Kopieren (Import-Token aus dem
+   Passwortmanager). Im Spiel UDP-Telemetrie an, Port 20777, Format 2025. **Jeder fährt mit seiner
+   Liga-Startnummer.** Details: [TELEMETRIE.md](TELEMETRIE.md#ablauf-am-renntag).
 
 ## Nach dem Rennen (spätestens Rennende + 2 h): Ergebnis
 
@@ -71,6 +86,30 @@ Kurzfristige Absage nach der Veröffentlichung: im Grid-Builder anpassen und ern
 6. **„Vorläufig veröffentlichen“** → Ergebnis ist öffentlich mit Banner „Vorläufig, Protestfrist bis …“,
    `#ergebnisse` bekommt den Post mit Podium, Pole, schnellster Runde und Protestfrist.
 7. Nach 1–3 Minuten Rennseite und `/wertung` kontrollieren.
+
+**Variante mit Import** (statt Schritt 2–4 abzutippen):
+
+1. Lief das Companion-Programm, meldet es nach jeder Session „Hochgeladen: Import-Stapel #…“.
+   Ohne Companion: Admin → Runden → Runde → **„Import“** → „CSV-Import“ (Session wählen, Datei oder
+   Text einfügen, Vorschau prüfen, „Speichern und übernehmen“).
+2. Admin → Runden → Runde → **„Import“**: je Session den Stapel prüfen („Zugeordnet x / y“, Hinweise).
+3. **„Übernehmen“** → die Ergebnis-Eingabe öffnet sich vorbefüllt („Vorbefüllt aus Import vom …“).
+4. Mit den Endstand-Screenshots vergleichen: Reihenfolge, Status, beste Runden, Strafsekunden.
+   Fehlende Fahrer ergänzen, Hinweise abarbeiten (z. B. DSQ aus dem Spiel → an die Stewards geben).
+5. Weiter mit Schritt 5 oben („Speichern als vorläufig“). Erst dann ist der Stapel „übernommen“.
+   Doppelte oder unvollständige Stapel (z. B. je Q1–Q3 einer) verwerfen.
+
+Klappt der Import nicht, nicht lange suchen: von Hand eintragen, die lokale Sicherung des Companions
+später nachreichen ([TELEMETRIE.md](TELEMETRIE.md)).
+
+**Optional nach „vorläufig“:**
+
+- **Fahrer des Tages** (Admin): Admin → **Auszeichnungen** → Runde → Fahrer wählen → „Speichern“,
+  Häkchen „In Discord posten“ für einen Post in `#ergebnisse`.
+- **Grafiken posten** (Redaktion oder Admin): Admin → **Grafiken** → Motiv „Ergebnis“, „Pole-Position“,
+  „Startaufstellung“ oder „Wertung – Fahrer“ und die Runde wählen (Admins: Runden-Übersicht →
+  „Social-Grafiken“) → „PNG herunterladen“ bzw. „An Discord senden“ (`#grafiken`). Ergebnis- und
+  Wertungsgrafiken tragen den Hinweis „Vorläufig“, solange das Ergebnis vorläufig ist.
 
 ## Protestfrist (Standard 48 h): Vorfälle
 
@@ -90,6 +129,8 @@ ohne Zutun neu gebaut, damit Fristhinweis und „Vorfall melden“ stimmen.
    aus dem Strafenkatalog), Paragraf.
 4. Beteiligte Stewards können nicht entscheiden (Befangenheit – das System sperrt sie).
    Bei aktivem **Vier-Augen-Prinzip** bestätigt ein zweiter Steward.
+   Bei aktivem **Strafpunkte-System**: Strafpunkte im Formular eintragen (0–12). Meldet das Formular
+   „Sperrschwelle erreicht – Rennsperre prüfen“, die Rennsperre als eigene Entscheidung aussprechen.
 5. **„Veröffentlichen“** → Register, Rennseite, Fahrerprofil, Post in `#urteile`;
    Zeit-/Positions-/DSQ-Strafen werden **automatisch** ins Ergebnis eingerechnet.
 6. Unbegründete oder verspätete Meldungen: Status „abgelehnt“ bzw. „verspätet“ mit kurzer Notiz.
@@ -102,7 +143,8 @@ ohne Zutun neu gebaut, damit Fristhinweis und „Vorfall melden“ stimmen.
    Frist abgelaufen).
 2. Ergebnis-Eingabe → **„Final setzen“** → Wertungs-Snapshot („Stand nach Runde X“) und Post in `#ergebnisse`.
 3. Optional: Rennbericht als News (Kategorie „Rennbericht“, Rennen verknüpfen) und VOD-/Highlight-Link
-   im Kalender eintragen.
+   im Kalender eintragen. Grafiken mit dem finalen Stand (Ergebnis, Fahrerwertung) neu erzeugen, falls
+   Urteile die Reihenfolge geändert haben.
 
 **Später noch ein Fehler entdeckt?** Ergebnis-Eingabe → „Korrigieren“ mit Pflicht-Grund. Der Hinweis
 „Korrigiert am … (Grund)“ steht öffentlich auf der Rennseite, Discord bekommt einen Post.
@@ -116,9 +158,12 @@ Runde: R__ · ______________   Datum: __.__.____   Start: __:__
 
 [ ] T-24h  Abmeldungen übernommen, Ersatz gesetzt, Prüfungen grün
 [ ] T-24h  Aufstellung veröffentlicht + im Discord angepinnt
+[ ]        (optional) Race-Week-/Aufstellungs-Grafik gepostet
 [ ] T-15m  Lobby offen, Lobby-Infos angepinnt
-[ ] +2h    Ergebnis Quali / (Sprint) / Rennen eingetragen, Vorschau geprüft
+[ ] T-15m  (optional) Telemetrie-Companion läuft, Overlays in OBS
+[ ] +2h    Ergebnis Quali / (Sprint) / Rennen eingetragen bzw. Import übernommen, Vorschau geprüft
 [ ] +2h    Vorläufig veröffentlicht, Rennseite und Wertung kontrolliert
+[ ]        (optional) Fahrer des Tages eingetragen, Ergebnis-Grafiken gepostet
 [ ] +48h   Protestfrist abgelaufen (Formular zu)
 [ ] +72h   Alle Vorfälle entschieden/abgelehnt, Urteile veröffentlicht
 [ ]        Final gesetzt, Snapshot + Discord-Post
@@ -140,6 +185,8 @@ Runde: R__ · ______________   Datum: __.__.____   Start: __:__
 | Deploy-Lauf rot mit „Renntags-Freeze“ | Nichts tun – das betrifft nur Code, nicht Inhalte | Code am nächsten Tag ausrollen lassen |
 | Vorfall-Formular geht nicht | Stewards nehmen Meldungen per Discord-Ticket entgegen (mit Clip-Link) | Steward trägt sie als eigene Untersuchung ein |
 | Discord-Posts der Website fehlen | Selbst posten | Webhook-URL unter Einstellungen prüfen (Webhook evtl. gelöscht) |
+| Companion lädt nicht hoch (401, 422, 503, kein Netz) | Ergebnis von Hand eintragen oder als CSV importieren | Lokale Sicherung aus `telemetrie-export` mit `--upload` nachreichen; Token bzw. Zuordnung prüfen ([TELEMETRIE.md](TELEMETRIE.md)) |
+| Overlay im Stream zeigt einen gelben Punkt | Nichts – der letzte Stand bleibt stehen | Website erreichbar? Das Overlay holt sich die Daten von selbst wieder ([OVERLAYS.md](OVERLAYS.md)) |
 | Datenbank kaputt / Daten versehentlich gelöscht | **Nichts weiter ändern!** Technik informieren | Wiederherstellung aus dem Backup ([BETRIEB.md](BETRIEB.md#wiederherstellung)) |
 
 **Kontakte im Notfall** (vor Saisonbeginn ausfüllen, im Discord-Staff-Channel anpinnen):

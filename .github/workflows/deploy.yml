@@ -19,6 +19,7 @@
 # Benötigt (Settings → Secrets and variables → Actions), sonst wird übersprungen:
 #   Secrets:   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, SUPABASE_URL, SUPABASE_ANON_KEY
 #   Variablen: PUBLIC_SITE_URL, PUBLIC_TURNSTILE_SITE_KEY, DISCORD_GUILD_ID,
+#              DISCORD_PUBLIC_KEY, DISCORD_APPLICATION_ID (Discord-Bot, optional),
 #              SITE_NOINDEX (true während der geschlossenen Beta), RACEDAY_WEEKDAY, FREEZE_DATES
 # Worker-Secrets (Service-Key, Bot-Token …) setzt man einmalig mit `wrangler secret put`,
 # sie stehen bewusst NICHT in diesem Workflow (siehe docs/SETUP.md).
@@ -146,6 +147,9 @@ jobs:
       PUBLIC_SITE_URL: ${{ vars.PUBLIC_SITE_URL }}
       PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.PUBLIC_TURNSTILE_SITE_KEY }}
       DISCORD_GUILD_ID: ${{ vars.DISCORD_GUILD_ID }}
+      # Discord-Bot (Interactions-Endpunkt); leer = Bot-Befehle aus
+      DISCORD_PUBLIC_KEY: ${{ vars.DISCORD_PUBLIC_KEY }}
+      DISCORD_APPLICATION_ID: ${{ vars.DISCORD_APPLICATION_ID }}
       SITE_NOINDEX: ${{ vars.SITE_NOINDEX || 'false' }}
       DEMO_MODE: 'false'
       # GITHUB_REPOSITORY setzt GitHub Actions automatisch (Ziel des Rebuild-Dispatch)

@@ -367,7 +367,7 @@ const yesNo = (v: boolean) => (v ? 'eingerichtet' : 'fehlt');
         ))
       }
     </ul>
-    <p class="mb-6 text-sm text-muted">Die Werte sind Worker-Secrets (wrangler secret put) und werden hier nie angezeigt.</p>
+    <p class="mb-6 text-sm text-muted">Die Werte werden hier nie angezeigt. Das Bot-Token ist ein Worker-Secret (<code>wrangler secret put</code>); Guild-ID, Application ID und Public Key sind öffentliche GitHub-Variablen, die beim Build eingebettet werden (siehe docs/DISCORD-BOT.md).</p>
 
     <div class="mb-6 grid gap-2">
       <label class="label" for="bot-endpoint">Interactions-Endpunkt</label>

@@ -70,7 +70,7 @@ Das Token besser als Umgebungsvariable setzen als mit `--token` – dann steht e
 | `--sample <datei>` | Beispiel-Mitschnitt erzeugen (Rennen in Montreal, passt zur Demo-Runde 5) |
 | `--verbose`, `--help`, `--version` | |
 
-Ein npm-Skript (`npm run telemetry -- …`) kann ergänzt werden: `"telemetry": "node tools/telemetry/companion.mjs"`.
+Kurzform im Projektordner: `npm run telemetry -- <Optionen>` (entspricht `node tools/telemetry/companion.mjs <Optionen>`).
 
 ### Was das Programm tut
 

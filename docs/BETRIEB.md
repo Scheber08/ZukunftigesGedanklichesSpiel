@@ -14,6 +14,7 @@ tiefe Vorkenntnisse funktionieren.
 - [Weiterleitungen nach Umbenennungen](#weiterleitungen-nach-umbenennungen)
 - [Öffentliche Daten: Views und Row Level Security](#öffentliche-daten-views-und-row-level-security)
 - [Monitoring](#monitoring)
+- [Telemetrie-Import](#telemetrie-import) · [Discord-Bot](#discord-bot) · [Stream-Overlays](#stream-overlays)
 - [Updates (Dependabot)](#updates-dependabot)
 - [Aktualitäts-Check](#aktualitäts-check)
 - [Accounts, Zugänge und Bus-Faktor](#accounts-zugänge-und-bus-faktor)
@@ -39,6 +40,8 @@ tiefe Vorkenntnisse funktionieren.
 | **Aktualitäts-Check der Inhalte** | **vierteljährlich** | Handarbeit | **Redaktion** |
 | Dependabot-Updates prüfen | wöchentlich (montags) | Pull Requests | Technik |
 | Saison-Snapshot | zum Saisonende | `backup.yml` manuell mit Namen | Technik |
+| Discord-Befehle registrieren | einmalig und nach Änderungen an `src/lib/discord-bot/commands.ts` | `npm run discord:register` | Technik |
+| **Feldtest Telemetrie** | vor dem ersten Einsatz, nach Spiel-Updates | Handarbeit, siehe unten | **Technik** mit Host |
 
 ---
 
@@ -64,8 +67,10 @@ Admin klickt „Veröffentlichen“
   „Vorfall melden“ auf der Rennseite stimmen dann ohne Zutun.
 - Der **tägliche Build** um 03:41 UTC hält Countdown-Startwerte und Ähnliches frisch, auch wenn
   niemand etwas veröffentlicht.
-- Dynamisch (ohne Rebuild) sind: Formulare, Admin, Nummern-Prüfung, Discord-Karte, Live-Status und
-  die [Weiterleitungen alter Adressen](#weiterleitungen-nach-umbenennungen). Die Kalender-Abos
+- Dynamisch (ohne Rebuild) sind: Formulare, Admin, Nummern-Prüfung, Discord-Karte, Live-Status, die
+  [Weiterleitungen alter Adressen](#weiterleitungen-nach-umbenennungen), die
+  [Stream-Overlays](#stream-overlays) (`/overlay/*`), der [Discord-Bot](#discord-bot)
+  (`/api/discord/interactions`) und der Import-Endpunkt (`/api/import`). Die Kalender-Abos
   (`kalender.ics`, ICS je Rennen) sind statische Dateien und ändern sich mit dem Rebuild.
 
 **Wenn nichts passiert:**
@@ -313,6 +318,67 @@ https://discordstatus.com · https://www.githubstatus.com
 
 ---
 
+## Telemetrie-Import
+
+Das Companion-Programm (`tools/telemetry/`, Start mit `npm run telemetry -- …`) läuft auf einem PC in
+der Lobby und lädt nach jeder Session das Endergebnis als Entwurf an `POST /api/import` (Worker).
+Übernommen wird erst im Admin. Anleitung und Technik: [TELEMETRIE.md](TELEMETRIE.md).
+
+**Feldtest vor dem ersten echten Einsatz** (Plan §12): Ob die Final Classification im Crossplay
+zuverlässig ankommt und welches UDP-Format gilt (2025, oder 2026 mit Season Pack), muss in einer echten
+Liga-Lobby geprüft werden. Die [Feldtest-Checkliste](TELEMETRIE.md#feldtest-checkliste-vor-dem-ersten-echten-einsatz)
+abarbeiten (Companion mit `--dry-run --record feldtest-<datum>.ndjson --verbose`, Crossplay-Lobby,
+Qualifying und Rennen, Vergleich mit dem Ergebnis-Bildschirm) und das Ergebnis dort festhalten. Nach
+Spiel-Updates, die das UDP-Format ändern, wiederholen. Bis der Feldtest bestanden ist, bleibt die
+Handeingabe der Normalweg.
+
+- **Import-Token:** gilt für die ganze Liga, gespeichert ist nur der SHA-256-Hash. Neu erzeugen
+  (Admin → Runde → Import → „Neues Token erzeugen“) macht das alte sofort ungültig – nötig, wenn eine
+  Person mit Token das Team verlässt oder das Token irgendwo aufgetaucht ist. „Token widerrufen“ sperrt
+  alle Uploads.
+- **Fehlerbilder** (Antwort an das Companion, Details in den Worker-Logs): 401 Token falsch, 503 kein
+  Token eingerichtet, 422 Runde/Session nicht eindeutig, 429 mehr als 30 Anfragen in 10 Minuten je IP,
+  413 größer als 512 KB.
+- **Aufräumen:** Die lokalen Sicherungen im Ordner `telemetrie-export` auf dem Lobby-PC enthalten
+  Renndaten – nach der Saison löschen.
+
+---
+
+## Discord-Bot
+
+Der Bot ist Teil des Workers (`/api/discord/interactions`), es läuft kein eigener Prozess. Einrichtung:
+[SETUP.md 4.7](SETUP.md#47-discord-bot-mit-slash-befehlen-optional) und [DISCORD-BOT.md](DISCORD-BOT.md).
+
+- **Nach einem Deploy** ist nichts zu tun, solange sich die Befehle nicht ändern.
+- **Nach Änderungen an `src/lib/discord-bot/commands.ts`** (neue oder umbenannte Befehle, Optionen):
+  nach dem Deploy `npm run discord:register` ausführen (mit `DISCORD_APPLICATION_ID` und
+  `DISCORD_BOT_TOKEN` in der Umgebung). Die Registrierung ersetzt die komplette Liste; global dauert es
+  bis zu einer Stunde. Zum Testen erst `-- --guild <Server-ID>`, danach die Server-Befehle mit
+  `--guild <Server-ID> --clear` wieder entfernen.
+- `DISCORD_PUBLIC_KEY` und `DISCORD_APPLICATION_ID` werden beim Build eingebettet – Änderungen wirken
+  erst mit dem nächsten Deploy. Nach einem Domainwechsel die Interactions Endpoint URL im Developer
+  Portal anpassen.
+- **Fehlerbilder:** Endpunkt antwortet 404 → `DISCORD_PUBLIC_KEY` fehlt im Build. Discord lehnt das
+  Speichern der Endpoint-URL ab → falscher Schlüssel (Public Key, nicht Client Secret). `/rolle` darf
+  nicht vergeben → Rollen-Hierarchie auf dem Server. Discord meldet, dass die Anwendung nicht reagiert
+  hat → Worker-Logs ansehen (Antwort muss innerhalb von 3 Sekunden kommen).
+- Den Stand der Variablen zeigt der Admin unter *Einstellungen → Discord-Bot*.
+
+---
+
+## Stream-Overlays
+
+`/overlay/<name>` sind Worker-Seiten (nicht vorgerendert, `noindex`, in `robots.txt` gesperrt), die
+Daten kommen aus `/api/overlay/<name>.json` (15 s Cache). Details: [OVERLAYS.md](OVERLAYS.md).
+
+- Keine Pflege nötig; Rebuilds ändern die Adressen nicht.
+- Last: Jede Browser-Quelle in OBS fragt alle 20 Sekunden ab – rund 180 Worker-Anfragen pro Stunde und
+  Quelle. Bei ein paar Quellen während eines Streams ist das weit unter der Free-Tier-Grenze.
+- Ist die Website kurz weg, bleibt im Stream der letzte Stand stehen (gelber Punkt im Overlay).
+- Nach Design-Updates in OBS bei der Quelle „Cache der aktuellen Seite aktualisieren“ klicken.
+
+---
+
 ## Updates (Dependabot)
 
 Dependabot (`.github/dependabot.yml`) öffnet **montags** Pull Requests für npm-Pakete und GitHub
@@ -341,12 +407,13 @@ auffielen (Uhrzeiten, Feldgröße, Spielversion, alte Regeln).
 Checkliste:
 
 - [ ] Startseite: Claim, Anmeldestatus, Partner-Leiste
-- [ ] `/mitfahren`: Voraussetzungen, Ablauf, Anmeldestatus
+- [ ] `/mitfahren`: Voraussetzungen, Ablauf, Anmeldestatus („Stand:“ zeigt die letzte Änderung des Status)
 - [ ] `/liga/regelwerk`: gültige Version, Changelog vollständig, Links auf Paragrafen funktionieren
 - [ ] `/liga/lobby`: Lobby-Einstellungen der aktuellen Saison
 - [ ] `/liga/faq`: Voraussetzungen (Spielversion, Season Pack), Renntag-Ablauf
 - [ ] `/liga/ueber-uns`: Orga-Team, offene Rollen noch offen?
 - [ ] `/liga/partner`: Partner aktiv? Kennzeichnung „Anzeige“
+- [ ] `/strecken`: Streckenkarten mit Quelle/Lizenz, Streckendaten (Länge, Rundenzahl)
 - [ ] Impressum, Datenschutz, Teilnahmebedingungen: Anbieterliste und Kontaktdaten aktuell
 - [ ] Englische Fassungen: fehlende Übersetzungen laut Dashboard nachgetragen
 - [ ] Discord-Einladung und Social-Links funktionieren
@@ -380,7 +447,8 @@ bekommt zusätzlich GitHub/Cloudflare/Supabase.
 2. Aus GitHub-Organisation, Cloudflare, Supabase, Passwortmanager entfernen (falls vorhanden).
 3. Secrets rotieren, die die Person kannte: Supabase-Service-Key (Supabase → API → neu erzeugen, dann
    `wrangler secret put`), Discord-Bot-Token, Webhook-URLs (im Discord neu anlegen, im Admin eintragen),
-   Datenbank-Passwort (dann `SUPABASE_DB_URL` anpassen).
+   Datenbank-Passwort (dann `SUPABASE_DB_URL` anpassen), Import-Token (Admin → Runde → Import →
+   „Neues Token erzeugen“, neues Token an den Lobby-PC geben).
 4. Im Audit-Log kurz prüfen, ob zuletzt ungewöhnliche Änderungen passiert sind.
 
 ---
@@ -389,19 +457,22 @@ bekommt zusätzlich GitHub/Cloudflare/Supabase.
 
 Plan §11.2. Die Checkliste steht auch im Admin; hier mit den technischen Schritten:
 
-1. **Letzte Runde final** setzen, alle Urteile veröffentlicht.
+1. **Letzte Runde final** setzen, alle Urteile veröffentlicht, **Rookie of the Year** unter
+   Admin → Auszeichnungen gewählt.
 2. **Snapshot-Backup**: Actions → Backup → Run workflow → Name `saison-<n>-ende`.
 3. **Saison beenden:** Admin → Saisons → Status „abgeschlossen“. Champions (Fahrer, Team) landen in der
    Hall of Fame, die Saison ist **eingefroren** und im Archiv nur noch lesbar.
 4. Umfrage unter den Fahrern, **Regelwerk überarbeiten** und als neue Version mit Changelog veröffentlichen.
 5. **Neue Saison aus der alten klonen** (Punkteschema, Lobby, Teams, Einstellungen), neue
-   Regelwerk-Version zuweisen, **Kalender** anlegen.
+   Regelwerk-Version zuweisen, **Kalender** anlegen, **Strafpunkte-System** (an/aus, Schwellen,
+   Verfall) vor dem ersten Rennen festlegen.
 6. Rückmeldung der Stammfahrer (bleibt / pausiert / hört auf): Fahrerstatus setzen,
    **Nummern inaktiver Fahrer freigeben**, Cockpits der neuen Saison belegen, Reservepool ordnen.
 7. Discord-Rollen und Grafiken aktualisieren, **Anmeldefenster öffnen** (Anmeldestatus).
 8. Neue Saison auf **aktiv** setzen (es kann nur eine aktive geben).
 9. `RACEDAY_WEEKDAY` prüfen, falls sich der Renntag ändert.
 10. Aktualitäts-Check der Inhaltsseiten (siehe oben).
+11. Telemetrie genutzt? Lokale Sicherungen (`telemetrie-export`) auf dem Lobby-PC löschen.
 
 ---
 
@@ -434,7 +505,7 @@ Grenzen gelegentlich prüfen):
 
 | Dienst | Relevante Grenze | Unser Bedarf |
 |---|---|---|
-| Cloudflare Workers | 100.000 Anfragen/Tag an den Worker, ca. 10 ms CPU je Anfrage | Statische Seiten zählen nicht; Worker nur für Formulare, Admin, APIs |
+| Cloudflare Workers | 100.000 Anfragen/Tag an den Worker, ca. 10 ms CPU je Anfrage | Statische Seiten zählen nicht; Worker nur für Formulare, Admin, APIs, Stream-Overlays, Discord-Bot und Import |
 | Cloudflare R2 | 10 GB Speicher | 30 Nacht-Backups + Snapshots, wenige MB je Backup |
 | Supabase | 500 MB Datenbank, 1 GB Storage, Pause nach 7 Tagen Inaktivität | wenige MB pro Saison; Keep-alive läuft |
 | GitHub Actions | 2.000 Minuten/Monat (privates Repo), unbegrenzt bei öffentlichem Repo | ca. 3–5 Minuten je Deploy (auch jeder Inhalts-Rebuild), CI ca. 15–20 Minuten je Push (Summe der parallelen Jobs) – bei privatem Repo also Pushes bündeln |
