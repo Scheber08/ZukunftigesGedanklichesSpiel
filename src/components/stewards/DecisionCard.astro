@@ -11,6 +11,7 @@ import { url, useT, type Lang } from '~/i18n';
 import { formatDate } from '~/lib/domain/time';
 import { roundLabel, seasonLabel } from '~/lib/view';
 import type { DecisionItem } from './model';
+import { pointsKey } from './penalty-points';
 import { penaltyOf, plainExcerpt } from './utils';
 import VerdictBadge from './VerdictBadge.astro';
 
@@ -24,6 +25,8 @@ const { lang, item, showSeason = true } = Astro.props;
 const t = useT(lang);
 const { decision: d, round, track, season, sessionType, driver, team, number, rule, clipUrl } = item;
 const penalty = penaltyOf(d);
+// Strafpunkte nur bei aktivem System der Saison (Plan Phase 2)
+const points = season.penalty_points_enabled && (d.penalty_points ?? 0) > 0 ? d.penalty_points! : null;
 const detailHref = url(lang, 'decision', { ref: d.public_ref });
 const raceHref = url(lang, 'race', { season: season.slug, round: round.number });
 const excerpt = plainExcerpt(item.reasoning.text, 220);
@@ -75,6 +78,7 @@ const headingId = `d-${d.public_ref.toLowerCase()}`;
     <p class="penalty text-sm">
       <span class="sr-only">{t('stewards.field.penalty')}: </span>
       {t(penalty.key, { n: penalty.n ?? '' })}
+      {points != null && <span class="font-normal text-muted"> · {t(pointsKey(points), { n: points })}</span>}
     </p>
   </div>
 

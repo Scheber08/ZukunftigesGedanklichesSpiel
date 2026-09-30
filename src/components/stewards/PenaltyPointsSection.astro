@@ -1,0 +1,188 @@
+---
+/**
+ * Strafpunkte im Steward-Register (Plan Phase 2, §4.6): Konten je Fahrer mit aktiven Punkten
+ * und Status (Text, nicht nur Farbe), Schwellen, Verfall und Links auf die Entscheidungen.
+ *
+ * Ein Block je Saison mit aktivem System. Sichtbar ist der Block der aktuellen Saison; ist im
+ * Register-Filter eine Saison gewählt, zeigt das Skript deren Block – oder blendet den
+ * Abschnitt aus, wenn das System in dieser Saison nicht aktiv ist. Ohne JavaScript bleibt
+ * der Block der aktuellen Saison sichtbar.
+ */
+import Badge from '~/components/ui/Badge.astro';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import { url, useT, type Lang } from '~/i18n';
+import type { Id } from '~/lib/db/types';
+import type { League } from '~/lib/league/league';
+import { seasonLabel } from '~/lib/view';
+import { expiryRuleKey, PENALTY_STATUS_KEY, PENALTY_STATUS_VARIANT, pointsKey, type SeasonPenaltyPoints } from './penalty-points';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  /** Saisons mit aktivem Strafpunkte-System, neueste zuerst */
+  blocks: SeasonPenaltyPoints[];
+  /** Saison, deren Block ohne Filter sichtbar ist (aktuelle Saison) */
+  defaultSeasonId: Id | null;
+  headingId?: string;
+}
+const { lang, league, blocks, defaultSeasonId, headingId = 'penalty-points-title' } = Astro.props;
+const t = useT(lang);
+const visible = blocks.some((b) => b.season.id === defaultSeasonId);
+---
+
+{
+  blocks.length > 0 && (
+    <section id="penalty-points" class="section pt-0" aria-labelledby={headingId} data-pp-section hidden={!visible}>
+      <SectionTitle id={headingId} title={t('stewards.points.title')} />
+      {blocks.map(({ season, config, accounts }) => {
+        const name = seasonLabel(season, lang);
+        const expiry = expiryRuleKey(config);
+        const hasExpiry = config.expiryRounds != null;
+        return (
+          <div data-pp-season={season.slug} data-pp-default={season.id === defaultSeasonId ? 'true' : undefined} hidden={season.id !== defaultSeasonId}>
+            <p class="micro mb-2">{name}</p>
+            <p class="max-w-2xl text-muted">{t('stewards.points.lead')}</p>
+            <dl class="rules mt-4 grid gap-3 sm:grid-cols-3">
+              <div class="card p-4">
+                <dt class="micro">{t('stewards.points.rules.warningTitle')}</dt>
+                <dd class="mt-1 text-sm">{t('stewards.points.rules.warning', { n: config.warningThreshold })}</dd>
+              </div>
+              <div class="card p-4">
+                <dt class="micro">{t('stewards.points.rules.banTitle')}</dt>
+                <dd class="mt-1 text-sm">{t('stewards.points.rules.ban', { n: config.banThreshold })}</dd>
+              </div>
+              <div class="card p-4">
+                <dt class="micro">{t('stewards.points.rules.expiryTitle')}</dt>
+                <dd class="mt-1 text-sm">{t(expiry.key, { n: expiry.n })}</dd>
+              </div>
+            </dl>
+            {accounts.length === 0 ? (
+              <p class="card mt-6 p-5 text-sm text-muted">{t('stewards.points.empty', { season: name })}</p>
+            ) : (
+              <div class="table-wrap mt-6">
+                <table class="timing-table">
+                  <caption class="sr-only">{t('stewards.points.caption', { season: name })}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col" class="sticky-col">
+                        {t('stewards.points.col.driver')}
+                      </th>
+                      <th scope="col" class="num">
+                        {t('stewards.points.col.active')}
+                      </th>
+                      <th scope="col">{t('stewards.points.col.status')}</th>
+                      {hasExpiry && (
+                        <th scope="col" class="num">
+                          {t('stewards.points.col.expired')}
+                        </th>
+                      )}
+                      <th scope="col">{t('stewards.points.col.decisions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accounts.map((a) => {
+                      const driver = league.driver(a.driverId);
+                      const driverName = league.driverName(a.driverId, lang);
+                      return (
+                        <tr>
+                          <th scope="row" class="sticky-col font-normal">
+                            <DriverLink lang={lang} driver={driver} team={league.driverTeam(a.driverId, season.id)} />
+                          </th>
+                          <td class="num">
+                            <span aria-hidden="true">
+                              <strong class="tabular">{a.active}</strong>
+                              <span class="muted"> / {config.banThreshold}</span>
+                            </span>
+                            <span class="sr-only">{t('stewards.points.activeOf', { n: a.active, max: config.banThreshold })}</span>
+                          </td>
+                          <td>
+                            <Badge variant={PENALTY_STATUS_VARIANT[a.status]}>{t(PENALTY_STATUS_KEY[a.status])}</Badge>
+                          </td>
+                          {hasExpiry && <td class="num muted">{a.expired}</td>}
+                          <td class="refs-cell">
+                            <ul class="refs" aria-label={t('stewards.points.decisionsOf', { name: driverName })}>
+                              {a.entries.map((e) => (
+                                <li class:list={{ expired: e.expired }}>
+                                  <a href={url(lang, 'decision', { ref: e.ref })} class="ref tabular">
+                                    {e.ref}
+                                  </a>
+                                  <span class="muted">
+                                    <span aria-hidden="true">+{e.points}</span>
+                                    <span class="sr-only">{t(pointsKey(e.points), { n: e.points })}</span>
+                                    {e.expired && <> · {t('stewards.points.entry.expired', { n: e.expiresAfterRound ?? '' })}</>}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </section>
+  )
+}
+
+<style>
+  .refs-cell {
+    white-space: normal;
+    min-width: 12rem;
+  }
+  .refs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1rem;
+  }
+  .refs li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+  .refs li.expired .ref {
+    text-decoration: line-through;
+  }
+  .ref {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-weight: 700;
+    color: var(--color-green);
+    text-decoration: none;
+  }
+  .ref:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+  .muted {
+    color: var(--color-muted);
+  }
+</style>
+
+<script>
+  // Block zur im Register-Filter gewählten Saison zeigen (Filter steht auch in der URL: ?season=…)
+  const section = document.querySelector<HTMLElement>('[data-pp-section]');
+  if (section) {
+    const blocks = [...section.querySelectorAll<HTMLElement>('[data-pp-season]')];
+    const show = (season: string) => {
+      let any = false;
+      for (const block of blocks) {
+        const match = season === '' ? block.dataset.ppDefault === 'true' : block.dataset.ppSeason === season;
+        block.hidden = !match;
+        if (match) any = true;
+      }
+      section.hidden = !any;
+    };
+    const initial = new URLSearchParams(location.search).get('season') ?? '';
+    show(/^[a-z0-9_-]{1,80}$/i.test(initial) ? initial : '');
+    const select = document.querySelector<HTMLSelectElement>('[data-decision-filters] select[name="season"]');
+    select?.addEventListener('change', () => show(select.value));
+    document.querySelector('[data-decision-filters] [data-filter-reset]')?.addEventListener('click', () => show(''));
+  }
+</script>

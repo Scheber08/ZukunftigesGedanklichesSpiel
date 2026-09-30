@@ -2,7 +2,7 @@
 /**
  * Saison bearbeiten (Plan §5 „Saisons“): Stammdaten, Lobby-Einstellungen, Saison
  * abschließen (Champions → Hall of Fame, einfrieren) bzw. wieder öffnen, Checkliste
- * Saisonwechsel (Plan §11.2).
+ * Saisonwechsel (Plan §11.2), Strafpunkte-System an/aus mit Schwellen und Verfall (Plan Phase 2).
  */
 export const prerender = false;
 
@@ -13,13 +13,16 @@ import LobbyEditor from '~/components/admin/core/LobbyEditor.astro';
 import Notice from '~/components/admin/core/Notice.astro';
 import Section from '~/components/admin/core/Section.astro';
 import SeasonFields from '~/components/admin/core/SeasonFields.astro';
+import Field from '~/components/admin/ui/Field.astro';
+import { seasonPenaltyPoints } from '~/components/stewards/penalty-points';
 import AdminLayout from '~/layouts/AdminLayout.astro';
 import { url } from '~/i18n';
 import { SEASON_STATUS_BADGE, SEASON_STATUS_LABELS } from '~/lib/admin/league/labels';
 import { lobbyStats } from '~/lib/admin/league/lobby';
 import { leagueFromStore } from '~/lib/admin/league/ops';
-import { actionOutcome, formValues, sameAction } from '~/lib/admin/league/page';
+import { actionOutcome, fieldAria, formValues, sameAction } from '~/lib/admin/league/page';
 import { FROZEN_MESSAGE, isSeasonFrozen, openRoundsBeforeFinish, seasonChangeChecklist } from '~/lib/admin/league/season';
+import { MAX_EXPIRY_ROUNDS, MAX_THRESHOLD, resolvePenaltyPointsConfig } from '~/lib/domain/penalty-points';
 import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 import { readPublicSettings } from '~/lib/server/settings';
@@ -27,7 +30,7 @@ import { intParam } from '~/lib/view';
 
 if (!hasRole(Astro.locals.staff, 'admin')) return Astro.rewrite('/admin?error=forbidden');
 const A = actions.admin;
-const outcome = await actionOutcome(Astro, [A.seasonSave, A.seasonLobbySave, A.seasonFinish, A.seasonReopen, A.seasonDelete]);
+const outcome = await actionOutcome(Astro, [A.seasonSave, A.seasonLobbySave, A.seasonFinish, A.seasonReopen, A.seasonDelete, A.penaltyPointsSave]);
 if (outcome.redirect) return Astro.redirect(outcome.redirect, 303);
 
 const seasonId = intParam(Astro.params.id);
@@ -76,6 +79,22 @@ const values = {
   ends_on: edit.str('ends_on', season.ends_on ?? ''),
 };
 
+// Strafpunkte-System (Plan Phase 2): Formularwerte (nach Fehler die abgeschickten) und aktuelle Konten
+const ppForm = formValues(outcome, A.penaltyPointsSave);
+const ppConfig = resolvePenaltyPointsConfig(season.penalty_points_config);
+const ppValues = {
+  enabled: ppForm.bool('penalty_points_enabled', season.penalty_points_enabled),
+  warning: ppForm.str('warning_threshold', ppConfig.warningThreshold),
+  ban: ppForm.str('ban_threshold', ppConfig.banThreshold),
+  mode: ppForm.str('expiry_mode', ppConfig.expiryRounds == null ? 'season' : 'rounds'),
+  rounds: ppForm.str('expiry_rounds', ppConfig.expiryRounds ?? ''),
+};
+const ppStored = Object.keys(season.penalty_points_config ?? {}).length > 0;
+const ppAccounts = seasonPenaltyPoints(league, season)?.accounts ?? [];
+const ppDecisionsWithPoints = league.decisions.filter((d) => (d.penalty_points ?? 0) > 0 && seasonRounds.some((r) => r.id === d.round_id)).length;
+const ppStatusLabel = { ok: 'unauffällig', warning: 'Verwarnschwelle erreicht', ban: 'Sperrschwelle erreicht' } as const;
+const ppStatusBadge = { ok: 'muted', warning: 'warning', ban: 'danger' } as const;
+
 const lobbyPosted = sameAction(outcome.action, A.seasonLobbySave);
 const lobbyMode = Astro.url.searchParams.get('lobby') === 'json' || (lobbyPosted && outcome.posted?.get('mode') === 'json') ? 'json' : 'form';
 const lobbyErrors = lobbyPosted ? { lobby: outcome.error?.fields.lobby, json: outcome.error?.fields.json } : {};
@@ -120,12 +139,185 @@ const stateIcon = { done: '✓', open: '○', manual: '•' } as const;
       <input type="hidden" name="id" value={season.id} />
       <fieldset disabled={frozen} class="grid min-w-0 gap-4">
         <legend class="sr-only">Stammdaten der Saison</legend>
-        <SeasonFields prefix="season" values={values} err={edit.err} schemes={schemes} rulesVersions={rulesSorted} withStatus={!frozen} />
+        <SeasonFields
+          prefix="season"
+          values={values}
+          err={edit.err}
+          schemes={schemes}
+          rulesVersions={rulesSorted}
+          withStatus={!frozen}
+          penaltyPoints="hidden"
+        />
         <div>
           <button type="submit" class="btn btn-primary">Speichern</button>
         </div>
       </fieldset>
     </form>
+  </Section>
+
+  <Section
+    title="Strafpunkte"
+    id="strafpunkte"
+    description="Konto je Fahrer aus veröffentlichten Entscheidungen. Bei aktivem System zeigt das Steward-Werkzeug das Strafpunkte-Feld und die Konten; öffentlich erscheinen die Konten im Steward-Register, im Fahrerprofil und als Hinweis im Regelwerk."
+  >
+    <form method="POST" action={A.penaltyPointsSave}>
+      <input type="hidden" name="season_id" value={season.id} />
+      <fieldset disabled={frozen} class="grid min-w-0 gap-4">
+        <legend class="sr-only">Strafpunkte-System der Saison</legend>
+        <label class="checkbox" for="pp-enabled">
+          <input id="pp-enabled" type="checkbox" name="penalty_points_enabled" value="true" checked={ppValues.enabled} />
+          <span>Strafpunkte-System in dieser Saison aktiv</span>
+        </label>
+        {
+          !ppStored && (
+            <p class="text-sm text-muted">
+              Noch keine eigenen Werte gespeichert – vorausgefüllt sind die Standardwerte (Verwarnung ab 8, Sperre ab 12 Punkten, kein Verfall).
+            </p>
+          )
+        }
+        <div class="grid gap-4 sm:grid-cols-2">
+          <Field
+            id="pp-warning"
+            label="Verwarnschwelle (Punkte)"
+            required
+            hint="Ab dieser Summe aktiver Punkte: Verwarnung – die letzte Warnung vor einer Sperre."
+            error={ppForm.err('warning_threshold')}
+          >
+            <input
+              id="pp-warning"
+              name="warning_threshold"
+              type="number"
+              min="1"
+              max={MAX_THRESHOLD - 1}
+              inputmode="numeric"
+              class="input"
+              value={ppValues.warning}
+              required
+              {...fieldAria('pp-warning', true, ppForm.err('warning_threshold'))}
+            />
+          </Field>
+          <Field
+            id="pp-ban"
+            label="Sperrschwelle (Punkte)"
+            required
+            hint="Ab dieser Summe: Rennsperre prüfen (die Stewards sprechen sie als eigene Entscheidung aus). Muss größer als die Verwarnschwelle sein."
+            error={ppForm.err('ban_threshold')}
+          >
+            <input
+              id="pp-ban"
+              name="ban_threshold"
+              type="number"
+              min="2"
+              max={MAX_THRESHOLD}
+              inputmode="numeric"
+              class="input"
+              value={ppValues.ban}
+              required
+              {...fieldAria('pp-ban', true, ppForm.err('ban_threshold'))}
+            />
+          </Field>
+        </div>
+        <fieldset class="grid min-w-0 gap-1" aria-describedby="pp-expiry-hint">
+          <legend class="label mb-1">Verfall <span class="req" aria-hidden="true">*</span></legend>
+          <label class="checkbox" for="pp-expiry-season">
+            <input id="pp-expiry-season" type="radio" name="expiry_mode" value="season" checked={ppValues.mode !== 'rounds'} />
+            <span>Nie – Punkte gelten bis zum Saisonende</span>
+          </label>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <label class="checkbox" for="pp-expiry-rounds">
+              <input id="pp-expiry-rounds" type="radio" name="expiry_mode" value="rounds" checked={ppValues.mode === 'rounds'} />
+              <span>Punkte verfallen nach</span>
+            </label>
+            <label for="pp-rounds" class="sr-only">Anzahl Runden bis zum Verfall</label>
+            <input
+              id="pp-rounds"
+              name="expiry_rounds"
+              type="number"
+              min="1"
+              max={MAX_EXPIRY_ROUNDS}
+              inputmode="numeric"
+              class="input w-24"
+              value={ppValues.rounds}
+              {...fieldAria('pp-rounds', false, ppForm.err('expiry_rounds'))}
+            />
+            <span aria-hidden="true">Runden</span>
+          </div>
+          <p class="field-hint" id="pp-expiry-hint">
+            Gezählt ab der Runde des Vorfalls, abgesagte Runden zählen nicht. Beispiel 3: Punkte aus R2 gelten in R3 bis R5 und verfallen, sobald
+            R5 gewertet ist.
+          </p>
+          {
+            ppForm.err('expiry_rounds')?.map((e) => (
+              <p class="field-error" id="pp-rounds-error" role="alert">
+                {e}
+              </p>
+            ))
+          }
+          {
+            ppForm.err('expiry_mode')?.map((e) => (
+              <p class="field-error" role="alert">
+                {e}
+              </p>
+            ))
+          }
+        </fieldset>
+        {
+          season.penalty_points_enabled && ppDecisionsWithPoints > 0 && (
+            <p class="text-sm text-muted">
+              Beim Ausschalten bleiben die Punkte in den {ppDecisionsWithPoints} Entscheidungen gespeichert, werden aber nirgends mehr gezeigt
+              oder gezählt.
+            </p>
+          )
+        }
+        <div>
+          <button type="submit" class="btn btn-primary">Strafpunkte speichern</button>
+        </div>
+      </fieldset>
+    </form>
+
+    {
+      season.penalty_points_enabled && (
+        <div class="mt-6 border-t border-border pt-4">
+          <h3 class="micro mb-2">Aktuelle Konten</h3>
+          {ppAccounts.length === 0 ? (
+            <p class="text-sm text-muted">Noch keine veröffentlichten Entscheidungen mit Strafpunkten.</p>
+          ) : (
+            <div class="table-wrap">
+              <table class="timing-table">
+                <caption class="sr-only">Strafpunkte-Konten {season.name}, meiste aktive Punkte zuerst</caption>
+                <thead>
+                  <tr>
+                    <th scope="col" class="sticky-col">Fahrer</th>
+                    <th scope="col" class="num">Aktiv</th>
+                    <th scope="col" class="num">Verfallen</th>
+                    <th scope="col">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ppAccounts.map((a) => (
+                    <tr>
+                      <th scope="row" class="sticky-col font-normal">
+                        {league.driverName(a.driverId)}
+                      </th>
+                      <td class="num">{a.active}</td>
+                      <td class="num muted">{a.expired}</td>
+                      <td>
+                        <Badge variant={ppStatusBadge[a.status]}>{ppStatusLabel[a.status]}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p class="mt-2 text-sm">
+            <a href={`/admin/stewards?saison=${season.id}`} class="inline-flex min-h-[44px] items-center underline hover:text-teal">
+              Zum Steward-Werkzeug
+            </a>
+          </p>
+        </div>
+      )
+    }
   </Section>
 
   <Section

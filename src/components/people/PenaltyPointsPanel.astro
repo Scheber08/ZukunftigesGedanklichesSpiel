@@ -1,0 +1,169 @@
+---
+/**
+ * Strafpunkte-Konto eines Fahrers für eine Saison (Plan Phase 2: „Das Konto erscheint im Profil“).
+ * Zeigt aktive Punkte mit Status (Text, nicht nur Farbe), Abstand zur nächsten Schwelle,
+ * nächsten Verfall, verfallene Punkte und die Einträge mit Link auf die Entscheidungen.
+ *
+ * Daten: `driverPenaltyAccount(league, season, driver.id)` aus
+ * src/components/stewards/penalty-points.ts (null, wenn das System in der Saison nicht aktiv ist).
+ */
+import Badge from '~/components/ui/Badge.astro';
+import { PENALTY_STATUS_KEY, PENALTY_STATUS_VARIANT, entryExpiryKey, pointsKey } from '~/components/stewards/penalty-points';
+import { url, useT, type Lang } from '~/i18n';
+import type { SeasonRow } from '~/lib/db/types';
+import type { PenaltyPointsAccount } from '~/lib/domain/penalty-points';
+import { seasonLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  /** Konto des Fahrers in dieser Saison */
+  account: PenaltyPointsAccount;
+  /** Saison des Kontos (Überschrift und Link zur Erklärung) */
+  season: Pick<SeasonRow, 'number' | 'name' | 'slug'>;
+  /** Überschriftenebene (Standard h3, z. B. innerhalb des Abschnitts „Strafen“) */
+  headingLevel?: 2 | 3;
+  /** Eindeutige ID-Basis, falls mehrere Panels auf einer Seite stehen */
+  id?: string;
+  class?: string;
+}
+const { lang, account, season, headingLevel = 3, id = 'penalty-account', class: className } = Astro.props;
+const t = useT(lang);
+const Heading = headingLevel === 2 ? 'h2' : 'h3';
+const { active, expired, status, entries, config, nextExpiry } = account;
+const points = (n: number) => t(pointsKey(n), { n });
+
+// Balken: Anteil an der Sperrschwelle (über 100 % wird gekappt), Markierung an der Verwarnschwelle
+const fill = Math.min(100, Math.round((active / config.banThreshold) * 100));
+const warnAt = Math.min(100, Math.round((config.warningThreshold / config.banThreshold) * 100));
+const progress =
+  status === 'ban'
+    ? t('stewards.points.panel.banReached', { max: config.banThreshold })
+    : status === 'warning'
+      ? t('stewards.points.panel.toBan', { n: account.toBan, max: config.banThreshold })
+      : t('stewards.points.panel.toWarning', { n: account.toWarning, max: config.warningThreshold });
+const explainHref = `${url(lang, 'stewards')}?season=${encodeURIComponent(season.slug)}#penalty-points`;
+---
+
+<section class:list={['pp-panel card p-4 sm:p-5', `is-${status}`, className]} aria-labelledby={`${id}-title`}>
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0">
+      <Heading id={`${id}-title`} class="text-lg uppercase">{t('stewards.points.panel.title')}</Heading>
+      <p class="micro mt-0.5">{seasonLabel(season, lang)}</p>
+    </div>
+    <Badge variant={PENALTY_STATUS_VARIANT[status]}>{t(PENALTY_STATUS_KEY[status])}</Badge>
+  </div>
+
+  <p class="mt-4 flex flex-wrap items-baseline gap-x-2">
+    <span class="sr-only">{t('stewards.points.panel.active')}: {t('stewards.points.activeOf', { n: active, max: config.banThreshold })}</span>
+    <span class="value tabular" aria-hidden="true">{active}</span>
+    <span class="text-muted" aria-hidden="true">/ {config.banThreshold}</span>
+    <span class="text-sm text-muted" aria-hidden="true">{t('stewards.points.panel.active')}</span>
+  </p>
+  <div class="meter mt-2" aria-hidden="true" style={`--pp-fill: ${fill}%; --pp-warn: ${warnAt}%`}>
+    <span class="meter-fill"></span>
+    <span class="meter-mark"></span>
+  </div>
+
+  <ul class="mt-3 grid gap-1 text-sm">
+    <li>{progress}</li>
+    {nextExpiry && <li class="text-muted">{t('stewards.points.panel.nextExpiry', { points: points(nextExpiry.points), n: nextExpiry.afterRound })}</li>}
+    {expired > 0 && <li class="text-muted">{t('stewards.points.panel.expired', { points: points(expired) })}</li>}
+  </ul>
+
+  {
+    entries.length === 0 ? (
+      <p class="mt-4 text-sm text-muted">{t('stewards.points.panel.none')}</p>
+    ) : (
+      <>
+        <p class="micro mt-4" id={`${id}-entries`}>
+          {t('stewards.points.panel.entries')}
+        </p>
+        <ul class="entries mt-1" aria-labelledby={`${id}-entries`}>
+          {entries.map((e) => {
+            const exp = entryExpiryKey(e);
+            return (
+              <li class:list={{ expired: e.expired }}>
+                <a href={url(lang, 'decision', { ref: e.ref })} class="ref tabular">
+                  {e.ref}
+                </a>
+                <span>{points(e.points)}</span>
+                <span class="text-muted">{t(exp.key, { n: exp.n })}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </>
+    )
+  }
+
+  <a href={explainHref} class="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-green hover:text-teal">
+    {t('stewards.points.panel.howItWorks')} →
+  </a>
+</section>
+
+<style>
+  .value {
+    font-family: var(--font-display);
+    font-size: 2.25rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .meter {
+    position: relative;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--color-surface-2);
+    overflow: hidden;
+  }
+  .meter-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--pp-fill);
+    border-radius: inherit;
+    background: var(--color-teal);
+  }
+  .is-warning .meter-fill {
+    background: var(--color-warning);
+  }
+  .is-ban .meter-fill {
+    background: var(--color-danger);
+  }
+  .meter-mark {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--pp-warn);
+    width: 2px;
+    background: var(--color-fg);
+    opacity: 0.6;
+  }
+  .entries {
+    display: grid;
+  }
+  .entries li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.875rem;
+  }
+  .entries li:last-child {
+    border-bottom: 0;
+  }
+  .entries li.expired .ref {
+    text-decoration: line-through;
+  }
+  .ref {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-weight: 700;
+    color: var(--color-green);
+    text-decoration: none;
+  }
+  .ref:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+</style>

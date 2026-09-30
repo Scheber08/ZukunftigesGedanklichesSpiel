@@ -1,9 +1,19 @@
 /**
  * Entscheidungsformular (Plan §5.3): Eingaben je Art prüfen und vereinheitlichen.
  * Zeitstrafe braucht Sekunden, Positions- und Grid-Strafe brauchen Plätze;
- * Strafpunkte nur, wenn das System in der Saison aktiv ist.
+ * Strafpunkte nur, wenn das System in der Saison aktiv ist (nicht bei „Keine Strafe“).
  */
-import type { DecisionRow, Id, Verdict } from '../../db/types';
+import type { Store } from '../../db/store';
+import type { DecisionRow, Id, SeasonRow, Verdict } from '../../db/types';
+import {
+  MAX_POINTS_PER_DECISION,
+  penaltyPointsAccounts,
+  penaltyPointsImpact,
+  resolvePenaltyPointsConfig,
+  type PenaltyPointsAccount,
+  type PenaltyPointsStatus,
+  type ResolvedPenaltyPointsConfig,
+} from '../../domain/penalty-points';
 
 export interface DecisionInput {
   incidentId: Id | null;
@@ -73,8 +83,10 @@ export function normalizeDecision(
 
   let penaltyPoints: number | null = null;
   if (opts.penaltyPointsEnabled && input.penaltyPoints != null) {
-    if (!Number.isInteger(input.penaltyPoints) || input.penaltyPoints < 0 || input.penaltyPoints > 12) {
-      errors.penaltyPoints = 'Strafpunkte als ganze Zahl (0–12).';
+    if (!Number.isInteger(input.penaltyPoints) || input.penaltyPoints < 0 || input.penaltyPoints > MAX_POINTS_PER_DECISION) {
+      errors.penaltyPoints = `Strafpunkte als ganze Zahl (0–${MAX_POINTS_PER_DECISION}).`;
+    } else if (input.verdict === 'no_action' && input.penaltyPoints > 0) {
+      errors.penaltyPoints = 'Bei „Keine Strafe“ gibt es keine Strafpunkte.';
     } else penaltyPoints = input.penaltyPoints;
   }
 
@@ -125,4 +137,161 @@ export function addVote(decidedBy: readonly string[], userId: string): string[] 
 /** Vier-Augen-Prinzip: genug verschiedene Stimmen zum Veröffentlichen? */
 export function enoughVotes(decidedBy: readonly string[], twoStewardRule: boolean): boolean {
   return new Set(decidedBy).size >= (twoStewardRule ? 2 : 1);
+}
+
+// ---------------------------------------------------------------------------- Strafpunkte (Plan Phase 2)
+
+export interface PenaltyPointsWarning {
+  level: 'warning' | 'ban';
+  /** aktive Punkte nach der Entscheidung */
+  after: number;
+  text: string;
+}
+
+/**
+ * Deutliche Warnung im Steward-Werkzeug, wenn eine neue Entscheidung eine Schwelle erreicht
+ * (oder ein Fahrer über der Sperrschwelle weitere Punkte bekommt). `activeBefore` sind die
+ * aktiven Punkte ohne diese Entscheidung. null = keine Warnung.
+ */
+export function penaltyPointsWarning(
+  activeBefore: number,
+  newPoints: number | null | undefined,
+  config: ResolvedPenaltyPointsConfig,
+): PenaltyPointsWarning | null {
+  const impact = penaltyPointsImpact(activeBefore, newPoints, config);
+  if (impact.after === impact.before) return null;
+  const detail = `${impact.after} aktive Punkte, Sperre ab ${config.banThreshold}`;
+  if (impact.reached === 'ban') {
+    return { level: 'ban', after: impact.after, text: `Sperrschwelle erreicht – Rennsperre prüfen (${detail}).` };
+  }
+  if (impact.statusAfter === 'ban') {
+    return { level: 'ban', after: impact.after, text: `Sperrschwelle schon vorher erreicht – Rennsperre prüfen (${detail}).` };
+  }
+  if (impact.reached === 'warning') {
+    return {
+      level: 'warning',
+      after: impact.after,
+      text: `Verwarnschwelle erreicht (${impact.after} aktive Punkte, Verwarnung ab ${config.warningThreshold}, Sperre ab ${config.banThreshold}).`,
+    };
+  }
+  return null;
+}
+
+/** Hinweis unter dem Strafpunkte-Feld: Warnung bei Schwelle, sonst der neue Kontostand. */
+export function penaltyPointsNote(
+  activeBefore: number,
+  newPoints: number | null | undefined,
+  config: ResolvedPenaltyPointsConfig,
+): { level: 'info' | 'warning' | 'ban'; text: string } | null {
+  const warning = penaltyPointsWarning(activeBefore, newPoints, config);
+  if (warning) return warning;
+  const impact = penaltyPointsImpact(activeBefore, newPoints, config);
+  if (impact.after === impact.before) return null;
+  return {
+    level: 'info',
+    text: `Konto danach: ${impact.after} aktive Punkte (Verwarnung ab ${config.warningThreshold}, Sperre ab ${config.banThreshold}).`,
+  };
+}
+
+/** Konto eines beteiligten Fahrers für die Anzeige im Steward-Werkzeug. */
+export interface PenaltyAccountRow {
+  id: Id;
+  label: string;
+  active: number;
+  expired: number;
+  status: 'ok' | 'warning' | 'ban';
+  nextExpiry: { afterRound: number; points: number } | null;
+}
+
+/** Strafpunkte-Daten fürs Entscheidungsformular (nur bei aktivem System). */
+export interface DecisionFormPenalty {
+  config: ResolvedPenaltyPointsConfig;
+  /** Aktive Punkte je Fahrer-ID (nur Fahrer mit Konto; fehlend = 0) */
+  active: Record<string, number>;
+  /** Konten der Beteiligten */
+  involved: PenaltyAccountRow[];
+  seasonName: string;
+}
+
+// ---------------------------------------------------------------------------- Strafpunkte im Steward-Werkzeug
+
+/*
+ * Konten einer Saison per gezielter Store-Abfrage (kein loadLeague()) plus Anzeigedaten für
+ * Formular und Entscheidungskarten. Nur nach der Rollenprüfung der Seite mit dem Service-Store aufrufen.
+ */
+
+export interface StewardPenaltyPoints {
+  config: ResolvedPenaltyPointsConfig;
+  /** Konten aller Fahrer mit Strafpunkten in der Saison, meiste aktive Punkte zuerst */
+  accounts: PenaltyPointsAccount[];
+  /** Aktive Punkte je Fahrer-ID (0, wenn nicht vorhanden) */
+  activeOf(driverId: Id): number;
+  accountOf(driverId: Id): PenaltyPointsAccount | undefined;
+}
+
+/** Konten der Saison – null, wenn das Strafpunkte-System dort nicht aktiv ist. */
+export async function loadStewardPenaltyPoints(store: Store, season: SeasonRow): Promise<StewardPenaltyPoints | null> {
+  if (!season.penalty_points_enabled) return null;
+  const rounds = await store.select('rounds', { eq: { season_id: season.id } });
+  const decisions = rounds.length > 0 ? await store.select('decisions', { in: { round_id: rounds.map((r) => r.id) } }) : [];
+  const accounts = penaltyPointsAccounts({ config: season.penalty_points_config, rounds, decisions });
+  const byDriver = new Map(accounts.map((a) => [a.driverId, a]));
+  return {
+    config: resolvePenaltyPointsConfig(season.penalty_points_config),
+    accounts,
+    activeOf: (driverId) => byDriver.get(driverId)?.active ?? 0,
+    accountOf: (driverId) => byDriver.get(driverId),
+  };
+}
+
+export const PENALTY_STATUS_LABEL: Record<PenaltyPointsStatus, string> = {
+  ok: 'unauffällig',
+  warning: 'Verwarnschwelle erreicht',
+  ban: 'Sperrschwelle erreicht',
+};
+
+export const PENALTY_STATUS_BADGE: Record<PenaltyPointsStatus, 'muted' | 'warning' | 'danger'> = {
+  ok: 'muted',
+  warning: 'warning',
+  ban: 'danger',
+};
+
+/** Konto-Zeilen für die beteiligten Fahrer (Reihenfolge wie übergeben, ohne Doppelte). */
+export function involvedAccounts(pp: StewardPenaltyPoints, driverIds: readonly Id[], label: (id: Id) => string): PenaltyAccountRow[] {
+  return [...new Set(driverIds)].map((id) => {
+    const a = pp.accountOf(id);
+    return {
+      id,
+      label: label(id),
+      active: a?.active ?? 0,
+      expired: a?.expired ?? 0,
+      status: a?.status ?? 'ok',
+      nextExpiry: a?.nextExpiry ?? null,
+    };
+  });
+}
+
+/** Daten fürs Entscheidungsformular: Schwellen, aktive Punkte aller Fahrer, Konten der Beteiligten. */
+export function formPenalty(
+  pp: StewardPenaltyPoints | null,
+  season: Pick<SeasonRow, 'name'>,
+  involvedIds: readonly Id[],
+  label: (id: Id) => string,
+): DecisionFormPenalty | null {
+  if (!pp) return null;
+  return {
+    config: pp.config,
+    active: Object.fromEntries(pp.accounts.filter((a) => a.active > 0).map((a) => [String(a.driverId), a.active])),
+    involved: involvedAccounts(pp, involvedIds, label),
+    seasonName: season.name,
+  };
+}
+
+/**
+ * Warnung für einen Entwurf: Welche Schwelle erreicht er beim Veröffentlichen?
+ * Veröffentlichte Entscheidungen stecken schon im Konto – dort keine Warnung.
+ */
+export function draftWarning(pp: StewardPenaltyPoints | null, d: Pick<DecisionRow, 'status' | 'driver_id' | 'penalty_points'>): PenaltyPointsWarning | null {
+  if (!pp || d.status !== 'draft') return null;
+  return penaltyPointsWarning(pp.activeOf(d.driver_id), d.penalty_points, pp.config);
 }

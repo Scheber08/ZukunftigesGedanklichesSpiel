@@ -2,13 +2,16 @@
 /**
  * Öffentliches Steward-Register (Plan §4.6): alle veröffentlichten Entscheidungen, filterbar
  * nach Saison, Runde, Fahrer und Art; Button „Vorfall melden“, Link zum Strafenkatalog und
- * eine kurze Erklärung des Verfahrens.
+ * eine kurze Erklärung des Verfahrens. Mit aktivem Strafpunkte-System (Plan Phase 2) zusätzlich
+ * die Konten je Fahrer.
  */
 import BookOpen from '@lucide/astro/icons/book-open';
 import Flag from '@lucide/astro/icons/flag';
 import DecisionCard from '~/components/stewards/DecisionCard.astro';
 import DecisionFilters from '~/components/stewards/DecisionFilters.astro';
 import { decisionItems } from '~/components/stewards/model';
+import { seasonPenaltyPoints, type SeasonPenaltyPoints } from '~/components/stewards/penalty-points';
+import PenaltyPointsSection from '~/components/stewards/PenaltyPointsSection.astro';
 import Procedure from '~/components/stewards/Procedure.astro';
 import { catalogueLink, procedureLinks } from '~/components/stewards/rules';
 import { roundFilterValue } from '~/components/stewards/utils';
@@ -32,6 +35,8 @@ const items = decisionItems(league, lang);
 const season = league.currentSeason;
 const multiSeason = new Set(items.map((i) => i.season.id)).size > 1;
 const catalogue = catalogueLink(league, lang);
+// Strafpunkte: Saisons mit aktivem System (neueste zuerst), sichtbar ist die aktuelle
+const penaltyBlocks = league.seasons.map((s) => seasonPenaltyPoints(league, s)).filter((b): b is SeasonPenaltyPoints => b != null);
 const procedure = procedureLinks(league, lang);
 
 const site = Astro.site ?? new URL(Astro.url.origin);
@@ -143,6 +148,8 @@ const verdictOptions = VERDICTS.filter((v) => items.some((i) => i.decision.verdi
         )
       }
     </section>
+
+    <PenaltyPointsSection lang={lang} league={league} blocks={penaltyBlocks} defaultSeasonId={season?.id ?? null} />
 
     <div class="pb-16">
       <Procedure lang={lang} hours={season?.protest_window_hours ?? 48} links={procedure} />

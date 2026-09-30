@@ -2,9 +2,12 @@
 /**
  * Eine Entscheidung mit Status, Stimmen (Vier-Augen-Prinzip) und den möglichen Schritten:
  * Entwurf → zustimmen / veröffentlichen / verwerfen, veröffentlicht → zurücknehmen.
+ * Bei aktivem Strafpunkte-System mit Punkten und – für Entwürfe – deutlicher Warnung, wenn die
+ * Entscheidung beim Veröffentlichen eine Schwelle erreicht.
  */
 import Markdown from '~/components/ui/Markdown.astro';
 import { url } from '~/i18n/routes';
+import type { PenaltyPointsWarning } from '~/lib/admin/raceday/decision-input';
 import { DECISION_STATUS_LABEL, DECISION_STATUS_VARIANT, verdictText } from '~/lib/admin/raceday/labels';
 import type { DecisionRow } from '~/lib/db/types';
 import { formatDateTime } from '~/lib/domain/time';
@@ -23,9 +26,27 @@ interface Props {
   editHref?: string | null;
   resultAffecting: boolean;
   roundFinal: boolean;
+  /** Strafpunkte zeigen (nur bei aktivem System der Saison) */
+  showPenaltyPoints?: boolean;
+  /** Entwurf: Schwelle, die beim Veröffentlichen erreicht wird */
+  penaltyWarning?: PenaltyPointsWarning | null;
 }
-const { decision: d, driverLabel, sessionLabel, voters, twoStewardRule, canDecide, hasVoted, actions, editHref, resultAffecting, roundFinal } =
-  Astro.props;
+const {
+  decision: d,
+  driverLabel,
+  sessionLabel,
+  voters,
+  twoStewardRule,
+  canDecide,
+  hasVoted,
+  actions,
+  editHref,
+  resultAffecting,
+  roundFinal,
+  showPenaltyPoints = false,
+  penaltyWarning = null,
+} = Astro.props;
+const points = showPenaltyPoints && (d.penalty_points ?? 0) > 0 ? d.penalty_points! : null;
 const needed = twoStewardRule ? 2 : 1;
 const votes = new Set(d.decided_by).size;
 const idp = `dec-${d.id}`;
@@ -45,6 +66,7 @@ const waitingForOthers = d.status === 'draft' && hasVoted && !canPublish;
   </header>
   <p class="mt-1 font-semibold">
     {verdictText(d)}
+    {points != null && <span> · {points === 1 ? '1 Strafpunkt' : `${points} Strafpunkte`}</span>}
     {sessionLabel && <span class="font-normal text-muted"> · {sessionLabel}</span>}
     {d.rule_ref && <span class="font-normal text-muted"> · {d.rule_ref}</span>}
   </p>
@@ -61,6 +83,13 @@ const waitingForOthers = d.status === 'draft' && hasVoted && !canPublish;
       </>
     )}
   </p>
+  {
+    penaltyWarning && d.status === 'draft' && (
+      <p class:list={['alert mt-3 font-bold', penaltyWarning.level === 'ban' ? 'alert-danger' : 'alert-warning']}>
+        Strafpunkte beim Veröffentlichen: {penaltyWarning.text}
+      </p>
+    )
+  }
   {
     resultAffecting && d.status === 'draft' && (
       <p class="mt-2 text-sm text-warning">

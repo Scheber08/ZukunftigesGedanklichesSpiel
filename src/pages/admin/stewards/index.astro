@@ -2,7 +2,7 @@
 /**
  * Steward-Eingang (Plan §5.3): Vorfälle mit Status neu, in Prüfung, entschieden, abgelehnt,
  * verspätet; Filter nach Saison, Runde und Status. Stewards und Admins sehen alles,
- * entscheiden können nur Stewards.
+ * entscheiden können nur Stewards. Bei aktivem Strafpunkte-System zusätzlich die Konten der Saison.
  */
 export const prerender = false;
 
@@ -12,7 +12,7 @@ import AdminLayout from '~/layouts/AdminLayout.astro';
 import Badge from '~/components/ui/Badge.astro';
 import Forbidden from '~/components/admin/raceday/Forbidden.astro';
 import { flashText } from '~/lib/admin/raceday/flash';
-import { isHttpsUrl } from '~/lib/admin/raceday/decision-input';
+import { isHttpsUrl, loadStewardPenaltyPoints, PENALTY_STATUS_BADGE, PENALTY_STATUS_LABEL } from '~/lib/admin/raceday/decision-input';
 import {
   DECISION_STATUS_LABEL,
   DECISION_STATUS_VARIANT,
@@ -63,6 +63,8 @@ const filterHref = (next: { status?: IncidentStatus | null }) => {
   return `/admin/stewards?${q.toString()}`;
 };
 const flash = flashText(params);
+// Strafpunkte-Konten der gewählten Saison (Plan Phase 2)
+const pp = allowed && season ? await loadStewardPenaltyPoints(store, season) : null;
 const newHref = `/admin/stewards/neu${roundFromParam ? `?runde=${roundFromParam.id}` : ''}`;
 ---
 
@@ -215,6 +217,75 @@ const newHref = `/admin/stewards/neu${roundFromParam ? `?runde=${roundFromParam.
               </tbody>
             </table>
           </div>
+        )}
+
+        {pp && (
+          <section aria-labelledby="pp-title" class="mt-10">
+            <h2 id="pp-title" class="mb-1 text-xl uppercase">
+              Strafpunkte-Konten
+            </h2>
+            <p class="field-hint mb-3">
+              {seasonLabel(season, 'de')}: Verwarnung ab {pp.config.warningThreshold}, Sperre ab {pp.config.banThreshold} aktiven Punkten ·{' '}
+              {pp.config.expiryRounds == null ? 'Punkte gelten bis Saisonende' : `Verfall nach ${pp.config.expiryRounds} Runden`}. Nur
+              veröffentlichte Entscheidungen zählen.
+              {hasRole(staff, 'admin') && (
+                <>
+                  {' '}
+                  <a href={`/admin/saisons/${season.id}#strafpunkte`} class="underline hover:text-teal">
+                    Einstellungen
+                  </a>
+                </>
+              )}
+            </p>
+            {pp.accounts.length === 0 ? (
+              <p class="alert">Noch keine veröffentlichten Entscheidungen mit Strafpunkten.</p>
+            ) : (
+              <div class="table-wrap">
+                <table class="timing-table">
+                  <caption class="sr-only">Strafpunkte-Konten {seasonLabel(season, 'de')}, meiste aktive Punkte zuerst</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col" class="sticky-col">Fahrer</th>
+                      <th scope="col" class="num">Aktiv</th>
+                      <th scope="col" class="num">Verfallen</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Nächster Verfall</th>
+                      <th scope="col">Entscheidungen</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pp.accounts.map((a) => (
+                      <tr>
+                        <th scope="row" class="sticky-col font-normal">
+                          {driverLabel(a.driverId)}
+                        </th>
+                        <td class="num">{a.active}</td>
+                        <td class="num muted">{a.expired}</td>
+                        <td>
+                          <Badge variant={PENALTY_STATUS_BADGE[a.status]}>{PENALTY_STATUS_LABEL[a.status]}</Badge>
+                        </td>
+                        <td class="muted">{a.nextExpiry ? `${a.nextExpiry.points} Pkt. nach R${a.nextExpiry.afterRound}` : '–'}</td>
+                        <td class="wrap">
+                          <ul class="flex flex-wrap gap-x-3">
+                            {a.entries.map((e) => (
+                              <li>
+                                <a href={`/admin/stewards/entscheidung/${e.decisionId}`} class="inline-flex min-h-11 items-center underline hover:text-teal">
+                                  {e.ref}
+                                </a>{' '}
+                                <span class="muted">
+                                  {e.points} Pkt.{e.expired ? ' (verfallen)' : ''}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         )}
 
         {inbox.looseDecisions.length > 0 && (

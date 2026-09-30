@@ -2,12 +2,14 @@
 /**
  * Einzelne Steward-Entscheidung (Plan §4.6): alle Details, Begründung als Markdown (DE/EN
  * mit Übersetzungshinweis), Regel-Referenz, Clip, Wirkung auf das Ergebnis, Rennseite.
+ * Strafpunkte nur bei aktivem System in der Saison und mehr als 0 Punkten (mit Verfall).
  */
 import ArrowLeft from '@lucide/astro/icons/arrow-left';
 import BookOpen from '@lucide/astro/icons/book-open';
 import Flag from '@lucide/astro/icons/flag';
 import Video from '@lucide/astro/icons/video';
 import { decisionItem, decisionItems } from '~/components/stewards/model';
+import { decisionPenaltyEntry, entryExpiryKey, pointsKey } from '~/components/stewards/penalty-points';
 import { penaltyOf } from '~/components/stewards/utils';
 import VerdictBadge from '~/components/stewards/VerdictBadge.astro';
 import DriverLink from '~/components/ui/DriverLink.astro';
@@ -62,6 +64,12 @@ const affectsNext = decision.verdict === 'grid_penalty_next' || decision.verdict
 const nextRound = affectsNext ? league.roundsOf(season.id).find((r) => r.number > round.number && r.status !== 'cancelled') : undefined;
 const effectN = decision.verdict === 'time_penalty' ? decision.time_seconds : decision.positions;
 const showResult = resultText != null && ['time_penalty', 'position_penalty', 'dsq'].includes(decision.verdict);
+
+// Strafpunkte (Plan Phase 2): nur bei aktivem System und > 0 Punkten
+const penaltyPoints = season.penalty_points_enabled && (decision.penalty_points ?? 0) > 0 ? decision.penalty_points! : null;
+const penaltyEntry = penaltyPoints != null ? decisionPenaltyEntry(league, season, decision) : null;
+const penaltyExpiry = penaltyEntry ? entryExpiryKey(penaltyEntry) : null;
+const accountsHref = `${url(lang, 'stewards')}?season=${encodeURIComponent(season.slug)}#penalty-points`;
 
 // Weitere Entscheidungen dieser Runde
 const sameRound = decisionItems(league, lang)
@@ -164,10 +172,16 @@ const jsonLd = breadcrumbJsonLd(site, [
           <dd class="font-semibold">{t(penalty.key, { n: penalty.n ?? '' })}</dd>
         </div>
         {
-          decision.penalty_points != null && season.penalty_points_enabled && (
+          penaltyPoints != null && (
             <div>
               <dt>{t('stewards.field.penaltyPoints')}</dt>
-              <dd>{t('stewards.penalty.points', { n: decision.penalty_points })}</dd>
+              <dd class="grid gap-1">
+                <span class="font-semibold">{t(pointsKey(penaltyPoints), { n: penaltyPoints })}</span>
+                {penaltyExpiry && <span class="text-muted">{t(penaltyExpiry.key, { n: penaltyExpiry.n })}</span>}
+                <a href={accountsHref} class="inline-flex min-h-11 items-center underline hover:text-teal">
+                  {t('stewards.points.accountLink')}
+                </a>
+              </dd>
             </div>
           )
         }

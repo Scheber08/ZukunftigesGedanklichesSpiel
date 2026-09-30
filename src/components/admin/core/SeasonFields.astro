@@ -30,8 +30,13 @@ interface Props {
   rulesVersions: RulesVersionRow[];
   /** Statusauswahl anzeigen (nicht beim Klonen) */
   withStatus?: boolean;
+  /**
+   * Strafpunkte-Schalter: „checkbox“ beim Anlegen; „hidden“ beim Bearbeiten – dort gibt es einen
+   * eigenen Abschnitt mit Schalter und Konfiguration, das Stammdaten-Formular schickt nur den Stand mit.
+   */
+  penaltyPoints?: 'checkbox' | 'hidden';
 }
-const { prefix, values: v, err, schemes, rulesVersions, withStatus = true } = Astro.props;
+const { prefix, values: v, err, schemes, rulesVersions, withStatus = true, penaltyPoints = 'checkbox' } = Astro.props;
 const fid = (n: string) => `${prefix}-${n}`;
 const aria = (n: string, hint = false) => fieldAria(fid(n), hint, err(n));
 const RULES_STATUS: Record<string, string> = { draft: 'Entwurf', published: 'veröffentlicht', archived: 'archiviert' };
@@ -118,8 +123,37 @@ const RULES_STATUS: Record<string, string> = { draft: 'Entwurf', published: 'ver
     <input id={fid('two')} type="checkbox" name="two_steward_rule" value="true" checked={v.two_steward_rule} />
     <span>Vier-Augen-Prinzip: Entscheidungen brauchen eine zweite Steward-Stimme</span>
   </label>
-  <label class="checkbox" for={fid('pp')}>
-    <input id={fid('pp')} type="checkbox" name="penalty_points_enabled" value="true" checked={v.penalty_points_enabled} />
-    <span>Strafpunkte-System aktiv <span class="text-muted">(vorbereitet, Entscheidung steht noch aus)</span></span>
-  </label>
+  {
+    penaltyPoints === 'checkbox' ? (
+      <>
+        <label class="checkbox" for={fid('pp')}>
+          <input
+            id={fid('pp')}
+            type="checkbox"
+            name="penalty_points_enabled"
+            value="true"
+            checked={v.penalty_points_enabled}
+            aria-describedby={`${fid('pp')}-hint`}
+          />
+          <span>Strafpunkte-System aktiv</span>
+        </label>
+        <p class="field-hint" id={`${fid('pp')}-hint`}>
+          Schwellen und Verfall stellst du danach in der Saison im Abschnitt „Strafpunkte“ ein (Standard: Verwarnung ab 8, Sperre ab 12
+          Punkten, kein Verfall).
+        </p>
+      </>
+    ) : (
+      <>
+        {/* Schalter und Konfiguration stehen im eigenen Abschnitt „Strafpunkte“ – hier nur den Stand mitschicken */}
+        {v.penalty_points_enabled && <input type="hidden" name="penalty_points_enabled" value="true" />}
+        <p class="text-sm text-muted">
+          Strafpunkte-System: <strong class="text-fg">{v.penalty_points_enabled ? 'aktiv' : 'aus'}</strong> – einstellen im Abschnitt{' '}
+          <a href="#strafpunkte" class="underline hover:text-teal">
+            Strafpunkte
+          </a>
+          .
+        </p>
+      </>
+    )
+  }
 </fieldset>

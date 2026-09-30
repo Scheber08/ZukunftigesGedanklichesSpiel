@@ -3,6 +3,7 @@
  * Vorfall im Steward-Werkzeug (Plan §5.3): alle Angaben, Clip als Link, Kontakt der meldenden Person,
  * Status setzen, Entscheidungen (auch mehrere pro Vorfall) anlegen, abstimmen, veröffentlichen.
  * Sehen dürfen Stewards und Admins, entscheiden nur Stewards – und nie bei Befangenheit.
+ * Bei aktivem Strafpunkte-System: Konten der Beteiligten und Warnung bei erreichter Schwelle.
  */
 export const prerender = false;
 
@@ -15,7 +16,7 @@ import DecisionCard from '~/components/admin/raceday/DecisionCard.astro';
 import DecisionForm, { type DecisionFormValues } from '~/components/admin/raceday/DecisionForm.astro';
 import Forbidden from '~/components/admin/raceday/Forbidden.astro';
 import RaceActionMessage from '~/components/admin/raceday/RaceActionMessage.astro';
-import { isHttpsUrl } from '~/lib/admin/raceday/decision-input';
+import { draftWarning, formPenalty, isHttpsUrl, loadStewardPenaltyPoints } from '~/lib/admin/raceday/decision-input';
 import { flashQuery, flashText } from '~/lib/admin/raceday/flash';
 import { INCIDENT_STATUS_LABEL, INCIDENT_STATUS_VARIANT, SESSION_LABEL } from '~/lib/admin/raceday/labels';
 import { stewardContext } from '~/lib/admin/raceday/queries';
@@ -79,6 +80,9 @@ const late =
 const voters = new Map<number, string[]>();
 for (const d of decisions) voters.set(d.id, await voterNames(store, d.decided_by, staff));
 const roundFinal = ctx?.round.status === 'final' || ctx?.round.status === 'corrected';
+// Strafpunkte (Plan Phase 2): Konten der Saison, Beteiligte = Fahrer des Vorfalls
+const pp = ctx ? await loadStewardPenaltyPoints(store, ctx.season) : null;
+const ppForm = ctx && incident ? formPenalty(pp, ctx.season, incident.involved_driver_ids, driverLabel) : null;
 const flash = flashText(Astro.url.searchParams);
 
 // Formularwerte nach einem Fehler wiederherstellen
@@ -275,6 +279,8 @@ const actionUrls = {
                   editHref={`/admin/stewards/entscheidung/${d.id}`}
                   resultAffecting={RESULT_AFFECTING_VERDICTS.includes(d.verdict)}
                   roundFinal={roundFinal}
+                  showPenaltyPoints={pp != null}
+                  penaltyWarning={draftWarning(pp, d)}
                 />
               ))}
             </div>
@@ -295,6 +301,7 @@ const actionUrls = {
               driverOptions={ctx.driverOptions}
               catalog={ctx.catalog}
               penaltyPointsEnabled={ctx.season.penalty_points_enabled}
+              penalty={ppForm}
               submitLabel="Als Entwurf speichern"
             />
           ) : (

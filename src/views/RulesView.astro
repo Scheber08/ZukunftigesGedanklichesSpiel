@@ -3,7 +3,9 @@
  * Regelwerk (Plan §4.8): gültige Fassung unter /liga/regelwerk, jede Fassung zusätzlich
  * unter /liga/regelwerk/v/[version]. Oben Version, „gilt ab“, Stand und Changelog.
  * Die englische Seite ist deutlich als Übersetzung markiert (DE ist verbindlich).
+ * Mit aktivem Strafpunkte-System der aktuellen Saison: Hinweisbox mit Schwellen und Verfall.
  */
+import Gauge from '@lucide/astro/icons/gauge';
 import Info from '@lucide/astro/icons/info';
 import Printer from '@lucide/astro/icons/printer';
 import RulesDocument from '~/components/content/RulesDocument.astro';
@@ -15,12 +17,14 @@ import TranslationNotice from '~/components/ui/TranslationNotice.astro';
 import { SITE } from '~/config/site';
 import { alternates, url, useT, type Lang } from '~/i18n';
 import MobileWrap from '~/components/content/MobileWrap.astro';
+import { expiryRuleKey } from '~/components/stewards/penalty-points';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { findRulesVersion, rulesHaveFallback, rulesUpdatedAt, sortRulesVersions } from '~/lib/content/rules';
+import { resolvePenaltyPointsConfig } from '~/lib/domain/penalty-points';
 import { formatDate } from '~/lib/domain/time';
 import { localized } from '~/lib/league/league';
 import { loadLeague } from '~/lib/server/league';
-import { breadcrumbJsonLd } from '~/lib/view';
+import { breadcrumbJsonLd, seasonLabel } from '~/lib/view';
 
 interface Props {
   lang: Lang;
@@ -75,6 +79,14 @@ const jsonLd = [
       ]
     : []),
 ];
+
+// Strafpunkte der aktuellen Saison (Plan Phase 2) – nur auf der gültigen Fassung und nur, wenn aktiv
+const ppSeason = league.currentSeason;
+const penaltyBox =
+  isCurrent && ppSeason?.penalty_points_enabled
+    ? { season: seasonLabel(ppSeason, lang), slug: ppSeason.slug, config: resolvePenaltyPointsConfig(ppSeason.penalty_points_config) }
+    : null;
+const penaltyExpiry = penaltyBox ? expiryRuleKey(penaltyBox.config) : null;
 
 const versionHref = (v: string) => (current && current.version === v ? url(lang, 'rules') : url(lang, 'rulesVersion', { version: v }));
 const isShown = (id: number) => shown?.id === id;
@@ -143,6 +155,24 @@ const dateOf = (iso: string | null) => (iso ? formatDate(iso, lang) : '–');
               </p>
             )}
             <TranslationNotice lang={lang} show={hasFallback} />
+            {penaltyBox && penaltyExpiry && (
+              <div class="alert alert-warning flex gap-3" role="note" data-penalty-points-note>
+                <Gauge size={20} aria-hidden="true" class="mt-0.5 shrink-0 text-warning" />
+                <div class="min-w-0">
+                  <p class="font-semibold">{t('stewards.points.rulesBox.title', { season: penaltyBox.season })}</p>
+                  <p class="mt-1 text-sm">
+                    {t('stewards.points.rulesBox.text', { warning: penaltyBox.config.warningThreshold, ban: penaltyBox.config.banThreshold })}{' '}
+                    {t(penaltyExpiry.key, { n: penaltyExpiry.n })}
+                  </p>
+                  <a
+                    href={`${url(lang, 'stewards')}?season=${encodeURIComponent(penaltyBox.slug)}#penalty-points`}
+                    class="mt-1 inline-flex min-h-11 items-center text-sm font-semibold text-green underline hover:text-teal"
+                  >
+                    {t('stewards.points.rulesBox.link')} →
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
 
           {versions.length > 0 && (

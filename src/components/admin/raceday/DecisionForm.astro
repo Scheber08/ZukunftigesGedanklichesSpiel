@@ -4,9 +4,14 @@
  * der Saison aktiv), Begründung DE (Pflicht, Markdown) + EN, Regel-Referenz, Clip, Textbausteine
  * aus dem Strafenkatalog. Funktioniert ohne JavaScript; mit JS fügt „Baustein einfügen“ Text ein
  * und blendet unpassende Felder aus.
+ *
+ * Strafpunkte (Plan Phase 2): Mit `penalty` zeigt das Formular die Konten der Beteiligten und warnt
+ * deutlich, wenn die neue Entscheidung eine Schwelle erreicht (mit JS live beim Tippen, ohne JS nach
+ * dem Speichern auf der Entscheidungskarte).
  */
 import type { CatalogEntry } from '~/lib/admin/raceday/catalog';
 import { catalogSnippet, CATALOG_NUMBER, suggestVerdict } from '~/lib/admin/raceday/catalog';
+import { penaltyPointsNote, type DecisionFormPenalty } from '~/lib/admin/raceday/decision-input';
 import { SESSION_LABEL, VERDICT_LABEL } from '~/lib/admin/raceday/labels';
 import type { Id, SessionRow, Verdict } from '~/lib/db/types';
 import { VERDICTS } from '~/lib/db/types';
@@ -35,15 +40,36 @@ interface Props {
   driverOptions: Array<{ id: Id; label: string }>;
   catalog: CatalogEntry[];
   penaltyPointsEnabled: boolean;
+  /** Konten und Schwellen (nur bei aktivem Strafpunkte-System) */
+  penalty?: DecisionFormPenalty | null;
   submitLabel: string;
   disabled?: boolean;
   disabledReason?: string | null;
 }
-const { action, idPrefix: p, roundId, values: v, sessions, driverOptions, catalog, penaltyPointsEnabled, submitLabel, disabled = false, disabledReason } =
-  Astro.props;
+const {
+  action,
+  idPrefix: p,
+  roundId,
+  values: v,
+  sessions,
+  driverOptions,
+  catalog,
+  penaltyPointsEnabled,
+  penalty = null,
+  submitLabel,
+  disabled = false,
+  disabledReason,
+} = Astro.props;
 const verdict = v.verdict ?? 'no_action';
 const race = sessions.find((s) => s.type === 'race');
 const sessionId = v.sessionId ?? race?.id ?? null;
+
+// Strafpunkte: Hinweis für die Werte im Formular (nach einem Fehler oder beim Bearbeiten eines Entwurfs)
+const ppNote =
+  penalty && v.driverId != null && verdict !== 'no_action' ? penaltyPointsNote(penalty.active[String(v.driverId)] ?? 0, v.penaltyPoints, penalty.config) : null;
+const ppData = penalty ? JSON.stringify({ config: penalty.config, active: penalty.active }) : undefined;
+const ppStatus = { ok: 'unauffällig', warning: 'Verwarnschwelle erreicht', ban: 'Sperrschwelle erreicht' } as const;
+const ppAlert = { info: 'alert pp-info', warning: 'alert alert-warning pp-strong', ban: 'alert alert-danger pp-strong' } as const;
 ---
 
 <form method="POST" action={action} class="decision-form" data-decision-form>
@@ -111,9 +137,69 @@ const sessionId = v.sessionId ?? race?.id ?? null;
 
     {
       penaltyPointsEnabled && (
-        <div class="field max-w-xs">
-          <label for={`${p}-points`} class="label">Strafpunkte</label>
-          <input id={`${p}-points`} name="penaltyPoints" type="number" min="0" max="12" inputmode="numeric" class="input" value={v.penaltyPoints ?? ''} />
+        <div class="pp card grid gap-3 p-3" data-pp={ppData}>
+          <div class="field max-w-xs" data-for="warning time_penalty position_penalty grid_penalty_next dsq race_ban">
+            <label for={`${p}-points`} class="label">
+              Strafpunkte
+            </label>
+            <input
+              id={`${p}-points`}
+              name="penaltyPoints"
+              type="number"
+              min="0"
+              max="12"
+              inputmode="numeric"
+              class="input"
+              value={v.penaltyPoints ?? ''}
+              aria-describedby={`${p}-points-hint ${p}-points-note`}
+              data-pp-points
+            />
+            <p id={`${p}-points-hint`} class="field-hint">
+              {penalty
+                ? `0–12, leer = keine. Verwarnung ab ${penalty.config.warningThreshold}, Sperre ab ${penalty.config.banThreshold} aktiven Punkten; ${
+                    penalty.config.expiryRounds == null ? 'Punkte gelten bis Saisonende' : `Verfall nach ${penalty.config.expiryRounds} Runden`
+                  }.`
+                : '0–12, leer = keine.'}
+            </p>
+          </div>
+          <div id={`${p}-points-note`} aria-live="polite" data-pp-live>
+            {ppNote && <p class={ppAlert[ppNote.level]}>{ppNote.text}</p>}
+          </div>
+          {penalty && penalty.involved.length > 0 && (
+            <div class="table-wrap">
+              <table class="timing-table">
+                <caption class="pp-caption">Strafpunkte-Konto der Beteiligten ({penalty.seasonName}), ohne diese Entscheidung</caption>
+                <thead>
+                  <tr>
+                    <th scope="col" class="sticky-col">
+                      Fahrer
+                    </th>
+                    <th scope="col" class="num">
+                      Aktiv
+                    </th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Nächster Verfall</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {penalty.involved.map((a) => (
+                    <tr>
+                      <th scope="row" class="sticky-col font-normal">
+                        {a.label}
+                      </th>
+                      <td class="num">{a.active}</td>
+                      <td>
+                        <span class:list={['badge', a.status === 'ban' ? 'badge-danger' : a.status === 'warning' ? 'badge-warning' : 'badge-muted']}>
+                          {ppStatus[a.status]}
+                        </span>
+                      </td>
+                      <td class="pp-muted">{a.nextExpiry ? `${a.nextExpiry.points} Pkt. nach R${a.nextExpiry.afterRound}` : '–'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )
     }
@@ -176,18 +262,54 @@ const sessionId = v.sessionId ?? race?.id ?? null;
 </form>
 
 <script>
-  // Progressive Verbesserung: Felder je Art ein-/ausblenden, Textbausteine einfügen
+  import { penaltyPointsNote } from '~/lib/admin/raceday/decision-input';
+  import type { ResolvedPenaltyPointsConfig } from '~/lib/domain/penalty-points';
+
+  const PP_ALERT = { info: 'alert pp-info', warning: 'alert alert-warning pp-strong', ban: 'alert alert-danger pp-strong' } as const;
+
+  // Progressive Verbesserung: Felder je Art ein-/ausblenden, Textbausteine einfügen, Strafpunkte-Warnung
   for (const form of document.querySelectorAll<HTMLFormElement>('[data-decision-form]')) {
     const verdict = form.querySelector<HTMLSelectElement>('[data-verdict]');
     const dependent = form.querySelectorAll<HTMLElement>('[data-for]');
+
+    // Strafpunkte: Warnung live, sobald Fahrer, Art oder Punkte sich ändern
+    const pp = form.querySelector<HTMLElement>('[data-pp]');
+    let ppData: { config: ResolvedPenaltyPointsConfig; active: Record<string, number> } | null = null;
+    try {
+      ppData = pp?.dataset.pp ? JSON.parse(pp.dataset.pp) : null;
+    } catch {
+      ppData = null;
+    }
+    const ppPoints = form.querySelector<HTMLInputElement>('[data-pp-points]');
+    const ppLive = form.querySelector<HTMLElement>('[data-pp-live]');
+    const driver = form.querySelector<HTMLSelectElement>('select[name="driverId"]');
+    const ppUpdate = () => {
+      if (!ppData || !ppLive) return;
+      const raw = ppPoints && !ppPoints.disabled ? ppPoints.value.trim() : '';
+      const points = raw === '' || !Number.isFinite(Number(raw)) ? 0 : Number(raw);
+      const note = driver?.value ? penaltyPointsNote(ppData.active[driver.value] ?? 0, points, ppData.config) : null;
+      // Nur bei Änderung neu schreiben, sonst liest der Screenreader denselben Text erneut vor
+      if ((note?.text ?? '') === (ppLive.textContent ?? '').trim()) return;
+      ppLive.replaceChildren();
+      if (note) {
+        const el = document.createElement('p');
+        el.className = PP_ALERT[note.level];
+        el.textContent = note.text;
+        ppLive.append(el);
+      }
+    };
+
     const sync = () => {
       for (const el of dependent) {
         const show = (el.dataset.for ?? '').split(' ').includes(verdict?.value ?? '');
         el.hidden = !show;
         el.querySelectorAll('input').forEach((i) => (i.disabled = !show));
       }
+      ppUpdate();
     };
     verdict?.addEventListener('change', sync);
+    ppPoints?.addEventListener('input', ppUpdate);
+    driver?.addEventListener('change', ppUpdate);
     sync();
 
     const catalog = form.querySelector<HTMLSelectElement>('[data-catalog]');
@@ -223,5 +345,24 @@ const sessionId = v.sessionId ?? race?.id ?? null;
   }
   fieldset[disabled] {
     opacity: 0.7;
+  }
+  .pp-caption {
+    caption-side: top;
+    text-align: left;
+    padding: 0 0 0.5rem;
+    font-size: var(--fs-micro);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+  .pp-muted {
+    color: var(--color-muted);
+  }
+  :global(.pp-strong) {
+    font-weight: 700;
+  }
+  :global(.pp-info) {
+    font-size: 0.875rem;
   }
 </style>
