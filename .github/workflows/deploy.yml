@@ -65,7 +65,7 @@ jobs:
       ref: ${{ steps.decide.outputs.ref }}
       kind: ${{ steps.decide.outputs.kind }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -154,11 +154,11 @@ jobs:
       DEMO_MODE: 'false'
       # GITHUB_REPOSITORY setzt GitHub Actions automatisch (Ziel des Rebuild-Dispatch)
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.ref }}
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -205,7 +205,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.ref }}
       - name: Tag „production“ auf den ausgerollten Code-Stand setzen

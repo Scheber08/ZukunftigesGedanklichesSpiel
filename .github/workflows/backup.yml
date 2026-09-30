@@ -97,7 +97,7 @@ jobs:
 
       - name: Supabase CLI installieren
         if: steps.cfg.outputs.enabled == 'true'
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@v3
         with:
           version: latest
       - name: age installieren, aws-cli einstellen
