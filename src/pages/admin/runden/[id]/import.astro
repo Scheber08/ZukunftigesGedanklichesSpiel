@@ -1,0 +1,274 @@
+---
+/**
+ * Import einer Runde (Plan Phase 2, §5.2, §6.6), nur Admin:
+ * (a) Import-Stapel der Runde (UDP vom Companion, CSV) mit Übernehmen/Verwerfen,
+ * (b) CSV-Import mit Vorschau und Warnungen,
+ * (c) Import-Token für das Telemetrie-Companion inkl. Beispiel-Befehl.
+ * „Übernehmen“ öffnet die Ergebnis-Eingabe vorbefüllt – erst dort wird gespeichert.
+ */
+export const prerender = false;
+
+import { actions } from 'astro:actions';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import Notice from '~/components/admin/core/Notice.astro';
+import Section from '~/components/admin/core/Section.astro';
+import Forbidden from '~/components/admin/raceday/Forbidden.astro';
+import CsvImport from '~/components/admin/import/CsvImport.svelte';
+import TokenPanel from '~/components/admin/import/TokenPanel.svelte';
+import { actionOutcome } from '~/lib/admin/league/page';
+import { RacedayError } from '~/lib/admin/raceday/errors';
+import { countText, SESSION_LABEL } from '~/lib/admin/raceday/labels';
+import type { RoundBasics } from '~/lib/server/results';
+import { importTokenStatus, listImportBatches, loadMapContext, type BatchView, type TokenStatus } from '~/lib/import/service';
+import type { MapContext } from '~/lib/import/map';
+import { hasRole } from '~/lib/server/auth';
+import { getServiceStore } from '~/lib/server/db';
+import { isDemoMode } from '~/lib/server/env';
+import { isFrozen, loadRoundBasics } from '~/lib/server/results';
+import { intParam, roundLabel, seasonLabel } from '~/lib/view';
+
+const staff = Astro.locals.staff;
+const allowed = hasRole(staff, 'admin');
+const roundId = intParam(Astro.params.id);
+
+const outcome = allowed ? await actionOutcome(Astro, [actions.admin.importDiscard]) : null;
+if (outcome?.redirect) return Astro.redirect(outcome.redirect, 303);
+
+let basics: RoundBasics | null = null;
+let batches: BatchView[] = [];
+let token: TokenStatus | null = null;
+let context: Omit<MapContext, 'sessionType'> | null = null;
+let hasResults = new Set<number>();
+if (allowed && roundId != null) {
+  const store = getServiceStore();
+  try {
+    basics = await loadRoundBasics(store, roundId);
+  } catch (err) {
+    if (!(err instanceof RacedayError)) throw err;
+  }
+  if (basics) {
+    const sessionIds = basics.sessions.map((s) => s.id);
+    const [list, tokenStatus, ctx, results] = await Promise.all([
+      listImportBatches(store, roundId),
+      importTokenStatus(store),
+      loadMapContext(store, roundId, 'race', basics),
+      sessionIds.length > 0 ? store.select('results', { in: { session_id: sessionIds } }) : Promise.resolve([]),
+    ]);
+    batches = list;
+    token = tokenStatus;
+    const { sessionType: _ignored, ...rest } = ctx;
+    context = rest;
+    hasResults = new Set(results.map((r) => r.session_id));
+  }
+}
+if (!allowed) Astro.response.status = 403;
+else if (!basics) Astro.response.status = 404;
+
+const label = basics ? roundLabel(basics.round, basics.track, 'de') : 'Runde';
+const readOnly = basics ? isFrozen(basics.season) || basics.round.status === 'cancelled' : true;
+const base = roundId != null ? `/admin/runden/${roundId}` : '/admin/runden';
+const ok = Astro.url.searchParams.get('ok');
+const okN = intParam(Astro.url.searchParams.get('n') ?? undefined);
+const flash = ok === 'import_discarded' ? 'Import-Stapel verworfen.' : ok === 'import_saved' ? `Import-Stapel${okN != null ? ` #${okN}` : ''} gespeichert.` : null;
+const SOURCE_LABEL = { udp: 'Telemetrie', csv: 'CSV' } as const;
+const STATUS_LABEL = { draft: 'Entwurf', applied: 'übernommen', discarded: 'verworfen' } as const;
+const STATUS_BADGE = { draft: 'badge-warning', applied: 'badge-green', discarded: 'badge-muted' } as const;
+const drafts = batches.filter((b) => b.status === 'draft').length;
+---
+
+<AdminLayout
+  title={`Import · ${label}`}
+  breadcrumbs={[{ label: 'Runden', href: '/admin/runden' }, { label, href: roundId != null ? base : undefined }, { label: 'Import' }]}
+>
+  {
+    !allowed ? (
+      <Forbidden roles="Admins" />
+    ) : !basics || !context || !token ? (
+      <p class="alert alert-danger" role="alert">
+        Diese Runde gibt es nicht. <a href="/admin/runden" class="underline">Zur Rundenliste</a>
+      </p>
+    ) : (
+      <>
+        <Notice outcome={outcome ?? undefined} />
+        {flash && (
+          <p class="alert alert-success mb-6" role="status">
+            <span class="font-semibold">Erledigt: </span>
+            {flash}
+          </p>
+        )}
+        <div class="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+          <RoundStatusBadge status={basics.round.status} lang="de" />
+          <span class="text-muted">{seasonLabel(basics.season, 'de')}</span>
+          <a href={`${base}/ergebnisse`} class="inline-flex min-h-11 items-center underline hover:text-teal">
+            Zur Ergebnis-Eingabe
+          </a>
+          <a href={`${base}/grid`} class="inline-flex min-h-11 items-center underline hover:text-teal">
+            Zum Grid-Builder
+          </a>
+        </div>
+        <p class="mb-6 max-w-prose text-sm text-muted">
+          Importe landen als Entwurf in einem Stapel. „Übernehmen“ öffnet die Ergebnis-Eingabe vorbefüllt – dort prüfen, ergänzen und
+          speichern. Die Fahrer werden über die Startnummer der Aufstellung zugeordnet (Grid-Builder).
+        </p>
+
+        <Section
+          title="Import-Stapel"
+          id="stapel"
+          description={batches.length === 0 ? 'Noch keine Importe für diese Runde.' : `${countText(batches.length, 'Stapel', 'Stapel')}, davon ${countText(drafts, 'Entwurf', 'Entwürfe')}.`}
+        >
+          {batches.length > 0 && (
+            <div class="table-wrap">
+              <table class="timing-table batches">
+                <caption class="sr-only">Import-Stapel dieser Runde, neueste zuerst</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Stapel</th>
+                    <th scope="col">Zeitpunkt</th>
+                    <th scope="col">Session</th>
+                    <th scope="col" class="num">Zugeordnet</th>
+                    <th scope="col">Hinweise</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">
+                      <span class="sr-only">Aktionen</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {batches.map((b) => (
+                    <tr id={`stapel-${b.id}`}>
+                      <th scope="row">
+                        #{b.id} · {SOURCE_LABEL[b.source]}
+                        <span class="block text-xs font-normal text-muted">
+                          {b.uploadedBy}
+                          {b.fileName ? ` · ${b.fileName}` : ''}
+                        </span>
+                      </th>
+                      <td>{b.createdText}</td>
+                      <td>{SESSION_LABEL[b.sessionType]}</td>
+                      <td class="num">
+                        {b.matched} / {b.total}
+                      </td>
+                      <td class="warn-cell">
+                        {b.warnings.length === 0 ? (
+                          <span class="text-muted">keine</span>
+                        ) : (
+                          <details>
+                            <summary>{countText(b.warnings.length, 'Hinweis', 'Hinweise')}</summary>
+                            <ul class="mt-1 list-disc space-y-1 pl-5 text-sm">
+                              {b.warnings.map((w) => (
+                                <li>{w.message}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                      </td>
+                      <td>
+                        <span class:list={['badge', STATUS_BADGE[b.status]]}>{STATUS_LABEL[b.status]}</span>
+                      </td>
+                      <td>
+                        <div class="flex flex-wrap gap-2">
+                          {b.status !== 'discarded' && !readOnly && (
+                            <a
+                              class:list={['btn btn-sm', b.status === 'draft' ? 'btn-primary' : 'btn-secondary']}
+                              href={`${base}/ergebnisse?session=${b.sessionId}&import=${b.id}`}
+                            >
+                              {b.status === 'draft' ? 'Übernehmen' : 'Erneut öffnen'}
+                              <span class="sr-only"> (Stapel #{b.id})</span>
+                            </a>
+                          )}
+                          {b.status === 'draft' && (
+                            <form method="POST" action={actions.admin.importDiscard}>
+                              <input type="hidden" name="roundId" value={String(basics!.round.id)} />
+                              <input type="hidden" name="batchId" value={String(b.id)} />
+                              <button type="submit" class="btn btn-ghost btn-sm">
+                                Verwerfen<span class="sr-only"> (Stapel #{b.id})</span>
+                              </button>
+                            </form>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Section>
+
+        <Section
+          title="CSV-Import"
+          id="csv"
+          description="Ergebnis aus einer Tabelle (z. B. aus einem anderen Telemetrie-Tool oder von Hand in Excel) – eine Session je Stapel."
+        >
+          {basics.sessions.length === 0 ? (
+            <p class="alert alert-warning">Diese Runde hat keine Sessions. Bitte im Kalender das Format prüfen.</p>
+          ) : (
+            <>
+              <noscript>
+                <p class="alert alert-warning mb-4">Der CSV-Import braucht JavaScript.</p>
+              </noscript>
+              <CsvImport
+                client:load
+                roundId={basics.round.id}
+                sessions={basics.sessions.map((s) => ({ id: s.id, type: s.type, hasResults: hasResults.has(s.id) }))}
+                context={context}
+                readOnly={readOnly}
+              />
+            </>
+          )}
+        </Section>
+
+        <Section
+          title="Telemetrie (UDP)"
+          id="telemetrie"
+          description="Das Companion-Programm läuft auf einem PC in der Lobby, liest die UDP-Telemetrie des Spiels und lädt nach jeder Session das Endergebnis als Entwurf hoch. Das Token gilt für die ganze Liga, die Runde wird über Strecke und Termin (±36 h) zugeordnet."
+        >
+          <noscript>
+            <p class="alert alert-warning mb-4">Token erzeugen braucht JavaScript.</p>
+          </noscript>
+          <TokenPanel
+            client:load
+            configured={token.configured}
+            createdText={token.createdText}
+            createdBy={token.createdBy}
+            fingerprint={token.fingerprint}
+            siteUrl={Astro.url.origin}
+            demo={isDemoMode()}
+            currentName={staff?.name ?? 'Admin'}
+          />
+          <details class="mt-6 text-sm">
+            <summary class="summary">Spiel-Einstellungen (F1 25)</summary>
+            <ul class="mt-2 list-disc space-y-1 pl-5 text-muted">
+              <li>Einstellungen → Telemetrie: UDP-Telemetrie „An“, UDP-Format 2025, Port 20777 (oder wie im Companion).</li>
+              <li>UDP-IP-Adresse: IP des PCs mit dem Companion (bei Konsole oder anderem PC), sonst 127.0.0.1. Broadcast nur im eigenen Netz.</li>
+              <li>Sendefrequenz 20 Hz reicht. „Telemetrie öffentlich“ ist für das Endergebnis nicht nötig.</li>
+              <li>Jeder Fahrer fährt mit seiner Liga-Startnummer – nur darüber wird zugeordnet.</li>
+            </ul>
+          </details>
+        </Section>
+      </>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .batches td,
+  .batches th {
+    vertical-align: top;
+  }
+  .warn-cell {
+    white-space: normal !important;
+    min-width: 12rem;
+    max-width: 28rem;
+  }
+  .summary {
+    cursor: pointer;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  details summary {
+    cursor: pointer;
+  }
+</style>

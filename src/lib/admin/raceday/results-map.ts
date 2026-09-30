@@ -80,6 +80,14 @@ export function parseTimeInput(input: string): number | null | undefined {
   return ms == null ? undefined : ms;
 }
 
+/**
+ * Eingegebener Status einer Zeile: `entered_status` (ohne Steward-Strafen), bei Altdaten ohne
+ * diese Spalte der gespeicherte Status. Eine DSQ per Urteil steckt nur in `status`.
+ */
+export function enteredStatusOf(row: Pick<ResultRow, 'status' | 'entered_status'>): ResultStatus {
+  return row.entered_status ?? row.status;
+}
+
 export function resultRowToEditor(row: ResultRow): EditorRow {
   return {
     driverId: row.driver_id,
@@ -87,7 +95,7 @@ export function resultRowToEditor(row: ResultRow): EditorRow {
     role: row.role,
     roundEntryId: row.round_entry_id,
     raceNumber: row.race_number,
-    status: row.status,
+    status: enteredStatusOf(row),
     gridPosition: row.grid_position,
     laps: row.laps,
     bestLap: msToText(row.best_lap_ms),
@@ -227,14 +235,18 @@ export function inputToEntered(r: ResultInput, index: number): EnteredResult {
   };
 }
 
-/** Gespeicherte Ergebniszeile → Eingabe der Punktelogik. */
+/**
+ * Gespeicherte Ergebniszeile → Eingabe der Punktelogik. Grundlage ist der eingegebene Status –
+ * Steward-DSQs kommen bei der Neuberechnung aus den veröffentlichten Urteilen dazu (und fallen
+ * beim Zurücknehmen wieder weg).
+ */
 export function resultRowToEntered(row: ResultRow): EnteredResult {
   return {
     driverId: row.driver_id,
     teamId: row.team_id,
     role: row.role,
     enteredPosition: row.entered_position,
-    status: row.status,
+    status: enteredStatusOf(row),
     laps: row.laps,
     totalTimeMs: row.total_time_ms,
     gapMs: row.gap_ms,
@@ -267,6 +279,7 @@ export function inputToResultInsert(r: ResultInput, sessionId: Id, index: number
     role: r.role,
     entered_position: index + 1,
     status: r.status,
+    entered_status: r.status,
     grid_position: r.gridPosition,
     laps: r.laps,
     total_time_ms: r.totalTimeMs,

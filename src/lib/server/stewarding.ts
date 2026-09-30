@@ -59,15 +59,18 @@ async function roundAndSeason(store: Store, roundId: Id): Promise<{ round: Round
   return { round, season };
 }
 
-/** Aktueller Status der Zeile, die eine DSQ trifft (Session der Entscheidung, sonst das Rennen). */
+/**
+ * Eingegebener Status der Zeile, die eine DSQ trifft (Session der Entscheidung, sonst das Rennen) –
+ * nur zur Nachvollziehbarkeit im Audit-Log; wiederhergestellt wird aus `results.entered_status`.
+ */
 async function dsqTargetStatus(store: Store, d: DecisionRow): Promise<ResultStatus | null> {
   const sessionId = d.session_id ?? (await selectOne(store, 'sessions', { round_id: d.round_id, type: 'race' }))?.id ?? null;
   if (sessionId == null) return null;
   const row = await selectOne(store, 'results', { session_id: sessionId, driver_id: d.driver_id });
-  return row?.status ?? null;
+  return row ? (row.entered_status ?? row.status) : null;
 }
 
-/** Status der Ergebniszeile vor der DSQ – steht im Audit-Eintrag der Veröffentlichung. */
+/** Status der Ergebniszeile vor der DSQ laut Audit-Eintrag der Veröffentlichung (nur für Altdaten ohne entered_status). */
 async function statusBeforeDsq(store: Store, decisionId: Id): Promise<ResultStatus | null> {
   const rows = await store.select('audit_log', { eq: { entity: 'decisions', entity_id: String(decisionId), action: 'publish' } });
   const latest = rows.sort((a, b) => (b.at ?? '').localeCompare(a.at ?? '') || b.id - a.id)[0];
@@ -222,8 +225,9 @@ export type DecisionEffect = 'none' | 'recomputed' | 'corrected';
 
 /**
  * Wirkung auf das Ergebnis: Neuberechnung, bei finaler Runde als Korrektur mit Grund „Urteil <ref>“.
- * Beim Zurücknehmen einer DSQ bekommt die betroffene Zeile ihren Status von vor dem Urteil zurück
- * (aus dem Audit-Log der Veröffentlichung, sonst „gewertet“).
+ * Beim Zurücknehmen einer DSQ bekommt die betroffene Zeile ihren eingegebenen Status zurück: Die
+ * Neuberechnung geht von `entered_status` aus, die DSQ entfällt mit dem Urteil. Nur Altdaten ohne
+ * `entered_status` werden vorher aus dem Audit-Log der Veröffentlichung (sonst „gewertet“) ergänzt.
  */
 async function applyDecisionEffect(store: Store, staff: StewardActor, d: DecisionRow, mode: 'publish' | 'revoke'): Promise<DecisionEffect> {
   if (!RESULT_AFFECTING_VERDICTS.includes(d.verdict)) return 'none';
@@ -239,8 +243,11 @@ async function applyDecisionEffect(store: Store, staff: StewardActor, d: Decisio
       (x) => x.id !== d.id && (x.session_id ?? target) === target,
     );
     if (target != null && others.length === 0) {
-      const restore = (await statusBeforeDsq(store, d.id)) ?? 'classified';
-      if (restore !== 'dsq') await store.update('results', { session_id: target, driver_id: d.driver_id, status: 'dsq' }, { status: restore });
+      const row = await selectOne(store, 'results', { session_id: target, driver_id: d.driver_id });
+      if (row && row.entered_status == null && row.status === 'dsq') {
+        const restore = (await statusBeforeDsq(store, d.id)) ?? 'classified';
+        await store.update('results', { id: row.id }, { status: restore, entered_status: restore });
+      }
     }
   }
 

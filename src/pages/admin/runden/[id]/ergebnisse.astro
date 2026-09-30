@@ -2,6 +2,10 @@
 /**
  * Ergebnis-Eingabe pro Runde (Plan §5.2): Tabs je Session, vorbefüllt mit der Aufstellung bzw. den
  * gespeicherten Ergebnissen; speichern → vorläufig → final → Korrektur mit Pflicht-Grund.
+ *
+ * `?import=<Stapel-ID>` (Phase 2): Die Session des Import-Stapels wird mit den importierten Werten
+ * vorbefüllt – derselbe Prüfbildschirm. Erst „Speichern“ schreibt, danach ist der Stapel „übernommen“.
+ * `?session=<ID>` öffnet diese Session.
  */
 export const prerender = false;
 
@@ -16,6 +20,7 @@ import { formatDateTime } from '~/lib/domain/time';
 import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 import { isFrozen, loadResultsEditorContext, type ResultsEditorContext } from '~/lib/server/results';
+import { importPrefill, type ImportPrefill } from '~/lib/import/service';
 import { intParam, roundLabel, seasonLabel } from '~/lib/view';
 
 const staff = Astro.locals.staff;
@@ -32,6 +37,20 @@ if (allowed && roundId != null) {
 }
 if (!allowed) Astro.response.status = 403;
 else if (!ctx) Astro.response.status = 404;
+
+// Vorbefüllung aus einem Import-Stapel
+const importId = intParam(Astro.url.searchParams.get('import') ?? undefined);
+let prefill: ImportPrefill | null = null;
+let importError: string | null = null;
+if (ctx && importId != null) {
+  try {
+    prefill = await importPrefill(getServiceStore(), ctx.basics.round.id, importId);
+  } catch (err) {
+    if (!(err instanceof RacedayError)) throw err;
+    importError = err.headline;
+  }
+}
+const requestedSession = intParam(Astro.url.searchParams.get('session') ?? undefined);
 
 const label = ctx ? roundLabel(ctx.basics.round, ctx.basics.track, 'de') : 'Runde';
 const frozen = ctx ? isFrozen(ctx.basics.season) : false;
@@ -56,13 +75,26 @@ const props = ctx && {
   },
   sessions: ctx.basics.sessions.map((s) => {
     const saved = ctx!.results.filter((r) => r.session_id === s.id).sort((a, b) => a.entered_position - b.entered_position);
+    const imported = prefill && prefill.sessionId === s.id ? prefill.rows : null;
     return {
       id: s.id,
       type: s.type,
       entered: saved.length > 0,
-      rows: saved.length > 0 ? saved.map(resultRowToEditor) : prefillRows(ctx!.entries, s.type === 'qualifying' ? null : ctx!.grid),
+      rows: imported ?? (saved.length > 0 ? saved.map(resultRowToEditor) : prefillRows(ctx!.entries, s.type === 'qualifying' ? null : ctx!.grid)),
     };
   }),
+  initialSession: prefill?.sessionId ?? (ctx.basics.sessions.some((s) => s.id === requestedSession) ? requestedSession : null),
+  importInfo: prefill && {
+    batchId: prefill.batchId,
+    sessionId: prefill.sessionId,
+    source: prefill.source,
+    status: prefill.status,
+    createdText: prefill.createdText,
+    matched: prefill.matched,
+    total: prefill.total,
+    warnings: prefill.warnings.map((w) => w.message),
+  },
+  importUrl: `/admin/runden/${ctx.basics.round.id}/import`,
   drivers: ctx.drivers.map((d) => ({ id: d.id, gamertag: d.anonymized ? `Ehemaliger Fahrer #${d.id}` : d.gamertag })),
   teams: ctx.teams.map((t) => ({ id: t.id, name: t.name, color: t.color_hex })),
   entries: ctx.entries,
@@ -115,12 +147,21 @@ const publicUrl = ctx ? url('de', 'race', { season: ctx.basics.season.slug, roun
           <a href={`/admin/runden/${ctx.basics.round.id}/grid`} class="inline-flex min-h-11 items-center underline hover:text-teal">
             Zum Grid-Builder
           </a>
+          <a href={`/admin/runden/${ctx.basics.round.id}/import`} class="inline-flex min-h-11 items-center underline hover:text-teal">
+            Import (UDP/CSV)
+          </a>
           {ctx.basics.round.status !== 'scheduled' && publicUrl && (
             <a href={publicUrl} class="inline-flex min-h-11 items-center underline hover:text-teal">
               Öffentliche Rennseite
             </a>
           )}
         </div>
+        {importError && (
+          <p class="alert alert-danger mb-4" role="alert">
+            Import nicht geladen: {importError}{' '}
+            <a href={`/admin/runden/${ctx.basics.round.id}/import`} class="underline">Zur Import-Seite</a>
+          </p>
+        )}
         {ctx.lineupSource === 'season' && (
           <p class="alert alert-warning mb-4">
             Für diese Runde ist noch keine Aufstellung gespeichert – die Eingabe ist mit der Saisonaufstellung vorbefüllt. Ersatzfahrer

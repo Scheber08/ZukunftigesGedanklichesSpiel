@@ -10,6 +10,7 @@
 import { ActionError, defineAction } from 'astro:actions';
 import { z } from 'astro/zod';
 import { RacedayError } from '~/lib/admin/raceday/errors';
+import { markBatchApplied } from '~/lib/import/service';
 import { ENTRY_ROLES, INCIDENT_STATUSES, RESULT_STATUSES, SESSION_TYPES, VERDICTS } from '~/lib/db/types';
 import { getServiceStore } from '~/lib/server/db';
 import {
@@ -76,6 +77,9 @@ const resultRow = z.object({
 
 const sessionsInput = z.array(z.object({ sessionId: id, rows: z.array(resultRow).max(30) })).min(1).max(3);
 
+/** Sessions, die mit Zeilen gespeichert wurden (für „Import übernommen“). */
+const savedSessionIds = (sessions: Array<{ sessionId: number; rows: unknown[] }>) => sessions.filter((s) => s.rows.length > 0).map((s) => s.sessionId);
+
 // ---------------------------------------------------------------------------- Actions
 
 export const racedayActions = {
@@ -111,16 +115,20 @@ export const racedayActions = {
 
   // ------------------------------------------------------------------ Ergebnisse
 
-  /** Ergebnis speichern (vor „final“), neu berechnen, Vorschau der neuen Wertung. */
+  /**
+   * Ergebnis speichern (vor „final“), neu berechnen, Vorschau der neuen Wertung.
+   * Mit `importBatchId` (Vorbefüllung aus einem Import) wird der Stapel danach „übernommen“.
+   */
   resultsSave: defineAction({
-    input: z.object({ roundId: id, sessions: sessionsInput }),
+    input: z.object({ roundId: id, sessions: sessionsInput, importBatchId: id.nullish() }),
     handler: async (input, context) => {
       const staff = staffFrom(context, 'admin');
       return run(async () => {
         const store = getServiceStore();
         const res = await saveResults(store, input.roundId, input.sessions, staff);
+        const importApplied = input.importBatchId != null ? await markBatchApplied(store, staff, input.importBatchId, savedSessionIds(input.sessions)) : false;
         const preview = await previewStandings(store, input.roundId);
-        return { warnings: res.warnings.map((w) => w.message), preview, status: res.round.status };
+        return { warnings: res.warnings.map((w) => w.message), preview, status: res.round.status, importApplied };
       });
     },
   }),
@@ -171,6 +179,7 @@ export const racedayActions = {
       sessions: sessionsInput.optional(),
       reasonDe: z.string().trim().min(5, 'Bitte gib einen Grund an (mindestens 5 Zeichen).').max(500),
       reasonEn: optionalText(500),
+      importBatchId: id.nullish(),
     }),
     handler: async (input, context) => {
       const staff = staffFrom(context, 'admin');
@@ -178,8 +187,10 @@ export const racedayActions = {
         const store = getServiceStore();
         if (input.sessions) await saveResults(store, input.roundId, input.sessions, staff, { allowFinal: true });
         const res = await correctRound(store, input.roundId, staff, input.reasonDe, input.reasonEn ?? null);
+        const importApplied =
+          input.importBatchId != null && input.sessions ? await markBatchApplied(store, staff, input.importBatchId, savedSessionIds(input.sessions)) : false;
         const preview = await previewStandings(store, input.roundId);
-        return { status: res.round.status, snapshots: res.snapshots, warnings: res.warnings.map((w) => w.message), discord: res.discord, preview };
+        return { status: res.round.status, snapshots: res.snapshots, warnings: res.warnings.map((w) => w.message), discord: res.discord, preview, importApplied };
       });
     },
   }),

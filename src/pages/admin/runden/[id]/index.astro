@@ -14,6 +14,7 @@ import { countText, SESSION_LABEL } from '~/lib/admin/raceday/labels';
 import { roundHub } from '~/lib/admin/raceday/queries';
 import { raceDaySteps } from '~/lib/admin/raceday/steps';
 import { formatDateTime } from '~/lib/domain/time';
+import { countDraftBatches } from '~/lib/import/service';
 import { hasRole } from '~/lib/server/auth';
 import { getServiceStore } from '~/lib/server/db';
 import { intParam, roundLabel, seasonLabel } from '~/lib/view';
@@ -22,6 +23,7 @@ const staff = Astro.locals.staff;
 const allowed = hasRole(staff, 'admin');
 const roundId = intParam(Astro.params.id);
 const hub = allowed && roundId != null ? await roundHub(getServiceStore(), roundId) : null;
+const importDrafts = hub ? await countDraftBatches(getServiceStore(), hub.sessions.map((s) => s.id)) : 0;
 if (!allowed) Astro.response.status = 403;
 else if (!hub) Astro.response.status = 404;
 
@@ -112,6 +114,26 @@ const publicVisible = hub != null && hub.round.status !== 'scheduled';
           <p class="field-hint mt-3">
             Ablauf: Aufstellung bis T−24 h, Ergebnis bis 2 h nach Rennende, danach {hub.season.protest_window_hours} h
             Protestfrist, Entscheidungen bis 72 h nach Fristende, dann final.
+          </p>
+        </section>
+
+        <section aria-labelledby="import-title" class="card mb-8 p-4">
+          <h2 id="import-title" class="text-xl uppercase">
+            Import (Telemetrie/CSV)
+          </h2>
+          <p class="mt-1 text-sm text-muted">
+            Ergebnis aus der UDP-Telemetrie (Companion-Programm) oder einer CSV übernehmen – führt in die Ergebnis-Eingabe.
+            {importDrafts > 0 && (
+              <>
+                {' '}
+                <span class="badge badge-warning">{countText(importDrafts, 'offener Import', 'offene Importe')}</span>
+              </>
+            )}
+          </p>
+          <p class="mt-3">
+            <a href={`/admin/runden/${hub.round.id}/import`} class="btn btn-secondary btn-sm">
+              Zum Import
+            </a>
           </p>
         </section>
 

@@ -4,6 +4,9 @@
    * gespeicherten Ergebnissen. Reihenfolge per Drag & Drop, Positionsnummer oder Hoch/Runter.
    * Vorschau (Positionen, Punkte, Pole, schnellste Runde, Steward-Strafen) mit derselben
    * Punktelogik wie auf dem Server. Ablauf: speichern → vorläufig → final → Korrektur mit Grund.
+   *
+   * Phase 2: Mit `importInfo` ist eine Session aus einem Import-Stapel (UDP/CSV) vorbefüllt –
+   * derselbe Prüfbildschirm (Plan §5.2). Erst „Speichern“ schreibt; danach ist der Stapel „übernommen“.
    */
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
   import ArrowDown from '@lucide/svelte/icons/arrow-down';
@@ -58,6 +61,17 @@
     positionDelta: number | null;
   }
 
+  interface ImportInfo {
+    batchId: number;
+    sessionId: number;
+    source: 'udp' | 'csv';
+    status: 'draft' | 'applied' | 'discarded';
+    createdText: string;
+    matched: number;
+    total: number;
+    warnings: string[];
+  }
+
   interface Props {
     roundId: number;
     roundStatus: RoundStatus;
@@ -76,6 +90,11 @@
     protestOpen: boolean;
     protestDeadline: string | null;
     stewardsUrl: string;
+    /** Session, die beim Laden geöffnet ist */
+    initialSession?: number | null;
+    /** Vorbefüllung aus einem Import-Stapel */
+    importInfo?: ImportInfo | null;
+    importUrl?: string;
   }
 
   let {
@@ -96,6 +115,9 @@
     protestOpen: protestOpenInitial,
     protestDeadline: protestDeadlineInitial,
     stewardsUrl,
+    initialSession = null,
+    importInfo = null,
+    importUrl = '',
   }: Props = $props();
 
   const driverName = new Map(drivers.map((d) => [d.id, d.gamertag]));
@@ -110,10 +132,16 @@
     rows: EditorRow[];
   }
 
-  let edit = $state<EditState[]>(sessions.map((s) => ({ id: s.id, type: s.type, entered: s.entered, include: s.entered, rows: s.rows })));
+  const importSessionId = importInfo?.sessionId ?? null;
+  let edit = $state<EditState[]>(
+    sessions.map((s) => ({ id: s.id, type: s.type, entered: s.entered, include: s.entered || s.id === importSessionId, rows: s.rows })),
+  );
   const serialize = () => JSON.stringify(edit.map((s) => ({ include: s.include, rows: s.rows })));
-  let savedJson = $state(serialize());
-  let active = $state<number>(sessions[0]?.id ?? 0);
+  // Importierte Werte sind noch nicht gespeichert – von Anfang an „ungespeichert“
+  let savedJson = $state(importInfo ? '' : serialize());
+  let active = $state<number>(importSessionId ?? initialSession ?? sessions[0]?.id ?? 0);
+  let importApplied = $state(importInfo?.status === 'applied');
+  const importSession = importInfo ? sessions.find((s) => s.id === importInfo.sessionId) : undefined;
   let status = $state<RoundStatus>(roundStatus);
   let announce = $state('');
   let busy = $state<string | null>(null);
@@ -296,6 +324,12 @@
     savedJson = serialize();
   }
 
+  /** Stapel-ID mitschicken, solange der Import offen ist und seine Session mit Zeilen gespeichert wird. */
+  function importBatchFor(payload: Array<{ sessionId: number; rows: ResultInput[] }>): number | null {
+    if (!importInfo || importApplied) return null;
+    return payload.some((p) => p.sessionId === importInfo.sessionId && p.rows.length > 0) ? importInfo.batchId : null;
+  }
+
   function fail(message: string | undefined) {
     error = splitErrorMessage(message);
     say(error.headline);
@@ -317,7 +351,7 @@
     error = null;
     success = null;
     const { actions } = await import('astro:actions');
-    const res = await actions.admin.resultsSave({ roundId, sessions: payload });
+    const res = await actions.admin.resultsSave({ roundId, sessions: payload, importBatchId: importBatchFor(payload) });
     busy = null;
     if (res.error) {
       fail(res.error.message);
@@ -326,7 +360,10 @@
     markSaved();
     serverWarnings = res.data.warnings;
     preview = res.data.preview;
-    success = isPublic ? 'Gespeichert – die Änderungen sind öffentlich (Rebuild angefordert).' : 'Gespeichert (noch nicht öffentlich). Die Vorschau zeigt die neue Wertung.';
+    if (res.data.importApplied) importApplied = true;
+    success =
+      (isPublic ? 'Gespeichert – die Änderungen sind öffentlich (Rebuild angefordert).' : 'Gespeichert (noch nicht öffentlich). Die Vorschau zeigt die neue Wertung.') +
+      (res.data.importApplied ? ' Der Import-Stapel ist als übernommen markiert.' : '');
     say(success);
     return true;
   }
@@ -385,15 +422,18 @@
     busy = 'correct';
     error = null;
     const { actions } = await import('astro:actions');
+    const changed = dirty && payload.length > 0 ? payload : undefined;
     const res = await actions.admin.resultsCorrect({
       roundId,
-      sessions: dirty && payload.length > 0 ? payload : undefined,
+      sessions: changed,
       reasonDe: reasonDe.trim(),
       reasonEn: reasonEn.trim() || null,
+      importBatchId: changed ? importBatchFor(changed) : null,
     });
     busy = null;
     if (res.error) return fail(res.error.message);
     markSaved();
+    if (res.data.importApplied) importApplied = true;
     status = res.data.status;
     preview = res.data.preview;
     serverWarnings = res.data.warnings;
@@ -413,13 +453,44 @@
     <p class="alert alert-warning mb-4">{readOnlyReason}</p>
   {/if}
 
+  {#if importInfo}
+    <div class="alert mb-4 import-note" class:alert-warning={!importApplied} class:alert-success={importApplied}>
+      <p>
+        <strong>Vorbefüllt aus Import vom {importInfo.createdText}</strong>
+        ({importInfo.source === 'udp' ? 'Telemetrie' : 'CSV'}, Stapel #{importInfo.batchId}{importSession ? `, ${SESSION_LABEL[importSession.type]}` : ''}):
+        {importInfo.matched} von {countText(importInfo.total, 'Zeile', 'Zeilen')} zugeordnet.
+        {#if importApplied}
+          Übernommen – das Ergebnis ist gespeichert.
+        {:else}
+          Bitte prüfen und ergänzen – erst „Speichern“ schreibt das Ergebnis.
+        {/if}
+      </p>
+      {#if importInfo.warnings.length > 0}
+        <details class="mt-2" open={importInfo.warnings.length <= 5}>
+          <summary class="summary">{countText(importInfo.warnings.length, 'Hinweis', 'Hinweise')} zum Import</summary>
+          <ul class="mt-1 list-disc space-y-1 pl-5 small">
+            {#each importInfo.warnings as w, k (k)}<li>{w}</li>{/each}
+          </ul>
+        </details>
+      {/if}
+      <p class="mt-2 small">
+        <a href={importUrl} class="underline">Zur Import-Übersicht</a>
+        {#if !importApplied}
+          · <a href={`?session=${importInfo.sessionId}`} class="underline">Import nicht verwenden (gespeicherte Werte zeigen)</a>
+        {/if}
+      </p>
+    </div>
+  {/if}
+
   <div class="re-bar">
     <p>
       Status: <strong>{ROUND_STATUS_LABEL[status]}</strong>
       {#if protestDeadline}· Protestfrist {protestOpen ? 'läuft bis' : 'endete'} {protestDeadline}{/if}
       {#if dirty && !readOnly}· <span class="text-warning">ungespeicherte Änderungen</span>{/if}
     </p>
-    <p class="muted small">Import (UDP/CSV) folgt in Phase 2 und führt in diesen Prüfbildschirm.</p>
+    {#if importUrl && !readOnly}
+      <p class="small"><a href={importUrl} class="underline">Import aus Telemetrie oder CSV</a></p>
+    {/if}
   </div>
 
   <div class="tabs" role="tablist" aria-label="Sessions">
@@ -941,6 +1012,12 @@
   }
   .text-green {
     color: var(--color-green);
+  }
+  .import-note .summary {
+    cursor: pointer;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
   }
   .tab-meta {
     margin-left: 0.25rem;
