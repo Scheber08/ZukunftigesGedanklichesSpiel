@@ -65,6 +65,9 @@ describe('Rahmen und sichere Ränder', () => {
     const insta = safeInsets(FORMATS.instagram);
     expect(insta).toEqual({ top: 64, right: 64, bottom: 64, left: 64 });
     expect(safeInsets(FORMATS.youtube).top).toBe(48);
+    // YouTube blendet unten rechts die Laufzeit ein
+    expect(safeInsets(FORMATS.youtube).bottom).toBeGreaterThanOrEqual(90);
+    expect(safeInsets(FORMATS.og)).toEqual({ top: 42, right: 42, bottom: 42, left: 42 });
   });
 
   it.each(FORMAT_IDS)('alle Bereiche liegen im Bild und innerhalb der sicheren Ränder (%s)', (id) => {

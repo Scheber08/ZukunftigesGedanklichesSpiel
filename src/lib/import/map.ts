@@ -11,7 +11,7 @@
  * ohne Import-Zeile, abweichendes Team im Spiel, unsichere Status-Übersetzung.
  * Reine Funktion – im Browser (CSV-Vorschau) und auf dem Server.
  */
-import type { EditorRow } from '../admin/raceday/results-map';
+import { formatGapInput, type EditorRow } from '../admin/raceday/results-map';
 import type { EntryRole, Id, ResultStatus, SessionType } from '../db/types';
 import { formatLapTime } from '../domain/laptime';
 import type { ImportRow } from './rows';
@@ -203,7 +203,7 @@ export function mapImport(rows: readonly ImportRow[], ctx: MapContext, skipped: 
       laps: race ? r.laps : null,
       bestLap: timeText(r.bestLapMs),
       totalTime: race ? timeText(r.totalTimeMs) : '',
-      gap: '',
+      gap: race && r.gapMs != null && !(lapsDown != null && lapsDown > 0) ? formatGapInput(r.gapMs) : '',
       gapLaps: race && lapsDown != null && lapsDown > 0 ? lapsDown : null,
       pitStops: race ? r.pitStops : null,
       ingamePenaltyS: race ? r.penaltyS : 0,

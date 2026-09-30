@@ -24,6 +24,7 @@ const row = (over: Partial<ImportRow>): ImportRow => ({
   pitStops: null,
   penaltyS: 0,
   lapsDown: null,
+  gapMs: null,
   ai: false,
   gameTeamId: null,
   ...over,
@@ -167,6 +168,15 @@ describe('mapImport', () => {
   it('CSV „+1 Runde“ wird zum Rundenrückstand', () => {
     const res = mapImport([row({ raceNumber: 4, lapsDown: 2 })], ctx());
     expect(res.rows[0]).toMatchObject({ gapLaps: 2, totalTime: '' });
+  });
+
+  it('CSV-Abstand „+3.664“ landet im Abstandsfeld, nicht in der Gesamtzeit', () => {
+    const res = mapImport([row({ raceNumber: 4, gapMs: 3_664 }), row({ line: 2, position: 2, raceNumber: 77, gapMs: 65_200 })], ctx());
+    expect(res.rows[0]).toMatchObject({ gap: '3.664', totalTime: '', gapLaps: null });
+    expect(res.rows[1]).toMatchObject({ gap: '1:05.200' });
+    // im Qualifying gibt es keinen Abstand
+    const quali = mapImport([row({ raceNumber: 4, gapMs: 3_664 })], ctx({ sessionType: 'qualifying' }));
+    expect(quali.rows[0]!.gap).toBe('');
   });
 });
 

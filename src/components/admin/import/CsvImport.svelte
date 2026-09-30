@@ -10,7 +10,7 @@
   import { splitErrorMessage } from '~/lib/admin/raceday/errors';
   import { CSV_COLUMN_LABEL, CSV_EXAMPLE, CSV_MAX_CHARS, parseCsv } from '~/lib/import/csv';
   import { mapImport, sortWarnings, type MapContext } from '~/lib/import/map';
-  import { formatLapTime } from '~/lib/domain/laptime';
+  import { formatGapMs, formatLapTime } from '~/lib/domain/laptime';
 
   interface Props {
     roundId: number;
@@ -128,7 +128,7 @@
       ></textarea>
       <p id="csv-text-hint" class="field-hint">
         Spalten: Position; Startnummer; Gamertag (optional); Status; Beste Runde; Gesamtzeit; Stopps; Strafsekunden. Trennzeichen „;“ oder „,“,
-        Kopfzeile optional. Status: gewertet (oder leer), DNF, DNS, DSQ, NC. Zeiten wie 1:23.456, Gesamtzeit inkl. Ingame-Strafen, „+1 Runde“ für
+        Kopfzeile optional. Status: gewertet (oder leer), DNF, DNS, DSQ, NC. Zeiten wie 1:23.456, Gesamtzeit inkl. Ingame-Strafen (oder Abstand „+5.123“), „+1 Runde“ für
         überrundete Fahrer.
       </p>
       <div class="mt-2 flex flex-wrap gap-2">
@@ -191,7 +191,7 @@
                   <th scope="col">Status</th>
                   <th scope="col">Beste Runde</th>
                   {#if session.type !== 'qualifying'}
-                    <th scope="col">Gesamtzeit</th>
+                    <th scope="col">Zeit / Abstand</th>
                     <th scope="col" class="num">Stopps</th>
                     <th scope="col" class="num">Strafe (s)</th>
                   {/if}
@@ -210,7 +210,7 @@
                     <td>{RESULT_STATUS_LABEL[l.status]}</td>
                     <td>{time(r?.bestLapMs)}</td>
                     {#if session.type !== 'qualifying'}
-                      <td>{r?.lapsDown ? `+${countText(r.lapsDown, 'Runde', 'Runden')}` : time(r?.totalTimeMs)}</td>
+                      <td>{r?.lapsDown ? `+${countText(r.lapsDown, 'Runde', 'Runden')}` : r?.totalTimeMs != null ? time(r.totalTimeMs) : r?.gapMs != null ? formatGapMs(r.gapMs) : ''}</td>
                       <td class="num">{r?.pitStops ?? ''}</td>
                       <td class="num">{r?.penaltyS || ''}</td>
                     {/if}

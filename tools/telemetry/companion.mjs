@@ -157,7 +157,7 @@ export function parseOptions(argv) {
 }
 
 /**
- * @typedef {{ ok: true, status: number, data: { batchId?: number, reviewUrl?: string, message?: string } }
+ * @typedef {{ ok: true, status: number, data: { batchId?: number, reviewUrl?: string, message?: string, duplicate?: boolean } }
  *   | { ok: false, status: number | null, message: string, details: string[] }} UploadResult
  */
 
@@ -216,7 +216,8 @@ export async function upload(payload, target, fetchImpl = fetch) {
  */
 function reportUpload(res, file) {
   if (res.ok) {
-    log(`Hochgeladen: Import-Stapel #${res.data.batchId ?? '?'} (Entwurf).`);
+    if (res.data.duplicate) log(`Schon vorhanden: Import-Stapel #${res.data.batchId ?? '?'} – derselbe Upload kam bereits an, nichts Neues angelegt.`);
+    else log(`Hochgeladen: Import-Stapel #${res.data.batchId ?? '?'} (Entwurf).`);
     if (res.data.reviewUrl) log(`Prüfen und übernehmen: ${res.data.reviewUrl}`);
     return;
   }

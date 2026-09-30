@@ -5,18 +5,31 @@
  *   Position; Startnummer; Gamertag (optional); Status; Beste Runde; Gesamtzeit; Stopps; Strafsekunden
  *
  * - Trennzeichen „;“, „,“ oder Tab werden erkannt (Excel-Zeile „sep=;“ ebenso), Excel-BOM wird entfernt.
- * - Kopfzeile optional; mit Kopfzeile ist die Reihenfolge frei und zusätzlich „Startplatz“ und
- *   „Runden“ möglich. Ohne Kopfzeile darf die Gamertag-Spalte fehlen (7 Spalten).
+ * - Kopfzeile optional; mit Kopfzeile ist die Reihenfolge frei und zusätzlich „Startplatz“,
+ *   „Runden“ und „Abstand“ möglich. Ohne Kopfzeile darf die Gamertag-Spalte fehlen (7 Spalten).
  * - Zeiten wie in der Ergebnis-Eingabe (1:23.456, 1:23,456, 45:12.345, 1:02:03.4); „+1 Runde“ in
- *   der Gesamtzeit bedeutet eine Runde Rückstand.
+ *   der Gesamtzeit bedeutet eine Runde Rückstand, „+5.123“ einen Abstand zum Sieger (keine Renndauer).
  * - Status: leer/gewertet, DNF, DNS, DSQ, NC (auch englisch).
  * Reine Funktion – im Browser (Vorschau) und auf dem Server (Speichern) dieselbe Logik.
  */
 import type { ResultStatus, SessionType } from '../db/types';
+import { parseGap } from '../admin/raceday/results-map';
 import { parseLapTime } from '../domain/laptime';
 import type { ImportRow } from './rows';
 
-export type CsvColumn = 'position' | 'number' | 'gamertag' | 'status' | 'bestLap' | 'totalTime' | 'pitStops' | 'penalty' | 'grid' | 'laps' | 'ignore';
+export type CsvColumn =
+  | 'position'
+  | 'number'
+  | 'gamertag'
+  | 'status'
+  | 'bestLap'
+  | 'totalTime'
+  | 'gap'
+  | 'pitStops'
+  | 'penalty'
+  | 'grid'
+  | 'laps'
+  | 'ignore';
 
 export const CSV_COLUMN_LABEL: Record<CsvColumn, string> = {
   position: 'Position',
@@ -25,6 +38,7 @@ export const CSV_COLUMN_LABEL: Record<CsvColumn, string> = {
   status: 'Status',
   bestLap: 'Beste Runde',
   totalTime: 'Gesamtzeit',
+  gap: 'Abstand',
   pitStops: 'Stopps',
   penalty: 'Strafsekunden',
   grid: 'Startplatz',
@@ -54,6 +68,7 @@ const HEADER_ALIASES: Record<Exclude<CsvColumn, 'ignore'>, readonly string[]> = 
   status: ['status', 'ergebnis', 'result'],
   bestLap: ['besterunde', 'bestlap', 'schnellsterunde', 'bestzeit', 'fastestlap', 'bestlaptime'],
   totalTime: ['gesamtzeit', 'zeit', 'totaltime', 'time', 'renndauer', 'racetime'],
+  gap: ['abstand', 'gap', 'rueckstand', 'interval', 'diff', 'differenz', 'delta'],
   pitStops: ['stopps', 'stops', 'boxenstopps', 'pitstops', 'pits', 'boxenstopp'],
   penalty: ['strafsekunden', 'strafe', 'strafen', 'penalty', 'penalties', 'penaltyseconds', 'ingamestrafe', 'zeitstrafe'],
   grid: ['startplatz', 'grid', 'gridposition', 'start', 'startposition'],
@@ -254,9 +269,10 @@ export function parseCsv(input: string, sessionType: SessionType): CsvParseResul
       errors.push(`${where}: Status „${cell('status')}“ ist unbekannt (erlaubt: gewertet, DNF, DNS, DSQ, NC).`);
       continue;
     }
+    const empty = (t: string) => t === '' || /^(dnf|dns|dsq|nc|dnc|-+|–)$/i.test(t);
     const time = (col: 'bestLap' | 'totalTime'): number | null => {
       const t = cell(col);
-      if (t === '' || /^(dnf|dns|dsq|nc|dnc|-+|–)$/i.test(t)) return null;
+      if (empty(t)) return null;
       const ms = parseLapTime(t.replace(/^\+/, ''));
       if (ms == null) {
         if (col === 'totalTime' && lapsDownOf(t) != null) return null;
@@ -272,7 +288,19 @@ export function parseCsv(input: string, sessionType: SessionType): CsvParseResul
       }
       return v;
     };
-    const lapsDown = lapsDownOf(cell('totalTime'));
+    // „+5.123“ in der Gesamtzeit-Spalte ist ein Abstand zum Sieger, keine Renndauer von 5 Sekunden
+    const totalText = cell('totalTime');
+    const gapText = cell('gap');
+    const lapsDown = lapsDownOf(totalText) ?? lapsDownOf(gapText);
+    const totalIsGap = /^\+/.test(totalText) && lapsDownOf(totalText) == null;
+    const classifiedRace = race && status === 'classified';
+    const gapSource = totalIsGap ? totalText : lapsDownOf(gapText) == null ? gapText : '';
+    let gapMs: number | null = null;
+    if (classifiedRace && !empty(gapSource)) {
+      const parsed = parseGap(gapSource);
+      if (parsed === undefined) warnings.push(`${where}: Abstand „${gapSource}“ nicht lesbar – bleibt leer.`);
+      else gapMs = parsed;
+    }
     rows.push({
       line: no,
       position,
@@ -283,10 +311,11 @@ export function parseCsv(input: string, sessionType: SessionType): CsvParseResul
       gridPosition: race ? num('grid') : null,
       laps: race ? num('laps') : null,
       bestLapMs: time('bestLap'),
-      totalTimeMs: race && status === 'classified' ? time('totalTime') : null,
+      totalTimeMs: classifiedRace && !totalIsGap ? time('totalTime') : null,
       pitStops: race ? num('pitStops') : null,
       penaltyS: race ? (num('penalty') ?? 0) : 0,
-      lapsDown: race && status === 'classified' ? lapsDown : null,
+      lapsDown: classifiedRace ? lapsDown : null,
+      gapMs,
       ai: false,
       gameTeamId: null,
     });

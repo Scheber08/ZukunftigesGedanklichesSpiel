@@ -38,7 +38,8 @@ export function scaleFor(format: Size): number {
 
 /**
  * Sichere Ränder: Story/TikTok hält oben (Profilzeile) und unten (Beschriftung, Antwortfeld)
- * sowie rechts (TikTok-Buttons) Abstand, die anderen Formate einen gleichmäßigen Rand.
+ * sowie rechts (TikTok-Buttons) Abstand, das YouTube-Thumbnail unten (Laufzeit-Anzeige unten
+ * rechts, ca. 13 % der Höhe), die anderen Formate einen gleichmäßigen Rand.
  */
 export function safeInsets(format: Size): Insets {
   const s = scaleFor(format);
@@ -46,6 +47,7 @@ export function safeInsets(format: Size): Insets {
     return { top: Math.round(format.height * 0.115), right: Math.round(96 * s), bottom: Math.round(format.height * 0.155), left: Math.round(72 * s) };
   }
   const m = Math.round(64 * s);
+  if (format.id === 'youtube') return { top: m, right: m, bottom: Math.max(m, Math.round(format.height * 0.13)), left: m };
   return { top: m, right: m, bottom: m, left: m };
 }
 

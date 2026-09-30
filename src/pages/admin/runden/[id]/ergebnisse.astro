@@ -39,7 +39,9 @@ if (!allowed) Astro.response.status = 403;
 else if (!ctx) Astro.response.status = 404;
 
 // Vorbefüllung aus einem Import-Stapel
-const importId = intParam(Astro.url.searchParams.get('import') ?? undefined);
+// Stapel-IDs wachsen über alle Runden – daher nicht auf 4 Stellen begrenzt (anders als intParam)
+const importParam = Astro.url.searchParams.get('import') ?? '';
+const importId = /^\d{1,9}$/.test(importParam) ? Number(importParam) : null;
 let prefill: ImportPrefill | null = null;
 let importError: string | null = null;
 if (ctx && importId != null) {

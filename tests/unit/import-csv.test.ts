@@ -70,6 +70,28 @@ describe('parseCsv', () => {
     expect(r.rows[1]).toMatchObject({ position: 2, raceNumber: 44, gridPosition: 1, laps: 24, totalTimeMs: null, lapsDown: 1 });
   });
 
+  it('„+3.664“ in der Gesamtzeit ist ein Abstand zum Sieger, keine Renndauer', () => {
+    const csv = ['1;4;Anna;;1:14.512;32:10.456;1;0', '2;77;Kerb;;1:14.803;+3.664;1;5', '3;16;Lukas;;1:15.0;+1:05,2;1;0', '4;55;Dani;;1:15.1;+x;1;0'].join('\n');
+    const r = parseCsv(csv, 'race');
+    expect(r.errors).toEqual([]);
+    expect(r.rows[0]).toMatchObject({ totalTimeMs: 1_930_456, gapMs: null });
+    expect(r.rows[1]).toMatchObject({ totalTimeMs: null, gapMs: 3_664, lapsDown: null });
+    expect(r.rows[2]).toMatchObject({ totalTimeMs: null, gapMs: 65_200 });
+    expect(r.rows[3]).toMatchObject({ totalTimeMs: null, gapMs: null });
+    expect(r.warnings.join(' ')).toMatch(/Zeile 4: Abstand „\+x“ nicht lesbar/);
+  });
+
+  it('eigene Spalte „Abstand“ (mit Kopfzeile), auch ohne Pluszeichen und mit Rundenrückstand', () => {
+    const csv = ['Pos;Nr;Status;Gesamtzeit;Abstand', '1;4;;32:10.456;', '2;77;;;3,664', '3;16;;;+2 Runden', '4;55;DNF;;+9.000'].join('\n');
+    const r = parseCsv(csv, 'race');
+    expect(r.errors).toEqual([]);
+    expect(r.columns).toContain('gap');
+    expect(r.rows[1]).toMatchObject({ gapMs: 3_664, totalTimeMs: null });
+    expect(r.rows[2]).toMatchObject({ gapMs: null, lapsDown: 2 });
+    // nicht gewertet: kein Abstand
+    expect(r.rows[3]).toMatchObject({ status: 'dnf', gapMs: null });
+  });
+
   it('Excel-Zeile „sep=;“ wird ausgewertet', () => {
     const r = parseCsv('sep=;\n1;4;Anna;;1:14.5;;;', 'race');
     expect(r.delimiter).toBe(';');

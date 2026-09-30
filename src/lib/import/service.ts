@@ -141,13 +141,38 @@ function toMapping(roundId: Id, sessionType: SessionType, result: MappingResult,
 
 // ---------------------------------------------------------------------------- Anlegen
 
-/** UDP-Stapel aus einem geprüften Upload (Endpunkt /api/import). */
+/**
+ * Kennung eines Telemetrie-Endergebnisses zum Erkennen wiederholter Uploads. Bewusst aus
+ * einzelnen Feldern gebaut: jsonb sortiert Objekt-Schlüssel um, JSON.stringify des gespeicherten
+ * Rohwerts wäre deshalb nicht stabil.
+ */
+export function telemetryFingerprint(payload: Pick<TelemetryPayload, 'sessionUid' | 'results'>): string {
+  const rows = [...payload.results]
+    .sort((a, b) => a.carIndex - b.carIndex)
+    .map((r) => [r.carIndex, r.position, r.raceNumber, r.resultStatus, r.numLaps ?? null, r.bestLapMs ?? null, r.totalRaceTimeMs ?? null, r.penaltiesS ?? null].join(':'));
+  return `${payload.sessionUid}|${rows.join(',')}`;
+}
+
+/**
+ * UDP-Stapel aus einem geprüften Upload (Endpunkt /api/import). Kommt dasselbe Endergebnis
+ * derselben Session erneut (z. B. Neuversuch des Companions nach einer Zeitüberschreitung, obwohl
+ * der erste Upload angekommen war), wird kein zweiter Stapel angelegt (`duplicate: true`).
+ */
 export async function createTelemetryBatch(
   store: Store,
   payload: TelemetryPayload,
   resolved: Extract<ResolveResult, { ok: true }>,
   uploadedBy: string | null,
-): Promise<{ batch: ImportBatchRow; mapping: BatchMapping }> {
+): Promise<{ batch: ImportBatchRow; mapping: BatchMapping; duplicate: boolean }> {
+  const fingerprint = telemetryFingerprint(payload);
+  const earlier = await store.select('import_batches', { eq: { session_id: resolved.sessionId, source: 'udp' } });
+  for (const b of earlier) {
+    if (b.status === 'discarded') continue;
+    const raw = telemetryPayloadSchema.safeParse(b.raw);
+    const mapping = readMapping(b.mapping);
+    if (raw.success && mapping && telemetryFingerprint(raw.data) === fingerprint) return { batch: b, mapping, duplicate: true };
+  }
+
   const basics = await loadRoundBasics(store, resolved.roundId);
   const { rows, skipped } = normalizeTelemetry(payload.results, resolved.sessionType);
   const ctx = await loadMapContext(store, resolved.roundId, resolved.sessionType, basics);
@@ -184,7 +209,7 @@ export async function createTelemetryBatch(
     total: mapping.total,
     warnings: mapping.warnings.length,
   });
-  return { batch, mapping };
+  return { batch, mapping, duplicate: false };
 }
 
 /** CSV-Stapel aus dem Admin (Session gewählt, Text eingefügt oder Datei gelesen). */

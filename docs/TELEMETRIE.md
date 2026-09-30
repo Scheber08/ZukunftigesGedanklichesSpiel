@@ -132,8 +132,8 @@ Position;Startnummer;Gamertag;Status;Beste Runde;Gesamtzeit;Stopps;Strafsekunden
 ```
 
 - Trennzeichen `;`, `,` oder Tab (auch Excel-Zeile `sep=;`), Excel-BOM, Windows-Zeilenenden; nicht-UTF-8-Dateien werden als Windows-1252 gelesen.
-- Kopfzeile optional. Mit Kopfzeile ist die Reihenfolge frei und zusätzlich *Startplatz* und *Runden* möglich; unbekannte Spalten werden ignoriert. Ohne Kopfzeile darf die Gamertag-Spalte fehlen (7 Spalten).
-- Status: leer/gewertet, DNF, DNS, DSQ, NC (auch englisch: finished, retired, …). Zeiten wie in der Ergebnis-Eingabe (`1:23.456`, `1:23,456`, `45:12.345`); `+1 Runde` in der Gesamtzeit = eine Runde Rückstand.
+- Kopfzeile optional. Mit Kopfzeile ist die Reihenfolge frei und zusätzlich *Startplatz*, *Runden* und *Abstand* möglich; unbekannte Spalten werden ignoriert. Ohne Kopfzeile darf die Gamertag-Spalte fehlen (7 Spalten).
+- Status: leer/gewertet, DNF, DNS, DSQ, NC (auch englisch: finished, retired, …). Zeiten wie in der Ergebnis-Eingabe (`1:23.456`, `1:23,456`, `45:12.345`); `+1 Runde` in der Gesamtzeit = eine Runde Rückstand, `+5.123` in der Gesamtzeit = **Abstand** zum Sieger (landet im Abstandsfeld der Ergebnis-Eingabe, nicht als Renndauer).
 - Die Gesamtzeit ist die Zeit **inklusive Ingame-Strafen** (wie im Spiel angezeigt).
 
 ## Endpunkt `POST /api/import`
@@ -143,6 +143,7 @@ Position;Startnummer;Gamertag;Status;Beste Runde;Gesamtzeit;Stopps;Strafsekunden
 | Antwort | Wann |
 |---|---|
 | 201 `{ batchId, reviewUrl, listUrl, matched, total, warnings }` | Stapel angelegt (Entwurf) |
+| 200 `{ …, duplicate: true }` | dasselbe Endergebnis derselben Session ist schon als Stapel da (Entwurf oder übernommen) – z. B. Neuversuch nach Zeitüberschreitung; kein zweiter Stapel. Nach „Verwerfen“ legt ein erneuter Upload wieder einen Entwurf an |
 | 400 | kein JSON / passt nicht zum Format (`details`) |
 | 401 | Token fehlt oder falsch (Vergleich des SHA-256-Hashes in konstanter Zeit) |
 | 413 | größer als 512 KB |
@@ -163,6 +164,7 @@ Plan §12: *„Vorher per Feldtest prüfen, ob die Final Classification im Cross
 - [ ] Kommt nach **jeder** Session „Endergebnis: …“? Auch wenn der Host die Session vorzeitig beendet? Auch bei Fahrern, die das Rennen verlassen haben (Status/KI-Übernahme)?
 - [ ] Stimmen Startnummern aller Plattformen? Kommen Namen an oder „Player“ (Einstellung „Online-Namen anzeigen“)?
 - [ ] Sprint-Wochenende: Welche Session-Typen meldet das Spiel für Sprint und Hauptrennen (15/16)?
+- [ ] Qualifying im Format Q1–Q3: Kommt nach jedem Teil ein eigenes Endergebnis (dann entstehen bis zu drei Stapel für „Qualifying“)? Welcher Stapel enthält die komplette Reihenfolge aller 22 Fahrer? Nur diesen übernehmen, die anderen verwerfen – oder im Liga-Format „Kurzes“/„Ein-Runden-Qualifying“ fahren.
 - [ ] Final Classification mit dem Ergebnis-Bildschirm vergleichen: Positionen, Status (DNF/DSQ), Gesamtzeit inkl. Strafen, beste Runde, Stopps.
 - [ ] Mitschnitt mit `--replay` gegen den Dev-Server abspielen und in der Ergebnis-Eingabe prüfen.
 - [ ] Ergebnis, Format und Auffälligkeiten hier dokumentieren; Mitschnitte als Test-Fixtures aufheben.

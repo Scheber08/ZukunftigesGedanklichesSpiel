@@ -335,6 +335,24 @@
     say(error.headline);
   }
 
+  type Actions = (typeof import('astro:actions'))['actions'];
+  const OFFLINE = 'Keine Verbindung zum Server – bitte die Seite neu laden und erneut versuchen. Die Eingaben bleiben erhalten, solange die Seite offen ist.';
+
+  /**
+   * Action aufrufen. Schlägt das Laden des Action-Clients oder die Verbindung fehl, gibt es eine
+   * Fehlermeldung statt eines hängenden „Speichert …“ (Ergebnis dann null).
+   */
+  async function callAction<T>(call: (actions: Actions) => Promise<T>): Promise<T | null> {
+    try {
+      const { actions } = await import('astro:actions');
+      return await call(actions);
+    } catch {
+      busy = null;
+      fail(OFFLINE);
+      return null;
+    }
+  }
+
   async function save(): Promise<boolean> {
     if (readOnly) return false;
     const { sessions: payload, errors } = buildPayload();
@@ -350,9 +368,9 @@
     busy = 'save';
     error = null;
     success = null;
-    const { actions } = await import('astro:actions');
-    const res = await actions.admin.resultsSave({ roundId, sessions: payload, importBatchId: importBatchFor(payload) });
+    const res = await callAction((a) => a.admin.resultsSave({ roundId, sessions: payload, importBatchId: importBatchFor(payload) }));
     busy = null;
+    if (!res) return false;
     if (res.error) {
       fail(res.error.message);
       return false;
@@ -374,9 +392,9 @@
     }
     busy = 'provisional';
     error = null;
-    const { actions } = await import('astro:actions');
-    const res = await actions.admin.resultsPublishProvisional({ roundId });
+    const res = await callAction((a) => a.admin.resultsPublishProvisional({ roundId }));
     busy = null;
+    if (!res) return;
     if (res.error) return fail(res.error.message);
     status = res.data.status;
     serverWarnings = res.data.warnings;
@@ -394,9 +412,9 @@
     if (dirty && !(await save())) return;
     busy = 'final';
     error = null;
-    const { actions } = await import('astro:actions');
-    const res = await actions.admin.resultsFinalize({ roundId, force: forceFinal });
+    const res = await callAction((a) => a.admin.resultsFinalize({ roundId, force: forceFinal }));
     busy = null;
+    if (!res) return;
     if (res.error) {
       const parts = splitErrorMessage(res.error.message);
       if (res.error.code === 'PRECONDITION_FAILED' && parts.details.length > 0) finalizeBlockers = parts.details;
@@ -421,16 +439,18 @@
     }
     busy = 'correct';
     error = null;
-    const { actions } = await import('astro:actions');
     const changed = dirty && payload.length > 0 ? payload : undefined;
-    const res = await actions.admin.resultsCorrect({
-      roundId,
-      sessions: changed,
-      reasonDe: reasonDe.trim(),
-      reasonEn: reasonEn.trim() || null,
-      importBatchId: changed ? importBatchFor(changed) : null,
-    });
+    const res = await callAction((a) =>
+      a.admin.resultsCorrect({
+        roundId,
+        sessions: changed,
+        reasonDe: reasonDe.trim(),
+        reasonEn: reasonEn.trim() || null,
+        importBatchId: changed ? importBatchFor(changed) : null,
+      }),
+    );
     busy = null;
+    if (!res) return;
     if (res.error) return fail(res.error.message);
     markSaved();
     if (res.data.importApplied) importApplied = true;

@@ -25,6 +25,8 @@ export interface ImportRow {
   penaltyS: number;
   /** Runden Rückstand, falls statt einer Zeit „+1 Runde“ angegeben ist (nur CSV) */
   lapsDown: number | null;
+  /** Abstand zum Sieger, falls statt der Gesamtzeit „+5.123“ angegeben ist (nur CSV) */
+  gapMs: number | null;
   /** Von der KI gefahren (nur Telemetrie) */
   ai: boolean;
   /** Team-ID im Spiel (nur Telemetrie) */
@@ -69,6 +71,7 @@ export function normalizeTelemetry(results: readonly TelemetryResult[], sessionT
       pitStops: race && r.numPitStops != null ? r.numPitStops : null,
       penaltyS: race ? penaltyS : 0,
       lapsDown: null,
+      gapMs: null,
       ai: r.aiControlled,
       gameTeamId: r.teamId ?? null,
     });

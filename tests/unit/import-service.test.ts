@@ -215,6 +215,35 @@ describe('POST /api/import', () => {
     expect((await quali.json()).sessionType).toBe('qualifying');
   });
 
+  it('wiederholter Upload desselben Endergebnisses: 200 mit dem vorhandenen Stapel, nach Verwerfen wieder neu', async () => {
+    const { token } = await createImportToken(store, admin);
+    const auth = { authorization: `Bearer ${token}` };
+    const { round } = await r5();
+    const payload = samplePayload();
+    const first = await call(JSON.stringify(payload), auth);
+    expect(first.status).toBe(201);
+    const firstData = await first.json();
+    expect(firstData.duplicate).toBe(false);
+
+    // gleicher Inhalt, andere Schlüsselreihenfolge (wie nach jsonb) → kein zweiter Stapel
+    const reordered = { ...payload, results: payload.results.map((r) => Object.fromEntries(Object.entries(r).reverse())) };
+    const again = await call(JSON.stringify(reordered), auth);
+    expect(again.status).toBe(200);
+    const againData = await again.json();
+    expect(againData).toMatchObject({ batchId: firstData.batchId, duplicate: true });
+    expect(await store.select('import_batches', { eq: { source: 'udp' } })).toHaveLength(1);
+
+    // anderes Ergebnis derselben Session → neuer Stapel
+    const changed = { ...payload, results: payload.results.map((r, i) => (i === 0 ? { ...r, bestLapMs: (r.bestLapMs ?? 80_000) + 1 } : r)) };
+    expect((await call(JSON.stringify(changed), auth)).status).toBe(201);
+
+    // verworfen → gleicher Upload legt wieder einen Entwurf an
+    await discardImportBatch(store, admin, round.id, firstData.batchId as Id);
+    const afterDiscard = await call(JSON.stringify(payload), auth);
+    expect(afterDiscard.status).toBe(201);
+    expect((await afterDiscard.json()).batchId).not.toBe(firstData.batchId);
+  });
+
   it('Antwort enthält keine privaten Daten', async () => {
     const { token } = await createImportToken(store, admin);
     const res = await call(JSON.stringify(samplePayload({ numbers: DEMO_NUMBERS.slice(0, 4) })), { authorization: `Bearer ${token}` });

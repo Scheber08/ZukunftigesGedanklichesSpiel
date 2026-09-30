@@ -4,7 +4,9 @@
  *
  * Ablauf: Rate-Limit → Token (SHA-256, konstante Zeit) → Größe/JSON/zod → Session zuordnen
  * (aktive Saison, Strecke, ±36 h bzw. explizit) → Import-Stapel (source „udp“, status „draft“).
- * Antwort 201 { batchId, reviewUrl }. Nichts wird veröffentlicht – übernommen wird erst im Admin.
+ * Antwort 201 { batchId, reviewUrl } – bzw. 200 mit dem vorhandenen Stapel, wenn dasselbe Endergebnis
+ * derselben Session schon hochgeladen wurde (Neuversuch). Nichts wird veröffentlicht – übernommen
+ * wird erst im Admin.
  * Worker-Endpunkt: nur gezielte Store-Abfragen, kein loadLeague().
  */
 import type { APIRoute } from 'astro';
@@ -115,7 +117,7 @@ export const POST: APIRoute = async ({ request, url }) => {
     });
     if (!resolved.ok) return json({ error: resolved.message, details: resolved.details }, 422);
 
-    const { batch, mapping } = await createTelemetryBatch(store, payload, resolved, settings.import_token.created_by);
+    const { batch, mapping, duplicate } = await createTelemetryBatch(store, payload, resolved, settings.import_token.created_by);
     const reviewUrl = new URL(`/admin/runden/${resolved.roundId}/ergebnisse?session=${resolved.sessionId}&import=${batch.id}`, url).href;
     const listUrl = new URL(`/admin/runden/${resolved.roundId}/import#stapel-${batch.id}`, url).href;
     return json(
@@ -129,9 +131,13 @@ export const POST: APIRoute = async ({ request, url }) => {
         matched: mapping.matched,
         total: mapping.total,
         warnings: mapping.warnings.length,
-        message: `Entwurf gespeichert: ${mapping.matched} von ${mapping.total} Zeilen zugeordnet${mapping.warnings.length > 0 ? `, ${mapping.warnings.length} Hinweise` : ''}.`,
+        duplicate,
+        message: duplicate
+          ? `Dieses Endergebnis ist schon als Stapel #${batch.id} vorhanden (${batch.status === 'applied' ? 'übernommen' : 'Entwurf'}) – nichts Neues angelegt.`
+          : `Entwurf gespeichert: ${mapping.matched} von ${mapping.total} Zeilen zugeordnet${mapping.warnings.length > 0 ? `, ${mapping.warnings.length} Hinweise` : ''}.`,
       },
-      201,
+      // Wiederholter Upload (z. B. Neuversuch des Companions): 200 mit dem vorhandenen Stapel
+      duplicate ? 200 : 201,
       { location: reviewUrl },
     );
   } catch (err) {
