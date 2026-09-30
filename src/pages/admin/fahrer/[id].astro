@@ -87,6 +87,7 @@ const teamOf = (id: number) => teams.find((t) => t.id === id);
     <a class="btn whitespace-normal btn-ghost" href={`/admin/audit?entitaet=drivers&id=${driver.id}`}>Änderungsverlauf</a>
     {/* Pseudonymisierte Fahrer haben keine Profilseite (Plan §6.7) */}
     {!driver.anonymized && <a class="btn whitespace-normal btn-ghost" href={url('de', 'driver', { slug: driver.slug })}>Öffentliches Profil</a>}
+    {!driver.anonymized && <a class="btn whitespace-normal btn-ghost" href={`/admin/grafiken?motiv=newcomer&fahrer=${driver.id}`}>Neuzugang-Grafik</a>}
   </div>
 
   <Notice
