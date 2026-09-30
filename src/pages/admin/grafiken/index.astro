@@ -1,0 +1,95 @@
+---
+/**
+ * Social-Grafiken (Plan Phase 2): Ergebnis, Wertung, Startaufstellung, Race-Week, Pole und
+ * Neuzugang in vier Formaten, erzeugt im Admin-Browser (Canvas) – Download als PNG oder Post
+ * in den Discord-Channel „Grafiken“. Rolle: Redaktion oder Admin.
+ *
+ * Datenquelle ist der öffentliche Store (wie die Website): keine E-Mails, Discord-Namen, EA-IDs
+ * oder Notizen. Die Liga wird pro Aufruf frisch geladen, damit neue Ergebnisse sofort da sind.
+ */
+export const prerender = false;
+
+import * as FLAGS from 'country-flag-icons/string/3x2';
+import NoAccess from '~/components/admin/core/NoAccess.astro';
+import GraphicsStudio from '~/components/admin/graphics/GraphicsStudio.svelte';
+import { SITE } from '~/config/site';
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import { selectionFromParams } from '~/lib/graphics/motifs';
+import { buildGraphicsSource, type GraphicsSource } from '~/lib/graphics/source';
+import { safeJson } from '~/lib/util/html';
+import { hasRole } from '~/lib/server/auth';
+import { getPublicStore, getServiceStore } from '~/lib/server/db';
+import { loadLeagueFrom } from '~/lib/server/league';
+import { readPrivateSettings } from '~/lib/server/settings';
+
+const staff = Astro.locals.staff;
+const allowed = hasRole(staff, 'redakteur');
+if (!allowed) Astro.response.status = 403;
+
+let source: GraphicsSource | null = null;
+let webhookReady = false;
+let loadError: string | null = null;
+
+if (allowed) {
+  try {
+    const [league, priv] = await Promise.all([loadLeagueFrom(getPublicStore()), readPrivateSettings(getServiceStore())]);
+    const host = (() => {
+      try {
+        return new URL(Astro.site ?? 'https://liga.example').host;
+      } catch {
+        return '';
+      }
+    })();
+    source = buildGraphicsSource(league, {
+      brand: { name: SITE.name, shortName: SITE.shortName, host },
+      flagSvg: (code) => (FLAGS as Record<string, string>)[code],
+    });
+    webhookReady = Boolean(priv.webhooks.graphics);
+  } catch (err) {
+    console.error('Grafiken: Daten konnten nicht geladen werden', err);
+    loadError = 'Die Liga-Daten konnten nicht geladen werden. Bitte später erneut versuchen.';
+    Astro.response.status = 500;
+  }
+}
+
+const initial = selectionFromParams(Astro.url.searchParams);
+const canEditSettings = hasRole(staff, 'admin');
+---
+
+<AdminLayout title="Grafiken" breadcrumbs={[{ label: 'Grafiken' }]} wide>
+  {
+    !allowed ? (
+      <NoAccess path={Astro.url.pathname} roles={staff?.roles ?? []} />
+    ) : loadError || !source ? (
+      <p class="alert alert-danger" role="alert">
+        {loadError ?? 'Keine Daten.'}
+      </p>
+    ) : source.seasons.length === 0 ? (
+      <p class="alert alert-warning" role="status">
+        Es gibt noch keine Saison – lege zuerst unter <a href="/admin/saisons" class="underline">Saisons</a> eine an.
+      </p>
+    ) : (
+      <>
+        <p class="mb-6 max-w-3xl text-muted">
+          Social-Grafiken im Liga-Design für Instagram, Story/TikTok, YouTube und Link-Vorschauen. Die Grafik entsteht in deinem
+          Browser aus den veröffentlichten Daten der Website – nicht veröffentlichte Ergebnisse oder Aufstellungen erscheinen hier nicht.
+        </p>
+        <noscript>
+          <p class="alert alert-warning mb-6">Für die Vorschau und den Export wird JavaScript benötigt.</p>
+        </noscript>
+        {/* Daten als JSON-Block statt Island-Props (deutlich kleiner); die Island liest ihn beim Start */}
+        <script type="application/json" id="graphics-source" set:html={safeJson(source)} />
+        <GraphicsStudio
+          client:only="svelte"
+          dataId="graphics-source"
+          initial={initial}
+          webhookReady={webhookReady}
+          canEditSettings={canEditSettings}
+          textureUrl={SITE.heroTexture}
+        >
+          <p slot="fallback" class="text-muted" role="status">Grafik-Werkzeug wird geladen …</p>
+        </GraphicsStudio>
+      </>
+    )
+  }
+</AdminLayout>
