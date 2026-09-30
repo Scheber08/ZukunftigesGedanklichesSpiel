@@ -1,0 +1,142 @@
+---
+/**
+ * Karte einer Strecke in der Übersicht (/strecken): Karte (falls gepflegt), Flagge, Name,
+ * Land, Länge, gewertete Rennen und – falls geplant – die nächste Runde. Der Name ist der
+ * Link; er deckt die ganze Karte ab (großes Touch-Ziel).
+ */
+import Flag from '~/components/ui/Flag.astro';
+import { url, useT, type Lang } from '~/i18n';
+import { trackMapImage } from '~/lib/calendar/race';
+import { formatDate } from '~/lib/domain/time';
+import type { League } from '~/lib/league/league';
+import { localTrackName, type TrackOverviewItem } from '~/lib/tracks';
+import { countryName, formatDecimal, roundLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  item: TrackOverviewItem;
+  /** Rundennummer der aktuellen Saison zeigen */
+  showRound?: boolean;
+}
+const { lang, league, item, showRound = false } = Astro.props;
+const t = useT(lang);
+const { track, races, next, currentRound } = item;
+const name = localTrackName(track, lang);
+const map = trackMapImage(track);
+const facts = [
+  track.length_km != null ? t('tracks.lengthKm', { km: formatDecimal(track.length_km, lang, 3) }) : null,
+  races === 0 ? t('tracks.noRacesShort') : races === 1 ? t('tracks.racesOne') : t('tracks.racesMany', { n: races }),
+].filter((x): x is string => x != null);
+const nextSeason = next ? league.season(next.season_id) : undefined;
+---
+
+<article class="track-card card card-hover">
+  {
+    map ? (
+      <div class="track-card-map">
+        <img src={map.src} alt="" width="320" height="200" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+      </div>
+    ) : (
+      <div class="track-card-map track-card-map-empty" aria-hidden="true">
+        <span class="track-card-code">{track.country_code.toUpperCase()}</span>
+      </div>
+    )
+  }
+  <div class="track-card-body">
+    {showRound && currentRound && <p class="micro">{t('common.roundShort', { n: currentRound.number })}</p>}
+    <h3 class="track-card-title">
+      <Flag code={track.country_code} lang={lang} decorative />
+      <a href={url(lang, 'track', { slug: track.slug })} class="track-card-link">{name}</a>
+    </h3>
+    <p class="text-sm text-muted">{countryName(track.country_code, lang)}</p>
+    <p class="track-card-facts tabular">{facts.join(' · ')}</p>
+    {
+      next && nextSeason && (
+        <p class="track-card-next text-sm">
+          <span class="text-muted">{t('tracks.nextShort')}</span>{' '}
+          <time datetime={next.start_utc}>{formatDate(next.start_utc, lang)}</time>
+          <span class="sr-only"> ({roundLabel(next, track, lang)})</span>
+        </p>
+      )
+    }
+  </div>
+</article>
+
+<style>
+  .track-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+  .track-card-map {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 8 / 5;
+    padding: 1rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+  }
+  .track-card-map img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .track-card-map-empty {
+    background:
+      radial-gradient(circle at 30% 20%, rgb(55 190 137 / 0.12), transparent 60%),
+      radial-gradient(circle at 80% 90%, rgb(52 196 208 / 0.1), transparent 55%),
+      var(--color-surface-2);
+  }
+  .track-card-code {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 2.5rem;
+    letter-spacing: 0.08em;
+    color: rgb(255 255 255 / 0.12);
+  }
+  .track-card-body {
+    display: grid;
+    gap: 0.25rem;
+    padding: 1rem 1.125rem 1.125rem;
+  }
+  .track-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.375rem;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+  .track-card-link {
+    text-decoration: none;
+  }
+  /* Ganze Karte klickbar (Touch-Ziel), Fokusrahmen um die Karte */
+  .track-card-link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-card);
+  }
+  .track-card-link:focus-visible {
+    outline: none;
+  }
+  .track-card-link:focus-visible::after {
+    outline: 2px solid var(--color-teal);
+    outline-offset: -2px;
+  }
+  .track-card:hover .track-card-link {
+    color: var(--color-teal);
+  }
+  .track-card-facts {
+    margin-top: 0.25rem;
+    font-size: 0.9375rem;
+  }
+  .track-card-next {
+    margin-top: 0.125rem;
+  }
+</style>

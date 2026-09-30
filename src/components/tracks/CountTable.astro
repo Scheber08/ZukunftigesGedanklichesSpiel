@@ -1,0 +1,57 @@
+---
+/** Rangliste einer Strecke (meiste Siege bzw. Poles) als kleine Tabelle mit Beschriftung. */
+import DriverLink from '~/components/ui/DriverLink.astro';
+import { useT, type Lang } from '~/i18n';
+import type { League } from '~/lib/league/league';
+import type { CountEntry } from '~/lib/tracks';
+
+interface Props {
+  lang: Lang;
+  league: League;
+  caption: string;
+  valueLabel: string;
+  entries: CountEntry[];
+  id: string;
+}
+const { lang, league, caption, valueLabel, entries, id } = Astro.props;
+const t = useT(lang);
+// Gleichstand teilt sich die Position (Anzeige „=2“)
+const positions = entries.map((e, i) => {
+  const first = entries.findIndex((x) => x.value === e.value);
+  const tied = entries.filter((x) => x.value === e.value).length > 1;
+  return { pos: first + 1, tied, index: i };
+});
+---
+
+<div class="min-w-0">
+  <h3 id={`${id}-title`} class="micro mb-2">{caption}</h3>
+  {
+    entries.length === 0 ? (
+      <p class="card p-4 text-sm text-muted">{t('tracks.records.none')}</p>
+    ) : (
+      <div class="table-wrap">
+        <table class="timing-table">
+          <caption class="sr-only">{caption}</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="pos">{t('common.positionShort')}</th>
+              <th scope="col">{t('common.driver')}</th>
+              <th scope="col" class="num">{valueLabel}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((e, i) => (
+              <tr>
+                <td class="pos">{positions[i]!.tied ? `=${positions[i]!.pos}` : positions[i]!.pos}</td>
+                <th scope="row" class="font-normal">
+                  <DriverLink lang={lang} driver={league.driver(e.driverId)} stripe={false} />
+                </th>
+                <td class="num font-bold">{e.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+</div>

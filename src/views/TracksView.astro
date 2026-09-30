@@ -1,0 +1,84 @@
+---
+/**
+ * Streckenübersicht (Plan Phase 3): alle Strecken, die in einem Liga-Kalender vorkommen –
+ * zuerst die der aktuellen Saison in Kalender-Reihenfolge, dann alle weiteren alphabetisch.
+ */
+import TrackCard from '~/components/tracks/TrackCard.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { loadLeague } from '~/lib/server/league';
+import { tracksOverview } from '~/lib/tracks';
+import { breadcrumbJsonLd, seasonLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const { current, other } = tracksOverview(league, lang);
+const season = league.currentSeason;
+
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('tracks.title'), href: url(lang, 'tracks') },
+];
+const site = Astro.site ?? new URL(Astro.url.origin);
+const jsonLd = breadcrumbJsonLd(site, crumbs.map((c) => ({ name: c.label, href: c.href })));
+---
+
+<BaseLayout lang={lang} title={t('tracks.title')} description={t('tracks.metaDescription')} alternates={alternates('tracks')} jsonLd={jsonLd}>
+  <PageHeader lang={lang} title={t('tracks.title')} eyebrow={t('nav.league')} lead={t('tracks.lead')} breadcrumbs={[crumbs[0]!, { label: t('tracks.title') }]} />
+
+  <div class="container-page pb-14">
+    {
+      current.length === 0 && other.length === 0 ? (
+        <div class="section">
+          <EmptyState title={t('tracks.emptyTitle')} text={t('tracks.emptyText')}>
+            <a href={url(lang, 'calendar')} class="btn btn-secondary btn-sm mt-6">
+              {t('nav.calendar')}
+            </a>
+          </EmptyState>
+        </div>
+      ) : (
+        <>
+          {current.length > 0 && season && (
+            <section class="pt-10 md:pt-14" aria-labelledby="tracks-current">
+              <SectionTitle id="tracks-current" title={t('tracks.currentSeason', { season: seasonLabel(season, lang) })} href={url(lang, 'calendar')} linkLabel={t('nav.calendar')} />
+              <ul class="track-grid">
+                {current.map((item) => (
+                  <li>
+                    <TrackCard lang={lang} league={league} item={item} showRound />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {other.length > 0 && (
+            <section class="pt-10 md:pt-14" aria-labelledby="tracks-other">
+              <SectionTitle id="tracks-other" title={current.length > 0 ? t('tracks.otherTracks') : t('tracks.allTracks')} />
+              <ul class="track-grid">
+                {other.map((item) => (
+                  <li>
+                    <TrackCard lang={lang} league={league} item={item} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      )
+    }
+  </div>
+</BaseLayout>
+
+<style>
+  .track-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  }
+</style>

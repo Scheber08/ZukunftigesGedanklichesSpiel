@@ -1,0 +1,15 @@
+---
+import { loadLeague } from '~/lib/server/league';
+import { trackPageSlugs } from '~/lib/tracks';
+import TrackView from '~/views/TrackView.astro';
+
+/** Streckenseiten für alle Strecken, die in einem Liga-Kalender vorkommen. */
+export async function getStaticPaths() {
+  const league = await loadLeague();
+  return trackPageSlugs(league).map((slug) => ({ params: { slug } }));
+}
+
+const { slug } = Astro.params;
+---
+
+<TrackView lang="de" slug={slug!} />

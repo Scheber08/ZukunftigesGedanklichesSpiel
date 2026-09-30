@@ -1,0 +1,370 @@
+---
+/**
+ * Streckenseite (Plan Phase 3): Streckenkarte mit Quellenangabe, Streckendaten, nächste
+ * Runde auf dieser Strecke und Rekorde aus allen gewerteten Ergebnissen (vorläufig, final,
+ * korrigiert): schnellste Rennrunde, beste Qualifying-Zeit, meiste Siege/Poles und die
+ * Sieger je Saison und Runde mit Link zur Rennseite.
+ */
+import TrackMap from '~/components/calendar/TrackMap.astro';
+import CountTable from '~/components/tracks/CountTable.astro';
+import LapRecordTile from '~/components/tracks/LapRecordTile.astro';
+import DriverLink from '~/components/ui/DriverLink.astro';
+import EmptyState from '~/components/ui/EmptyState.astro';
+import Flag from '~/components/ui/Flag.astro';
+import LocalTime from '~/components/ui/LocalTime.astro';
+import PageHeader from '~/components/ui/PageHeader.astro';
+import RoundStatusBadge from '~/components/ui/RoundStatusBadge.astro';
+import SectionTitle from '~/components/ui/SectionTitle.astro';
+import { alternates, url, useT, type Lang } from '~/i18n';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { trackMapImage } from '~/lib/calendar/race';
+import { formatDate } from '~/lib/domain/time';
+import { formatLapTime } from '~/lib/domain/laptime';
+import type { ResultRow } from '~/lib/db/types';
+import { loadLeague } from '~/lib/server/league';
+import { calendarTracks, leaders, localTrackName, raceDistanceKm, topEntries, trackPlaceJsonLd, trackRecords } from '~/lib/tracks';
+import { breadcrumbJsonLd, countryName, formatDecimal, roundLabel, seasonLabel } from '~/lib/view';
+
+interface Props {
+  lang: Lang;
+  slug: string;
+}
+const { lang, slug } = Astro.props;
+const t = useT(lang);
+const league = await loadLeague();
+const track = calendarTracks(league).find((x) => x.slug === slug);
+const records = track ? trackRecords(league, track.id) : null;
+const name = track ? localTrackName(track, lang) : '–';
+const map = trackMapImage(track);
+const distance = track ? raceDistanceKm(track) : null;
+
+const crumbs = [
+  { label: t('nav.home'), href: url(lang, 'home') },
+  { label: t('tracks.title'), href: url(lang, 'tracks') },
+  { label: name, href: track ? url(lang, 'track', { slug: track.slug }) : url(lang, 'tracks') },
+];
+const site = Astro.site ?? new URL(Astro.url.origin);
+const pageUrl = new URL(crumbs[2]!.href, site).href;
+const jsonLd = track
+  ? [
+      breadcrumbJsonLd(site, crumbs.map((c) => ({ name: c.label, href: c.href }))),
+      trackPlaceJsonLd(track, lang, pageUrl, map ? new URL(map.src, site).href : null),
+    ]
+  : undefined;
+
+const nextSeason = records?.next ? league.season(records.next.season_id) : undefined;
+const winLeaders = records ? leaders(records.wins) : [];
+const poleLeaders = records ? leaders(records.poles) : [];
+const leaderNames = (list: typeof winLeaders) => list.map((e) => league.driverName(e.driverId, lang)).join(', ');
+
+/** Fahrerzelle mit Teamstreifen und Startnummer der Runde */
+const driverOf = (r: ResultRow | null) => (r ? { driver: league.driver(r.driver_id), team: league.team(r.team_id), number: r.race_number } : null);
+if (!track) Astro.response.status = 404;
+---
+
+<BaseLayout
+  lang={lang}
+  title={track ? name : t('tracks.notFound')}
+  description={track ? t('tracks.metaDescriptionTrack', { track: name, country: countryName(track.country_code, lang) }) : undefined}
+  alternates={alternates('track', { slug })}
+  jsonLd={jsonLd}
+  noindex={!track}
+>
+  {
+    !track || !records ? (
+      <div class="container-page section">
+        <h1 class="sr-only">{t('tracks.notFound')}</h1>
+        <EmptyState title={t('tracks.notFound')}>
+          <a href={url(lang, 'tracks')} class="btn btn-secondary mt-6">
+            {t('tracks.title')}
+          </a>
+        </EmptyState>
+      </div>
+    ) : (
+      <>
+        <PageHeader lang={lang} title={name} eyebrow={countryName(track.country_code, lang)} breadcrumbs={[crumbs[0]!, crumbs[1]!, { label: name }]}>
+          <div class="track-head">
+            <dl class="facts">
+              <div>
+                <dt class="micro">{t('tracks.facts.country')}</dt>
+                <dd class="fact-value">
+                  <Flag code={track.country_code} lang={lang} decorative />
+                  <span>{countryName(track.country_code, lang)}</span>
+                </dd>
+              </div>
+              <div>
+                <dt class="micro">{t('tracks.facts.length')}</dt>
+                <dd class="fact-value tabular">{track.length_km != null ? t('tracks.lengthKm', { km: formatDecimal(track.length_km, lang, 3) }) : '–'}</dd>
+              </div>
+              <div>
+                <dt class="micro">{t('tracks.facts.laps')}</dt>
+                <dd class="fact-value tabular">{track.laps_default ?? '–'}</dd>
+              </div>
+              <div>
+                <dt class="micro">{t('tracks.facts.distance')}</dt>
+                <dd class="fact-value tabular">{distance != null ? t('tracks.lengthKm', { km: formatDecimal(distance, lang, 1) }) : '–'}</dd>
+              </div>
+              <div>
+                <dt class="micro">{t('tracks.facts.races')}</dt>
+                <dd class="fact-value tabular">{records.races}</dd>
+              </div>
+              {records.first && (
+                <div>
+                  <dt class="micro">{t('tracks.facts.firstRace')}</dt>
+                  <dd class="fact-value">
+                    <a href={url(lang, 'race', { season: records.first.season.slug, round: records.first.round.number })} class="head-link">
+                      {seasonLabel(records.first.season, lang)} · {t('common.roundShort', { n: records.first.round.number })}
+                    </a>
+                  </dd>
+                </div>
+              )}
+            </dl>
+            {map && <TrackMap lang={lang} track={track} eager />}
+          </div>
+        </PageHeader>
+
+        <div class="container-page pb-14">
+          <!-- Nächste Runde -->
+          {records.next && nextSeason && (
+            <section class="track-section" aria-labelledby="next-title">
+              <SectionTitle id="next-title" title={t('tracks.next.title')} />
+              <div class="card next-card">
+                <div class="min-w-0">
+                  <p class="micro">{seasonLabel(nextSeason, lang)}</p>
+                  <p class="next-label">
+                    <a href={url(lang, 'race', { season: nextSeason.slug, round: records.next.number })} class="head-link">
+                      {roundLabel(records.next, track, lang)}
+                    </a>
+                  </p>
+                  <p class="text-sm">
+                    <LocalTime instant={records.next.start_utc} lang={lang} format="dateLongTime" zone />
+                  </p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  {records.next.format === 'sprint' && <span class="badge badge-teal">{t('format.sprint')}</span>}
+                  <RoundStatusBadge status={records.next.status} lang={lang} />
+                </div>
+              </div>
+            </section>
+          )}
+
+          <!-- Rekorde -->
+          <section class="track-section" aria-labelledby="records-title">
+            <SectionTitle id="records-title" title={t('tracks.records.title')} />
+            {records.races === 0 ? (
+              <p class="card p-5 text-sm text-muted">{t('tracks.noRaces', { track: name })}</p>
+            ) : (
+              <>
+                <dl class="record-grid">
+                  <LapRecordTile lang={lang} league={league} label={t('tracks.records.fastestLap')} record={records.fastestRaceLap} />
+                  <LapRecordTile lang={lang} league={league} label={t('tracks.records.bestQuali')} record={records.bestQualifying} />
+                  <div class="count-tile">
+                    <dt class="micro">{t('tracks.records.mostWins')}</dt>
+                    <dd>
+                      {winLeaders.length > 0 ? (
+                        <>
+                          <span class="record-value tabular">{winLeaders[0]!.value}</span>
+                          <span class="block text-sm">{leaderNames(winLeaders)}</span>
+                        </>
+                      ) : (
+                        <span class="text-muted">{t('tracks.records.none')}</span>
+                      )}
+                    </dd>
+                  </div>
+                  <div class="count-tile">
+                    <dt class="micro">{t('tracks.records.mostPoles')}</dt>
+                    <dd>
+                      {poleLeaders.length > 0 ? (
+                        <>
+                          <span class="record-value tabular">{poleLeaders[0]!.value}</span>
+                          <span class="block text-sm">{leaderNames(poleLeaders)}</span>
+                        </>
+                      ) : (
+                        <span class="text-muted">{t('tracks.records.none')}</span>
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+                <p class="mt-3 text-xs text-muted">{t('tracks.records.note')}</p>
+              </>
+            )}
+          </section>
+
+          {records.races > 0 && (
+            <>
+              <!-- Sieger je Saison und Runde -->
+              <section class="track-section" aria-labelledby="winners-title">
+                <SectionTitle id="winners-title" title={t('tracks.winners.title')} />
+                <div class="table-wrap">
+                  <table class="timing-table">
+                    <caption class="sr-only">{t('tracks.winners.caption', { track: name })}</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col" class="sticky-col">{t('common.round')}</th>
+                        <th scope="col">{t('common.date')}</th>
+                        <th scope="col">{t('tracks.winners.winner')}</th>
+                        <th scope="col">{t('legend.pole')}</th>
+                        <th scope="col">{t('legend.fastestLap')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {records.history.map((h) => {
+                        const winner = driverOf(h.winner);
+                        const pole = driverOf(h.pole);
+                        const fl = driverOf(h.fastestLap);
+                        return (
+                          <tr>
+                            <th scope="row" class="sticky-col font-normal">
+                              <a href={url(lang, 'race', { season: h.season.slug, round: h.round.number })} class="round-link">
+                                {seasonLabel(h.season, lang)} · {t('common.roundShort', { n: h.round.number })}
+                              </a>
+                              {h.round.status === 'provisional' && <span class="badge badge-warning ml-2">{t('status.round.provisional')}</span>}
+                            </th>
+                            <td class="muted tabular">
+                              <time datetime={h.round.start_utc}>{formatDate(h.round.start_utc, lang)}</time>
+                            </td>
+                            <td>{winner ? <DriverLink lang={lang} driver={winner.driver} team={winner.team} number={winner.number} /> : '–'}</td>
+                            <td>{pole ? <DriverLink lang={lang} driver={pole.driver} team={pole.team} /> : '–'}</td>
+                            <td>
+                              {fl && h.fastestLap ? (
+                                <span class="inline-flex flex-wrap items-center gap-x-2">
+                                  <DriverLink lang={lang} driver={fl.driver} team={fl.team} />
+                                  <span class="muted tabular">{formatLapTime(h.fastestLap.best_lap_ms)}</span>
+                                </span>
+                              ) : (
+                                '–'
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <!-- Ranglisten -->
+              <section class="track-section" aria-labelledby="rankings-title">
+                <SectionTitle id="rankings-title" title={t('tracks.rankings.title')} />
+                <div class="grid gap-6 md:grid-cols-2">
+                  <CountTable
+                    lang={lang}
+                    league={league}
+                    id="ranking-wins"
+                    caption={t('tracks.rankings.wins', { track: name })}
+                    valueLabel={t('standings.wins')}
+                    entries={topEntries(records.wins)}
+                  />
+                  <CountTable
+                    lang={lang}
+                    league={league}
+                    id="ranking-poles"
+                    caption={t('tracks.rankings.poles', { track: name })}
+                    valueLabel={t('standings.poles')}
+                    entries={topEntries(records.poles)}
+                  />
+                </div>
+              </section>
+            </>
+          )}
+
+          <p class="mt-10">
+            <a href={url(lang, 'tracks')} class="inline-flex min-h-11 items-center text-sm font-semibold text-green hover:text-teal">← {t('tracks.allTracksLink')}</a>
+          </p>
+        </div>
+      </>
+    )
+  }
+</BaseLayout>
+
+<style>
+  .track-head {
+    display: grid;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+  }
+  @media (min-width: 768px) {
+    .track-head {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 22rem);
+      align-items: start;
+    }
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 2rem;
+  }
+  @media (min-width: 640px) {
+    .facts {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  .fact-value {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.25rem;
+    line-height: 1.2;
+  }
+  .head-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    text-decoration: none;
+  }
+  .head-link:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+  .track-section {
+    padding-top: 3rem;
+  }
+  .next-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem;
+  }
+  .next-label {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.5rem;
+    text-transform: uppercase;
+  }
+  .record-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  }
+  .count-tile {
+    display: grid;
+    align-content: start;
+    gap: 0.5rem;
+    padding: 1rem 1.125rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface-1);
+    min-width: 0;
+  }
+  .record-value {
+    display: block;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 2rem;
+    line-height: 1.1;
+  }
+  .round-link {
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .round-link:hover {
+    color: var(--color-teal);
+    text-decoration: underline;
+  }
+</style>
