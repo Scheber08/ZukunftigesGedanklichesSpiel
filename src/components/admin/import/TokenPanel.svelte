@@ -124,6 +124,8 @@
   {#if message}
     <p class={`alert alert-${message.kind} mt-3`} role={message.kind === 'danger' ? 'alert' : 'status'}>{message.text}</p>
   {/if}
+  <!-- Rückmeldung zum Kopieren für Screenreader (der Knopftext allein wird nicht angesagt) -->
+  <span class="sr-only" role="status">{copied === 'token' ? 'Token kopiert.' : copied ? 'Befehl kopiert.' : ''}</span>
 
   {#if token}
     <div class="alert alert-warning mt-3">
