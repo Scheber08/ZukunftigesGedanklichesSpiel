@@ -779,7 +779,7 @@ insert into public.open_positions (id, title_de, title_en, description_de, descr
   (5, 'Caster / Kommentator (später)', 'Caster / commentator (later)', 'Sobald wir Rennen übertragen, suchen wir Stimmen für Kommentar und Analyse. Du solltest Spaß am Sprechen haben, Rennen gut lesen können und fair über alle Fahrer berichten. Diese Position besetzen wir erst später – du kannst dich aber schon jetzt melden.', 'Once we start broadcasting races, we will be looking for voices for commentary and analysis. You should enjoy speaking, read a race well and cover all drivers fairly. We will fill this position later – but you are welcome to get in touch now.', 'ca. 2–3 h pro Renntag (inkl. Vorbereitung)', true, 40)
 on conflict do nothing;
 
--- settings (14)
+-- settings (15)
 insert into public.settings (key, value, is_public) values
   ('discord_invite', '{"url":null,"code":null}'::jsonb, true),
   ('socials', '{"instagram":null,"tiktok":null,"youtube":null}'::jsonb, true),
@@ -794,7 +794,8 @@ insert into public.settings (key, value, is_public) values
   ('discord_invites', '{"website":null,"instagram":null,"tiktok":null,"youtube":null}'::jsonb, false),
   ('rebuild', '{"requested_at":null,"dispatched_at":null,"reason":null}'::jsonb, false),
   ('twitch_token', '{"access_token":null,"expires_at":null}'::jsonb, false),
-  ('import_token', '{"hash":null,"created_at":null,"created_by":null}'::jsonb, false)
+  ('import_token', '{"hash":null,"created_at":null,"created_by":null}'::jsonb, false),
+  ('discord_self_roles', '{"roles":[]}'::jsonb, false)
 on conflict do nothing;
 
 -- Identitäts-Sequenzen hinter die höchsten IDs setzen

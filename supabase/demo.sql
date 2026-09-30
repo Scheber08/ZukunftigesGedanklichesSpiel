@@ -4,7 +4,7 @@
 -- AUTOMATISCH ERZEUGT von scripts/generate-seed-sql.ts – nicht von Hand bearbeiten.
 -- Neu erzeugen: npm run db:seed:generate -- --demo
 --
--- Termine relativ zu 2026-09-30T14:02:13.906Z erzeugt (Option --now=…).
+-- Termine relativ zu 2026-09-30T14:09:43.529Z erzeugt (Option --now=…).
 -- NUR für eine Test-Datenbank! Einspielen NACH seed.sql. Vorhandene Demo-Zeilen werden aktualisiert.
 -- Alle Gamertags sind erfunden. Nicht in der Produktionsdatenbank verwenden.
 -- =============================================================================
@@ -1636,13 +1636,13 @@ on conflict (id) do update set name = excluded.name, logo = excluded.logo, url =
 -- settings (2)
 insert into public.settings (key, value, is_public) values
   ('registration', '{"state":"open","free_seats":0,"free_reserve":4,"note_de":"Alle 22 Cockpits sind vergeben – im Reservepool ist noch Platz.","note_en":"All 22 cockpits are taken – there is still room in the reserve pool."}'::jsonb, true),
-  ('discord_counts', '{"members":214,"online":38,"checked_at":"2026-09-30T14:02:13.906Z"}'::jsonb, true)
+  ('discord_counts', '{"members":214,"online":38,"checked_at":"2026-09-30T14:09:43.529Z"}'::jsonb, true)
 on conflict (key) do update set value = excluded.value, is_public = excluded.is_public;
 
 -- registrations (2)
 insert into public.registrations (id, gamertag, discord_username, ea_id, platform, input_device, nationality, desired_number, wanted_role, availability, experience, reference_time, consents, status, admin_notes, ip_hash, driver_id, processed_by, processed_at) values
-  (1, 'Newcomer_Nele', 'nele_racing', 'Newcomer_Nele', 'playstation', 'controller', 'DE', 42, 'any', 'regular', 'Zwei Saisons in einer anderen Liga', '1:29.812 (Suzuka, Time Trial)', '{"age16":true,"rules":true,"at":"2026-09-29T08:02:13.906Z","rules_version":"1.0"}'::jsonb, 'new', NULL, 'demo', NULL, NULL, NULL),
-  (2, 'Sidepod_Sid', 'sid.sidepod', NULL, 'xbox', 'wheel', NULL, 9, 'reserve', 'mostly', NULL, NULL, '{"age16":true,"rules":true,"at":"2026-09-27T06:02:13.906Z","rules_version":"1.0"}'::jsonb, 'contacted', 'Auf Discord angeschrieben.', NULL, NULL, NULL, '2026-09-28T02:02:13.906Z')
+  (1, 'Newcomer_Nele', 'nele_racing', 'Newcomer_Nele', 'playstation', 'controller', 'DE', 42, 'any', 'regular', 'Zwei Saisons in einer anderen Liga', '1:29.812 (Suzuka, Time Trial)', '{"age16":true,"rules":true,"at":"2026-09-29T08:09:43.529Z","rules_version":"1.0"}'::jsonb, 'new', NULL, 'demo', NULL, NULL, NULL),
+  (2, 'Sidepod_Sid', 'sid.sidepod', NULL, 'xbox', 'wheel', NULL, 9, 'reserve', 'mostly', NULL, NULL, '{"age16":true,"rules":true,"at":"2026-09-27T06:09:43.529Z","rules_version":"1.0"}'::jsonb, 'contacted', 'Auf Discord angeschrieben.', NULL, NULL, NULL, '2026-09-28T02:09:43.529Z')
 on conflict (id) do update set gamertag = excluded.gamertag, discord_username = excluded.discord_username, ea_id = excluded.ea_id, platform = excluded.platform, input_device = excluded.input_device, nationality = excluded.nationality, desired_number = excluded.desired_number, wanted_role = excluded.wanted_role, availability = excluded.availability, experience = excluded.experience, reference_time = excluded.reference_time, consents = excluded.consents, status = excluded.status, admin_notes = excluded.admin_notes, ip_hash = excluded.ip_hash, driver_id = excluded.driver_id, processed_by = excluded.processed_by, processed_at = excluded.processed_at;
 
 -- contact_messages (1)

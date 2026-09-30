@@ -53,6 +53,12 @@ export interface PrivateSettings {
   import_token: { hash: string | null; created_at: string | null; created_by: string | null };
   /** App-Token der Twitch-API (Client-Credentials), vom Cron-Job gepflegt. */
   twitch_token: { access_token: string | null; expires_at: string | null };
+  /**
+   * Discord-Bot (Plan Phase 3, Rollenvergabe): Rollen, die sich Mitglieder per /rolle selbst
+   * geben oder nehmen dürfen (z. B. Renntag-Ping). Der Bot braucht dafür „Manage Roles“ und
+   * muss in der Rollenliste über diesen Rollen stehen.
+   */
+  discord_self_roles: { roles: Array<{ role_id: string; label_de: string; label_en: string }> };
 }
 
 export type SettingKey = keyof PublicSettings | keyof PrivateSettings;
@@ -75,6 +81,7 @@ export const PRIVATE_SETTING_KEYS = [
   'rebuild',
   'twitch_token',
   'import_token',
+  'discord_self_roles',
 ] as const satisfies ReadonlyArray<keyof PrivateSettings>;
 
 export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
@@ -107,6 +114,7 @@ export const DEFAULT_PRIVATE_SETTINGS: PrivateSettings = {
   rebuild: { requested_at: null, dispatched_at: null, reason: null },
   twitch_token: { access_token: null, expires_at: null },
   import_token: { hash: null, created_at: null, created_by: null },
+  discord_self_roles: { roles: [] },
 };
 
 /** Liest die Einstellungen aus Zeilen und füllt fehlende Schlüssel mit Defaults auf. */
