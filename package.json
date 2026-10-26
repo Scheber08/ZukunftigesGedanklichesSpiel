@@ -27,29 +27,29 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^14.3.3",
-    "@astrojs/svelte": "^9.0.1",
-    "@lucide/astro": "^1.48.0",
-    "@lucide/svelte": "^1.48.0",
+    "@astrojs/cloudflare": "^14.4.2",
+    "@astrojs/svelte": "^9.1.1",
+    "@lucide/astro": "^1.61.0",
+    "@lucide/svelte": "^1.61.0",
     "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.117.2",
+    "@supabase/supabase-js": "^2.118.0",
     "@tailwindcss/vite": "^4.3.3",
     "astro": "^7.3.5",
     "country-flag-icons": "^1.6.20",
-    "marked": "^18.0.14",
-    "simple-icons": "^16.33.0",
-    "svelte": "^5.57.1",
+    "marked": "^18.1.1",
+    "simple-icons": "^16.35.0",
+    "svelte": "^5.57.2",
     "tailwindcss": "^4.3.3",
     "vanilla-cookieconsent": "^3.1.0"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.10",
-    "@axe-core/playwright": "^4.13.0",
-    "@playwright/test": "^1.63.0",
-    "@types/node": "^22.20.4",
-    "svelte-check": "^4.7.6",
+    "@astrojs/check": "^0.9.12",
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^22.20.5",
+    "svelte-check": "^4.7.7",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.2",
+    "vitest": "^5.0.5",
     "wrangler": "^4.143.0"
   }
 }
